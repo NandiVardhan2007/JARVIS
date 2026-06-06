@@ -20,3 +20,5 @@ telegram_offset.txt
 token.pickle
 *.onnx
 models/
+jarvis.db
+jarvis_waha.db
