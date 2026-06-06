@@ -1,0 +1,77 @@
+# ── JARVIS Core ───────────────────────────────────────────────────────────────
+# LiveKit agent runtime + noise cancellation + VAD
+livekit-agents[silero,noise-cancellation]==1.5.0
+
+# AI providers (no OpenAI required)
+livekit-api>=1.0.7
+livekit-plugins-google==1.5.0        # LLM+STT+TTS (Gemini Realtime)
+livekit-plugins-groq==1.5.0          # LLM (llama-3.3-70b) + STT (whisper-large-v3) + TTS (orpheus)
+livekit-plugins-openai==1.5.0        # OpenAI API compatible LLMs (NVIDIA NIM)
+livekit-plugins-nvidia==1.5.0        # STT fallback (parakeet-1.1b) + TTS fallback (Riva/Leo)
+livekit-plugins-cartesia==1.5.0      # TTS primary (sonic-2)
+
+# ── Desktop automation ────────────────────────────────────────────────────────
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pyperclip>=1.8.2
+mss>=9.0.1
+pytesseract>=0.3.10          # OCR click-on-text (requires Tesseract binary)
+Pillow>=10.0.0
+screen-brightness-control>=0.22.1
+pycaw>=20240210              # Windows volume control
+comtypes>=1.4.7              # Required by pycaw on Windows
+
+# ── System info ───────────────────────────────────────────────────────────────
+psutil>=5.9.8
+
+# ── Web search & information ─────────────────────────────────────────────────
+requests>=2.31.0
+wikipedia>=1.4.0
+langchain-community>=0.2.0
+duckduckgo-search>=6.0.0
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+send2trash>=1.8.2
+
+# ── Document handling ─────────────────────────────────────────────────────────
+PyPDF2>=3.0.1
+python-docx>=0.8.11
+chardet>=5.0.0
+
+# ── Screen reader (new) ───────────────────────────────────────────────────────
+# Pillow already listed above (required for screenshot resize)
+# GEMINI_API_KEY → google-generativeai not needed — uses raw REST via requests
+# Groq vision fallback uses existing GROQ_API_KEY via requests
+
+# ── Process manager (new) ─────────────────────────────────────────────────────
+# psutil already listed above
+
+# ── Messaging — Telegram + Discord (new) ─────────────────────────────────────
+# Uses requests (already listed) — no extra SDK needed
+
+# ── Upgrades ──────────────────────────────────────────────────────────────────
+chromadb>=0.4.20
+PyGithub>=2.1.0
+
+# ── Sub-Agents ────────────────────────────────────────────────────────────────
+# Web scraping
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+html2image>=2.0.4
+
+# Finance
+yfinance>=0.2.30
+
+# Calendar
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.2.0
+
+# News (RSS)
+feedparser>=6.0.0
+PyQt5>=5.15.0
+python-vlc>=3.0.0
+pycryptodome>=3.20.0
+
+# ── TTS (Local) ───────────────────────────────────────────────────────────────
+piper-tts>=1.2.0
