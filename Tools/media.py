@@ -3,7 +3,7 @@
 import logging
 import urllib.parse
 import webbrowser
-import requests
+import aiohttp
 from base64 import b64decode
 from Crypto.Cipher import DES
 from livekit.agents import function_tool
@@ -21,6 +21,8 @@ _media_player = _vlc_instance.media_player_new() if _vlc_instance else None
 
 import threading
 import socket
+import os
+import json
 
 def _media_command_listener():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -127,78 +129,107 @@ async def play_media(media_name: str, media_type: str = "song") -> str:
         if not clean_query:
             clean_query = media_name
             
-        # Search JioSaavn
-        search_resp = requests.get(
-            "https://www.jiosaavn.com/api.php",
-            params={
-                "__call": "autocomplete.get",
-                "query": clean_query,
-                "_format": "json",
-                "_marker": "0",
-                "ctx": "web6dot0"
-            },
-            timeout=5
-        ).json()
-
-        if "songs" in search_resp and "data" in search_resp["songs"] and len(search_resp["songs"]["data"]) > 0:
-            song_id = search_resp["songs"]["data"][0]["id"]
-            
-            # Get song details
-            details_resp = requests.get(
+        async with aiohttp.ClientSession() as session:
+            # Search JioSaavn
+            async with session.get(
                 "https://www.jiosaavn.com/api.php",
                 params={
-                    "__call": "song.getDetails",
-                    "pids": song_id,
+                    "__call": "autocomplete.get",
+                    "query": clean_query,
                     "_format": "json",
                     "_marker": "0",
                     "ctx": "web6dot0"
                 },
                 timeout=5
-            ).json()
-            
-            if "songs" in details_resp and len(details_resp["songs"]) > 0:
-                song_data = details_resp["songs"][0]
-                title = song_data.get("title", media_name)
-                # Unescape HTML entities like &quot;
-                import html
-                title = html.unescape(title)
-                
-                # Get artist and image
-                artist = song_data.get("primary_artists", "Unknown Artist")
-                artist = html.unescape(artist)
-                image_url = song_data.get("image", "").replace("150x150", "500x500")
+            ) as resp:
+                search_resp = await resp.json(content_type=None)
 
-                encrypted_url = song_data.get("encrypted_media_url")
-                if encrypted_url and _media_player:
-                    stream_url = _decrypt_saavn_url(encrypted_url)
-                    media = _vlc_instance.media_new(stream_url)
-                    _media_player.set_media(media)
-                    _media_player.play()
+            if "songs" in search_resp and "data" in search_resp["songs"] and len(search_resp["songs"]["data"]) > 0:
+                song_id = search_resp["songs"]["data"][0]["id"]
+
+                # Get song details
+                async with session.get(
+                    "https://www.jiosaavn.com/api.php",
+                    params={
+                        "__call": "song.getDetails",
+                        "pids": song_id,
+                        "_format": "json",
+                        "_marker": "0",
+                        "ctx": "web6dot0"
+                    },
+                    timeout=5
+                ) as resp:
+                    details_resp = await resp.json(content_type=None)
+
+                if "songs" in details_resp and len(details_resp["songs"]) > 0:
+                    song_data = details_resp["songs"][0]
+                    title = song_data.get("title", media_name)
+                    # Unescape HTML entities like &quot;
+                    import html
+                    title = html.unescape(title)
                     
-                    # Update dynamic island
-                    try:
-                        import json
-                        import socket
-                        island_payload = {
-                            "state": "expanded",
-                            "context": "tool",
-                            "category": "MEDIA",
-                            "tool_name": "Now Playing",
-                            "description": f"{title}\nBy {artist}",
-                            "image_url": image_url
-                        }
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                        sock.sendto(json.dumps(island_payload).encode(), ("127.0.0.1", 5005))
-                        sock.close()
-                    except Exception as e:
-                        logger.error(f"Failed to update island: {e}")
-                        
-                    return f"Now playing directly: {title} by {artist}"
+                    # Get artist and image
+                    artist = song_data.get("primary_artists", "Unknown Artist")
+                    artist = html.unescape(artist)
+                    image_url = song_data.get("image", "").replace("150x150", "500x500")
 
-        # Fallback: YouTube search
+                    encrypted_url = song_data.get("encrypted_media_url")
+                    if encrypted_url and _media_player:
+                        stream_url = _decrypt_saavn_url(encrypted_url)
+                        media = _vlc_instance.media_new(stream_url)
+                        _media_player.set_media(media)
+                        _media_player.play()
+                        
+                        # Update dynamic island
+                        try:
+                            island_payload = {
+                                "state": "expanded",
+                                "context": "tool",
+                                "category": "MEDIA",
+                                "tool_name": "Now Playing",
+                                "description": f"{title}\nBy {artist}",
+                                "image_url": image_url
+                            }
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                            sock.sendto(json.dumps(island_payload).encode(), ("127.0.0.1", 5005))
+                            sock.close()
+                        except Exception as e:
+                            logger.error(f"Failed to update island: {e}")
+
+                        return f"Now playing directly: {title} by {artist}"
+
+            # Fallback: YouTube API search
+            youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+            if youtube_api_key:
+                try:
+                    async with session.get(
+                        "https://www.googleapis.com/youtube/v3/search",
+                        params={
+                            "part": "snippet",
+                            "q": f"{media_name} {media_type}",
+                            "type": "video",
+                            "key": youtube_api_key,
+                            "maxResults": 1
+                        },
+                        timeout=5
+                    ) as resp:
+                        yt_resp = await resp.json()
+
+                    if "items" in yt_resp and len(yt_resp["items"]) > 0:
+                        video_id = yt_resp["items"][0]["id"]["videoId"]
+                        title = yt_resp["items"][0]["snippet"]["title"]
+                        import html
+                        title = html.unescape(title)
+                        webbrowser.open(f"https://www.youtube.com/watch?v={video_id}")
+                        return f"Playing '{title}' on YouTube."
+                except Exception as yt_e:
+                    logger.error(f"YouTube API error: {yt_e}")
+
+        # Final Fallback: Direct YouTube web search opening
         query = urllib.parse.quote(f"{media_name} {media_type}")
         webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
         return f"Opening YouTube search for '{media_name}'."
+
     except Exception as e:
         logger.error(f"Playback error: {e}")
         return f"Media playback failed: {e}"
