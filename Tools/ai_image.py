@@ -91,6 +91,7 @@ async def generate_local_image_comfyui(prompt: str, model_name: str = "novaReali
     """
     import json
     import random
+    import aiofiles
     
     if seed is None or int(seed) <= 0:
         seed = random.randint(1, 9999999999)
@@ -102,8 +103,9 @@ async def generate_local_image_comfyui(prompt: str, model_name: str = "novaReali
     workflow_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "comfy_api.json")
     
     if os.path.exists(workflow_path):
-        with open(workflow_path, "r") as f:
-            workflow = json.load(f)
+        async with aiofiles.open(workflow_path, "r") as f:
+            content = await f.read()
+            workflow = json.loads(content)
             # Naive prompt replacement if we find a CLIP node
             for node_id, node in workflow.items():
                 if node.get("class_type") == "CLIPTextEncode" and "positive" in str(node.get("_meta", {}).get("title", "")).lower() or node_id == "6":
