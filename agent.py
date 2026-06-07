@@ -334,7 +334,7 @@ async def entrypoint(ctx: agents.JobContext):
         vad=agent_vad
     )
     
-    # FIX: agent must be passed as keyword arg in livekit-agents 1.5.x;
+    # NOTE: agent must be passed as keyword arg in livekit-agents 1.5.x;
     # passing it positionally placed it where SessionConfig is expected → TypeError.
     await session.start(agent=agent, room=ctx.room)
     
