@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Fix for onnxruntime DLL loading in PyInstaller
+# Workaround to properly load onnxruntime DLLs when running from a PyInstaller executable.
 if hasattr(sys, '_MEIPASS'):
     base_dir = sys._MEIPASS
     os.environ['PATH'] = base_dir + os.pathsep + os.environ.get('PATH', '')
