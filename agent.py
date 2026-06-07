@@ -31,6 +31,7 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 import logging
 import os
 import json
+import aiofiles
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -271,11 +272,12 @@ async def entrypoint(ctx: agents.JobContext):
         while True:
             if os.path.exists(drop_file):
                 try:
-                    with open(drop_file, "r") as f:
-                        items = json.load(f)
+                    async with aiofiles.open(drop_file, "r") as f:
+                        content = await f.read()
+                        items = json.loads(content)
                     if items:
-                        with open(drop_file, "w") as f:
-                            json.dump([], f)
+                        async with aiofiles.open(drop_file, "w") as f:
+                            await f.write(json.dumps([]))
                         
                         item_str = ", ".join(items)
                         logger.info(f"Detected dropped items: {item_str}")
