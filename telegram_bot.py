@@ -699,7 +699,7 @@ async def main() -> None:
                     send_message(chat_id, "Rate limit exceeded. Please wait a moment before sending more messages.")
                     continue
 
-                # BUG FIX: await directly — create_task() caused replies to be
+                # await directly — create_task() caused replies to be
                 # garbage-collected before they could run.
                 await handle_message(chat_id, text)
 
