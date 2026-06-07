@@ -2,6 +2,7 @@
 
 import logging
 import requests
+import aiohttp
 from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,12 @@ async def search_web(query: str) -> str:
     # 1. Wikipedia (English)
     try:
         import wikipedia
+        import asyncio
         wikipedia.set_lang("en")
-        summary = wikipedia.summary(query, sentences=3, auto_suggest=True)
+        loop = asyncio.get_event_loop()
+        summary = await loop.run_in_executor(
+            None, lambda: wikipedia.summary(query, sentences=3, auto_suggest=True)
+        )
         if summary and len(summary) > 20:
             return f"Wikipedia:\n{summary}"
     except Exception as e:
@@ -35,12 +40,12 @@ async def search_web(query: str) -> str:
 
     # 2. DuckDuckGo Instant Answer API
     try:
-        resp = requests.get(
-            "https://api.duckduckgo.com/",
-            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
-            timeout=8,
-        )
-        data = resp.json()
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
+            async with session.get(
+                "https://api.duckduckgo.com/",
+                params={"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"},
+            ) as resp:
+                data = await resp.json(content_type=None)
         if data.get("AbstractText"):
             return f"DuckDuckGo:\n{data['AbstractText']}"
         if data.get("RelatedTopics"):
@@ -57,7 +62,11 @@ async def search_web(query: str) -> str:
     # 3. LangChain DuckDuckGo search
     try:
         from langchain_community.tools import DuckDuckGoSearchRun
-        result = DuckDuckGoSearchRun().run(query)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, lambda: DuckDuckGoSearchRun().run(query)
+        )
         if result and len(result) > 20:
             return f"Search results:\n{result}"
     except Exception as e:
