@@ -129,14 +129,16 @@ def get_all_tools() -> list:
     # Deduplicate just in case
     return list({t.__name__: t for t in all_tools}.values())
 
-def get_tools_for_category(category: str) -> list:
+def get_tools_for_category(category) -> list:
     """
-    Return tools for a specific category plus core tools.
+    Return tools for a specific category (or list of categories) plus core tools.
     Used by the Telegram bot for intent-based routing to keep context small.
     """
     tools = list(CORE_TOOLS)
-    if category in TOOL_CATEGORIES:
-        tools.extend(TOOL_CATEGORIES[category])
+    categories = category if isinstance(category, list) else [category]
+    for cat in categories:
+        if cat in TOOL_CATEGORIES:
+            tools.extend(TOOL_CATEGORIES[cat])
     return list({t.__name__: t for t in tools}.values())
 
 
@@ -174,14 +176,15 @@ for _cat, _keywords in _INTENT_KEYWORDS.items():
     _INTENT_PATTERNS[_cat] = _pattern
 
 
-def classify_intent(text: str) -> str:
+def classify_intent(text: str) -> list:
     """
     Fast keyword-based intent classifier using pre-compiled regex patterns.
-    Returns the category name that best matches the user's message.
+    Returns all category names that match the user's message.
     """
+    matches = []
     for cat, pattern in _INTENT_PATTERNS.items():
         if pattern.search(text):
-            return cat
-    return "core"
+            matches.append(cat)
+    return matches if matches else ["core"]
 
 __all__ = ["get_all_tools", "get_tools_for_category", "classify_intent"]

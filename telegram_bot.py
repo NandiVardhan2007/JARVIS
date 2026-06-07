@@ -36,8 +36,27 @@ TELEGRAM_LLM_API = os.getenv("TELEGRAM_LLM_API", "").strip()
 LOCAL_LLM_URL   = os.getenv("LOCAL_LLM_URL", "")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
+from collections import OrderedDict
+class LRUUserContexts:
+    def __init__(self, maxsize=100):
+        self.cache = OrderedDict()
+        self.maxsize = maxsize
+    def __contains__(self, key):
+        return key in self.cache
+    def __getitem__(self, key):
+        self.cache.move_to_end(key)
+        return self.cache[key]
+    def __setitem__(self, key, value):
+        self.cache[key] = value
+        self.cache.move_to_end(key)
+        if len(self.cache) > self.maxsize:
+            self.cache.popitem(last=False)
+    def __delitem__(self, key):
+        if key in self.cache:
+            del self.cache[key]
+
 # Global dictionary to store ChatContext per user
-USER_CONTEXTS: dict[str, ChatContext] = {}
+USER_CONTEXTS = LRUUserContexts(maxsize=100)
 
 # ── Rate Limiting ────────────────────────────────────────────────────────────
 RATE_LIMIT_REQUESTS = 10
@@ -131,12 +150,24 @@ def get_dynamic_system_prompt() -> str:
     except Exception:
         memories = "Memory system unavailable."
 
+    try:
+        location_path = os.path.join(os.path.dirname(__file__), "jarvis_memory", "location.json")
+        if os.path.exists(location_path):
+            with open(location_path, "r") as f:
+                loc_data = json.load(f)
+                location_str = f"{loc_data.get('address', 'Unknown')} (Lat: {loc_data.get('lat')}, Lon: {loc_data.get('lon')})"
+        else:
+            location_str = "Location unknown."
+    except Exception:
+        location_str = "Location parsing error."
+
     dynamic_context = f"""
 ## LIVE CONTEXT
 - Current Time: {now}
 - User: {user}
 - Hostname: {host}
 - Active App: {active_app}
+- User Location: {location_str}
 
 ## PERSISTENT MEMORIES
 {memories}
@@ -464,6 +495,10 @@ async def _run_llm_loop(chat_id: str, ctx: ChatContext, llm, active_tools: list)
                 except Exception:
                     pass
 
+            MAX_TOOL_OUTPUT = 2000
+            if len(result) > MAX_TOOL_OUTPUT:
+                result = result[:MAX_TOOL_OUTPUT] + f"\n... [Truncated, original length {len(result)} chars]"
+
             logger.info(f"Tool '{tool_name}' result: {result!r}")
 
             # Inject tool output using FunctionCallOutput (proper API)
@@ -577,6 +612,35 @@ async def main() -> None:
                             continue
                         logger.info(f"Transcribed voice note: {text}")
 
+                location = msg.get("location")
+                if location:
+                    lat = location.get("latitude")
+                    lon = location.get("longitude")
+                    send_message(chat_id, "Received location. Updating JARVIS context...")
+                    # Reverse geocode using Nominatim
+                    try:
+                        headers = {"User-Agent": "JARVIS-Assistant/1.0"}
+                        geo_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
+                        geo_resp = requests.get(geo_url, headers=headers, timeout=5)
+                        if geo_resp.status_code == 200:
+                            geo_data = geo_resp.json()
+                            address = geo_data.get("display_name", "Unknown Address")
+                        else:
+                            address = f"Coordinates: {lat}, {lon}"
+                            
+                        # Save to memory
+                        mem_dir = os.path.join(os.path.dirname(__file__), "jarvis_memory")
+                        os.makedirs(mem_dir, exist_ok=True)
+                        loc_path = os.path.join(mem_dir, "location.json")
+                        with open(loc_path, "w") as f:
+                            json.dump({"lat": lat, "lon": lon, "address": address, "timestamp": time.time()}, f)
+                            
+                        send_message(chat_id, f"Location updated to:\n{address}")
+                    except Exception as e:
+                        logger.error(f"Geocoding failed: {e}")
+                        send_message(chat_id, "Location received, but reverse geocoding failed.")
+                    continue
+
                 if not text:
                     continue
 
@@ -628,6 +692,8 @@ async def main() -> None:
                         room_name = os.getenv("LIVEKIT_ROOM", "jarvis-room")
                         token.with_identity(f"telegram_user_{chat_id}_{str(uuid.uuid4())[:8]}")
                         token.with_name(username)
+                        import datetime
+                        token.with_ttl(datetime.timedelta(minutes=30))
                         token.with_grants(api.VideoGrants(
                             room_join=True,
                             room=room_name,

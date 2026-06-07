@@ -50,8 +50,16 @@ def _cleanup_old_screenshots() -> None:
     except Exception as e:
         logger.warning(f"Failed to cleanup screenshots: {e}")
 
-# Run cleanup once on module load
-_cleanup_old_screenshots()
+def _start_cleanup_task():
+    import threading
+    def run_periodically():
+        while True:
+            _cleanup_old_screenshots()
+            time.sleep(21600)  # 6 hours
+    threading.Thread(target=run_periodically, daemon=True).start()
+
+# Run cleanup periodically
+_start_cleanup_task()
 
 
 def _take_screenshot(save_dir: Optional[str] = None, monitor_index: int = 1) -> str:

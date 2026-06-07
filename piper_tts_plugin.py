@@ -37,7 +37,12 @@ class PiperChunkedStream(tts.ChunkedStream):
 
             while True:
                 # Fetch from queue in a non-blocking way for asyncio
-                chunk = await asyncio.to_thread(chunk_queue.get)
+                try:
+                    chunk = await asyncio.to_thread(chunk_queue.get, timeout=30)
+                except queue.Empty:
+                    logger.error("TTS generation timeout waiting for piper")
+                    break
+                
                 if chunk is None:
                     break
                 output_emitter.push(chunk)

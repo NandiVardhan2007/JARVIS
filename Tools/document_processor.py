@@ -154,11 +154,17 @@ class DocumentProcessor:
 
     @staticmethod
     def file_hash(path: str) -> str:
-        # Optimize by using file path, size, and modified time instead of reading full file
+        # Optimize by using file path, size, modified time, and a 64KB partial hash
         import os
         try:
             st = os.stat(path)
-            meta_str = f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime}"
+            try:
+                with open(path, "rb") as f:
+                    chunk = f.read(65536)
+            except Exception:
+                chunk = b""
+            chunk_hash = hashlib.md5(chunk).hexdigest()
+            meta_str = f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime}|{chunk_hash}"
             return hashlib.md5(meta_str.encode("utf-8")).hexdigest()
         except OSError:
             # Fallback if stat fails

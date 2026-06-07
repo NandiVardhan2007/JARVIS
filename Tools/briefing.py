@@ -5,7 +5,7 @@ from livekit.agents import function_tool
 logger = logging.getLogger(__name__)
 
 @function_tool
-async def morning_briefing(location: str = "New York", stock_symbol: str = "AAPL") -> str:
+async def morning_briefing(location: str = "", stock_symbol: str = "AAPL") -> str:
     """
     Generates a daily morning digest.
     Aggregates weather, calendar events, recent unread emails, finance updates, and pending tasks.

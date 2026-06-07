@@ -63,7 +63,13 @@ cp .env.example .env
 # Fill in LIVEKIT_*, WAHA_URL, COMFYUI_URL, etc.
 ```
 
-### 3. Run JARVIS
+### 3. Setup Pre-commit Hooks (Contributors)
+If you plan to contribute, initialize the secrets baseline to pass the CI hooks:
+```bash
+detect-secrets scan > .secrets.baseline
+```
+
+### 4. Run JARVIS
 ```bash
 python jarvis_launcher.py
 ```

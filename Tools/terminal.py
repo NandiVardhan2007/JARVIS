@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 ALLOWED_COMMANDS = {
     "git", "echo", "dir", "ls", "pwd",
     "whoami", "ipconfig", "ping", "cd", "type", "cat", "grep",
-    "mkdir", "find"
+    "mkdir", "find", "python", "pip", "npm", "node"
 }
 
 

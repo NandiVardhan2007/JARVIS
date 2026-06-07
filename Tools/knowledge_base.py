@@ -8,12 +8,19 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "jarvis_memory", "knowledge_base")
 
+import threading
+_client = None
+_lock = threading.Lock()
+
 def _get_collection():
+    global _client
     try:
         import chromadb
-        # Initialize persistent client
-        client = chromadb.PersistentClient(path=DB_PATH)
-        collection = client.get_or_create_collection(name="jarvis_notes")
+        with _lock:
+            if _client is None:
+                # Initialize persistent client
+                _client = chromadb.PersistentClient(path=DB_PATH)
+        collection = _client.get_or_create_collection(name="jarvis_notes")
         return collection
     except ImportError:
         logger.error("ChromaDB not installed.")

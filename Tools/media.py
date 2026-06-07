@@ -54,31 +54,36 @@ def _media_command_listener():
         except Exception as e:
             logger.error(f"UDP listener error: {e}")
 
-if _vlc_instance:
+def _song_finished_callback(event):
+    import json
+    import socket
+    try:
+        island_payload = {
+            "state": "idle",
+            "context": "",
+            "category": "",
+            "tool_name": "",
+            "description": "",
+            "notify": {
+                "title": "Playback Ended",
+                "body": "Song finished. Play another?",
+                "category": "MEDIA"
+            }
+        }
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(json.dumps(island_payload).encode(), ("127.0.0.1", 5005))
+        sock.close()
+    except Exception as e:
+        logger.error(f"Failed to notify island on end: {e}")
+
+_listener_started = False
+def _ensure_listener():
+    global _listener_started
+    if _listener_started or not _vlc_instance:
+        return
+    _listener_started = True
     listener_thread = threading.Thread(target=_media_command_listener, daemon=True)
     listener_thread.start()
-
-    def _song_finished_callback(event):
-        import json
-        import socket
-        try:
-            island_payload = {
-                "state": "idle",
-                "context": "",
-                "category": "",
-                "tool_name": "",
-                "description": "",
-                "notify": {
-                    "title": "Playback Ended",
-                    "body": "Song finished. Play another?",
-                    "category": "MEDIA"
-                }
-            }
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(json.dumps(island_payload).encode(), ("127.0.0.1", 5005))
-            sock.close()
-        except Exception as e:
-            logger.error(f"Failed to notify island on end: {e}")
 
     if _media_player:
         event_manager = _media_player.event_manager()
@@ -111,6 +116,7 @@ async def play_media(media_name: str, media_type: str = "song") -> str:
         media_type: Type of content — "song", "video", "movie", etc.
     """
     logger.info(f"Playing media: {media_name} ({media_type})")
+    _ensure_listener()
     try:
         # Clean query for better search results
         import re

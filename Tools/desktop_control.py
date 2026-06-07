@@ -107,3 +107,78 @@ async def click_on_text(target_text: str) -> str:
         return f"Could not find '{target_text}' on the screen."
     except Exception as e:
         return f"OCR click failed: {e}"
+
+@function_tool
+async def move_mouse_to(x: int, y: int) -> str:
+    """
+    Moves the mouse cursor to specific coordinates.
+
+    Args:
+        x: X coordinate.
+        y: Y coordinate.
+    """
+    try:
+        import pyautogui
+        pyautogui.moveTo(x, y, duration=0.2)
+        return f"Mouse moved to ({x}, {y})."
+    except Exception as e:
+        return f"Failed to move mouse: {e}"
+
+@function_tool
+async def drag_and_drop(x1: int, y1: int, x2: int, y2: int) -> str:
+    """
+    Clicks and holds the mouse at the starting coordinates and drags it to the ending coordinates.
+
+    Args:
+        x1: Starting X coordinate.
+        y1: Starting Y coordinate.
+        x2: Ending X coordinate.
+        y2: Ending Y coordinate.
+    """
+    try:
+        import pyautogui
+        pyautogui.moveTo(x1, y1, duration=0.2)
+        pyautogui.dragTo(x2, y2, duration=0.5, button='left')
+        return f"Dragged from ({x1}, {y1}) to ({x2}, {y2})."
+    except Exception as e:
+        return f"Drag and drop failed: {e}"
+
+@function_tool
+async def right_click(x: Optional[int] = None, y: Optional[int] = None) -> str:
+    """
+    Performs a right click. If coordinates are provided, moves there first.
+
+    Args:
+        x: Optional X coordinate.
+        y: Optional Y coordinate.
+    """
+    try:
+        import pyautogui
+        if x is not None and y is not None:
+            pyautogui.rightClick(x, y)
+            return f"Right-clicked at ({x}, {y})."
+        else:
+            pyautogui.rightClick()
+            return "Right-clicked at current position."
+    except Exception as e:
+        return f"Right click failed: {e}"
+
+@function_tool
+async def double_click(x: Optional[int] = None, y: Optional[int] = None) -> str:
+    """
+    Performs a double left click. If coordinates are provided, moves there first.
+
+    Args:
+        x: Optional X coordinate.
+        y: Optional Y coordinate.
+    """
+    try:
+        import pyautogui
+        if x is not None and y is not None:
+            pyautogui.doubleClick(x, y)
+            return f"Double-clicked at ({x}, {y})."
+        else:
+            pyautogui.doubleClick()
+            return "Double-clicked at current position."
+    except Exception as e:
+        return f"Double click failed: {e}"

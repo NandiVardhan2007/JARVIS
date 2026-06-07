@@ -28,7 +28,26 @@ from livekit.agents.llm import ChatContext, ChatMessage
 from livekit.plugins import groq, openai
 from Tools import get_all_tools, get_tools_for_category, classify_intent
 
-USER_CONTEXTS = {}
+from collections import OrderedDict
+class LRUUserContexts:
+    def __init__(self, maxsize=100):
+        self.cache = OrderedDict()
+        self.maxsize = maxsize
+    def __contains__(self, key):
+        return key in self.cache
+    def __getitem__(self, key):
+        self.cache.move_to_end(key)
+        return self.cache[key]
+    def __setitem__(self, key, value):
+        self.cache[key] = value
+        self.cache.move_to_end(key)
+        if len(self.cache) > self.maxsize:
+            self.cache.popitem(last=False)
+    def __delitem__(self, key):
+        if key in self.cache:
+            del self.cache[key]
+
+USER_CONTEXTS = LRUUserContexts(maxsize=100)
 
 def _build_llm():
     if os.getenv("TELEGRAM_LLM_API", "").strip():
@@ -264,10 +283,13 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
             "Reply in the same language the user uses — if they message in Telugu, reply in Telugu script."
         )
         intent = classify_intent(text)
-        if intent == "creative":
+        if "creative" in intent:
             try:
                 from Tools.ai_image import generate_local_image_comfyui
-                active_tools = [generate_local_image_comfyui]
+                if os.getenv("COMFYUI_GUEST_ENABLED", "false").lower() == "true":
+                    active_tools = [generate_local_image_comfyui]
+                else:
+                    active_tools = []
             except Exception:
                 active_tools = []
         else:
@@ -357,6 +379,10 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
                 except Exception:
                     pass
                 
+            MAX_TOOL_OUTPUT = 2000
+            if len(result) > MAX_TOOL_OUTPUT:
+                result = result[:MAX_TOOL_OUTPUT] + f"\n... [Truncated, original length {len(result)} chars]"
+
             ctx.insert(FunctionCallOutput(call_id=tc.call_id, name=tool_name, output=result, is_error=is_error))
             
             if is_error:
@@ -382,20 +408,31 @@ from collections import OrderedDict
 
 START_TIME = time.time()
 
-class _LRUDedup:
-    """LRU-based message deduplication that evicts oldest entries instead of clearing all."""
-    def __init__(self, maxsize=1000):
-        self._data = OrderedDict()
-        self._maxsize = maxsize
-    def add(self, item):
-        self._data[item] = None
-        self._data.move_to_end(item)
-        while len(self._data) > self._maxsize:
-            self._data.popitem(last=False)
-    def __contains__(self, item):
-        return item in self._data
+import sqlite3
 
-PROCESSED_MESSAGE_IDS = _LRUDedup(maxsize=1000)
+class SQLiteDedup:
+    """SQLite-based message deduplication for cross-restart replays."""
+    def __init__(self, db_path="jarvis_memory/webhook_dedup.db", ttl=86400):
+        self.db_path = db_path
+        self.ttl = ttl
+        import os
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS processed_msgs (msg_id TEXT PRIMARY KEY, timestamp REAL)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON processed_msgs(timestamp)")
+    
+    def __contains__(self, msg_id):
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT 1 FROM processed_msgs WHERE msg_id = ?", (msg_id,)).fetchone()
+            return row is not None
+            
+    def add(self, msg_id):
+        now = time.time()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("INSERT OR IGNORE INTO processed_msgs (msg_id, timestamp) VALUES (?, ?)", (msg_id, now))
+            conn.execute("DELETE FROM processed_msgs WHERE timestamp < ?", (now - self.ttl,))
+
+PROCESSED_MESSAGE_IDS = SQLiteDedup()
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):

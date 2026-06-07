@@ -12,6 +12,7 @@ import logging
 import re
 import os
 import sqlite3
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
@@ -132,11 +133,21 @@ async def _monitor():
                     tool_map = {t.__name__: t for t in get_all_tools()}
                     func = tool_map.get(task["tool_name"])
                     if func:
-                        params = task.get("tool_parameters", "")
-                        if params:
-                            result = await func(params)
-                        else:
-                            result = await func()
+                        params_str = task.get("tool_parameters", "")
+                        params = {}
+                        if params_str:
+                            try:
+                                params = json.loads(params_str)
+                                if not isinstance(params, dict):
+                                    params = {}
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Failed to parse tool parameters: {e}")
+                        
+                        import inspect
+                        res = func(**params)
+                        if inspect.isawaitable(res):
+                            res = await res
+                        result = res
                         logger.info(f"Task {tid} result: {str(result)[:120]}")
                         
                         # Send proactive Telegram notification
@@ -195,7 +206,7 @@ async def schedule_task(
                           "in 2 hours", "tomorrow at 9:00 AM".
         tool_name:        Exact name of the JARVIS tool function to call
                           (e.g., "open_app", "search_web", "get_weather").
-        tool_parameters:  A single string argument to pass to the tool (optional).
+        tool_parameters:  A JSON string containing keyword arguments to pass to the tool (optional).
     """
     global _task_counter
 

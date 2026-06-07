@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
 echo.
 echo [3/3] Booting JARVIS...
 echo ==============================================================
-:: Launch JARVIS dynamically
-python jarvis_launcher.py
+:: Launch JARVIS dynamically via Watchdog
+python watchdog.py
 
 pause

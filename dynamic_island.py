@@ -776,51 +776,57 @@ class PremiumDynamicIsland(QWidget):
 
         # ── Thinking particles (Phase 4: trails + sparks) ──
         is_thinking = self.state == 'thinking'
-        for pt in self.particles:
-            pt['angle'] += pt['speed']
-            if is_thinking:
-                pt['alpha'] = min(1.0, pt['alpha'] + 0.06)
-                # Store trail position
-                face_cx = 28.0
-                face_cy = min(self.current_h / 2, 26.0) if self.current_h > 60 else self.current_h / 2
-                px = face_cx + math.cos(pt['angle']) * pt['radius']
-                py = face_cy + math.sin(pt['angle']) * pt['radius']
-                pt['trail'].append((px, py))
-            else:
-                pt['alpha'] = max(0.0, pt['alpha'] - 0.04)
-                if pt['alpha'] <= 0:
-                    pt['trail'].clear()
+        # Optimization: skip particle updates if idle and no visual output
+        skip_particles = (self.state == 'idle' and self.hover == 0.0 and 
+                          not any(pt['alpha'] > 0 for pt in self.particles) and 
+                          len(self.sparks) == 0)
+                          
+        if not skip_particles:
+            for pt in self.particles:
+                pt['angle'] += pt['speed']
+                if is_thinking:
+                    pt['alpha'] = min(1.0, pt['alpha'] + 0.06)
+                    # Store trail position
+                    face_cx = 28.0
+                    face_cy = min(self.current_h / 2, 26.0) if self.current_h > 60 else self.current_h / 2
+                    px = face_cx + math.cos(pt['angle']) * pt['radius']
+                    py = face_cy + math.sin(pt['angle']) * pt['radius']
+                    pt['trail'].append((px, py))
+                else:
+                    pt['alpha'] = max(0.0, pt['alpha'] - 0.04)
+                    if pt['alpha'] <= 0:
+                        pt['trail'].clear()
 
-        # ── Spark particles update ──
-        if is_thinking and self.frame % 3 == 0:
-            import random
-            if random.random() < 0.02:  # 2% chance per 3 frames
-                face_cx = 28.0
-                face_cy = min(self.current_h / 2, 26.0) if self.current_h > 60 else self.current_h / 2
-                angle = random.uniform(0, 2 * math.pi)
-                speed = random.uniform(1.0, 3.0)
-                self.sparks.append({
-                    'x': face_cx + math.cos(angle) * 18,
-                    'y': face_cy + math.sin(angle) * 18,
-                    'vx': math.cos(angle) * speed,
-                    'vy': math.sin(angle) * speed,
-                    'alpha': 1.0,
-                    'size': random.uniform(1.0, 2.5),
-                    'color': random.choice([
-                        (255, 200, 80), (255, 160, 50), (255, 240, 120),
-                        (0, 212, 255), (175, 82, 222)
-                    ]),
-                })
-        # Update existing sparks
-        new_sparks = []
-        for sp in self.sparks:
-            sp['x'] += sp['vx']
-            sp['y'] += sp['vy']
-            sp['vy'] += 0.05  # gravity
-            sp['alpha'] -= 0.025
-            if sp['alpha'] > 0:
-                new_sparks.append(sp)
-        self.sparks = new_sparks
+            # ── Spark particles update ──
+            if is_thinking and self.frame % 3 == 0:
+                import random
+                if random.random() < 0.02:  # 2% chance per 3 frames
+                    face_cx = 28.0
+                    face_cy = min(self.current_h / 2, 26.0) if self.current_h > 60 else self.current_h / 2
+                    angle = random.uniform(0, 2 * math.pi)
+                    speed = random.uniform(1.0, 3.0)
+                    self.sparks.append({
+                        'x': face_cx + math.cos(angle) * 18,
+                        'y': face_cy + math.sin(angle) * 18,
+                        'vx': math.cos(angle) * speed,
+                        'vy': math.sin(angle) * speed,
+                        'alpha': 1.0,
+                        'size': random.uniform(1.0, 2.5),
+                        'color': random.choice([
+                            (255, 200, 80), (255, 160, 50), (255, 240, 120),
+                            (0, 212, 255), (175, 82, 222)
+                        ]),
+                    })
+            # Update existing sparks
+            new_sparks = []
+            for sp in self.sparks:
+                sp['x'] += sp['vx']
+                sp['y'] += sp['vy']
+                sp['vy'] += 0.05  # gravity
+                sp['alpha'] -= 0.025
+                if sp['alpha'] > 0:
+                    new_sparks.append(sp)
+            self.sparks = new_sparks
 
         # ── Connection status ──
         if time.time() - self.last_heartbeat > 15:
@@ -1055,6 +1061,8 @@ class PremiumDynamicIsland(QWidget):
         mute_lbl = "Unmute Mic" if getattr(self, 'mic_muted', False) else "Mute Mic"
         mute_a = QAction(f"🎤  {mute_lbl}  (Ctrl+M)", self)
         
+        settings_a = QAction("⚙  Settings", self)
+        
         sep1 = menu.addSeparator()
         stop_a     = QAction("⊘  Stop JARVIS", self)
         hide_a     = QAction("◎  Hide  (Ctrl+J)", self)
@@ -1063,6 +1071,7 @@ class PremiumDynamicIsland(QWidget):
         menu.addAction(history_a)
         menu.addAction(reset_pos_a)
         menu.addAction(mute_a)
+        menu.addAction(settings_a)
         menu.addSeparator()
         menu.addAction(hide_a)
         menu.addSeparator()
@@ -1080,6 +1089,8 @@ class PremiumDynamicIsland(QWidget):
             self.custom_y = 14
         elif action == mute_a:
             self._toggle_mute()
+        elif action == settings_a:
+            self._open_settings()
         elif action == hide_a:
             self._toggle_visibility()
         elif action == stop_a:
@@ -1087,6 +1098,43 @@ class PremiumDynamicIsland(QWidget):
             os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Token Server" >nul 2>&1')
             os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Telegram Bot" >nul 2>&1')
             QTimer.singleShot(500, QApplication.quit)
+
+    def _open_settings(self):
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton
+        dlg = QDialog(self)
+        dlg.setWindowTitle("JARVIS HUD Settings")
+        dlg.setFixedSize(300, 150)
+        dlg.setStyleSheet("background-color: #1e1e22; color: white;")
+        layout = QVBoxLayout()
+        
+        row1 = QHBoxLayout()
+        lbl1 = QLabel("Auto-collapse Timeout (s):")
+        spn1 = QSpinBox()
+        spn1.setRange(3, 60)
+        spn1.setValue(self.auto_collapse_s)
+        spn1.setStyleSheet("background-color: #2a2a32; color: white; border: 1px solid #3a3a4a;")
+        row1.addWidget(lbl1)
+        row1.addWidget(spn1)
+        layout.addLayout(row1)
+        
+        btn_box = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        save_btn.setStyleSheet("background-color: #007aff; color: white; padding: 5px;")
+        save_btn.clicked.connect(lambda: dlg.accept())
+        btn_box.addStretch()
+        btn_box.addWidget(save_btn)
+        layout.addLayout(btn_box)
+        
+        dlg.setLayout(layout)
+        if dlg.exec_():
+            self.auto_collapse_s = spn1.value()
+            try:
+                import json, os
+                s_path = os.path.join(os.path.dirname(__file__), "jarvis_memory", "hud_settings.json")
+                with open(s_path, "w") as f:
+                    json.dump({"auto_collapse_s": self.auto_collapse_s}, f)
+            except Exception as e:
+                print("Failed to save settings:", e)
 
     def _bounce(self, s=0.95):
         self.target_click_scale = s

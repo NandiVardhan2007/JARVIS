@@ -19,6 +19,27 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS episodic_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                summary TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS personality (
+                trait TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        
+        # Insert default personality if empty
+        cursor = conn.execute("SELECT COUNT(*) FROM personality")
+        if cursor.fetchone()[0] == 0:
+            conn.execute("INSERT INTO personality (trait, value) VALUES ('identity', 'You are JARVIS, a real-time voice AI assistant with full desktop control, built for speed and precision. You speak with calm confidence, dry wit, and zero filler. Think Tony Stark''s AI — competent, sharp, and effortlessly helpful.')")
+            conn.execute("INSERT INTO personality (trait, value) VALUES ('voice_rules', 'Be extremely concise. No markdown or emoji. Lead with the answer. Never narrate your actions.')")
+            conn.execute("INSERT INTO personality (trait, value) VALUES ('behavior', 'Decisive, proactive, and protective. Only ask for clarification when genuinely ambiguous.')")
+
         conn.commit()
 
 init_db()
@@ -88,14 +109,52 @@ async def forget_fact(fact_id: int) -> str:
         logger.error(f"Failed to forget fact: {e}")
         return f"Failed to forget fact: {e}"
 
-def get_memory_summary() -> str:
-    """Returns a formatted string of all memories for the system prompt."""
+@function_tool
+async def update_personality(trait: str, value: str) -> str:
+    """
+    Updates or adds a personality trait for JARVIS.
+    
+    Args:
+        trait: The trait to update (e.g., 'identity', 'voice_rules', 'behavior', 'humor').
+        value: The new value or description for that trait.
+    """
     try:
         with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("INSERT OR REPLACE INTO personality (trait, value) VALUES (?, ?)", (trait.strip(), value.strip()))
+            conn.commit()
+        return f"Personality trait '{trait}' updated to: {value}"
+    except Exception as e:
+        logger.error(f"Failed to update personality: {e}")
+        return f"Failed to update personality: {e}"
+
+def save_episodic_summary(summary: str):
+    """Saves a session conversation summary to episodic memory."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("INSERT INTO episodic_memory (summary) VALUES (?)", (summary.strip(),))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to save episodic summary: {e}")
+
+def get_memory_summary() -> str:
+    """Returns a formatted string of all memories, personality, and episodes for the system prompt."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            # 1. Facts
             cursor = conn.execute("SELECT fact FROM memory")
             rows = cursor.fetchall()
-            if not rows:
-                return "No persistent memories saved yet."
-            return "\n".join(f"- {r[0]}" for r in rows)
-    except Exception:
-        return "Memory system unavailable."
+            facts_str = "\n".join(f"- {r[0]}" for r in rows) if rows else "No persistent memories saved yet."
+            
+            # 2. Personality
+            cursor = conn.execute("SELECT trait, value FROM personality")
+            p_rows = cursor.fetchall()
+            personality_str = "\n".join(f"- {r[0].capitalize()}: {r[1]}" for r in p_rows) if p_rows else ""
+            
+            # 3. Episodic Memory (last 5)
+            cursor = conn.execute("SELECT datetime(created_at, 'localtime'), summary FROM episodic_memory ORDER BY id DESC LIMIT 5")
+            e_rows = cursor.fetchall()
+            episodes_str = "\n".join(f"[{r[0]}] {r[1]}" for r in reversed(e_rows)) if e_rows else "No previous sessions recorded."
+            
+            return f"## PERSONALITY PROFILE\n{personality_str}\n\n## PERSISTENT FACTS\n{facts_str}\n\n## PREVIOUS SESSIONS\n{episodes_str}"
+    except Exception as e:
+        return f"Memory system unavailable: {e}"

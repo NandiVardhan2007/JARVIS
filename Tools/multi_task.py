@@ -8,6 +8,14 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
+_REGISTRY = None
+
+def _get_registry():
+    global _REGISTRY
+    if _REGISTRY is None:
+        from Tools import get_all_tools
+        _REGISTRY = {t.info.name: t for t in get_all_tools() if t.info.name != "execute_multi_task"}
+    return _REGISTRY
 
 @function_tool
 async def execute_multi_task(tasks_json: str) -> str:
@@ -21,8 +29,6 @@ async def execute_multi_task(tasks_json: str) -> str:
             - 'params' (dict): Keyword arguments for that tool.
             Example: '[{"tool_name": "open_app", "params": {"app_name": "chrome"}}, {"tool_name": "get_weather", "params": {"city": "London"}}]'
     """
-    from Tools import get_all_tools
-
     # Parse the JSON string into a list of task dicts
     try:
         tasks = json.loads(tasks_json)
@@ -32,13 +38,10 @@ async def execute_multi_task(tasks_json: str) -> str:
     if not isinstance(tasks, list):
         return "tasks_json must be a JSON array of task objects."
 
-    # Dynamically build the registry from all loaded tools, excluding multi_task itself to prevent recursion
-    all_tools = get_all_tools()
-    REGISTRY = {t.info.name: t for t in all_tools if t.info.name != "execute_multi_task"}
-
     if not tasks:
         return "No tasks were provided."
 
+    registry = _get_registry()
     results = []
     for i, task in enumerate(tasks, 1):
         name = task.get("tool_name")
@@ -47,23 +50,18 @@ async def execute_multi_task(tasks_json: str) -> str:
         if not name:
             results.append(f"Task {i}: missing 'tool_name'.")
             continue
-        fn = REGISTRY.get(name)
+        
+        fn = registry.get(name)
         if not fn:
             results.append(f"Task {i}: unknown tool '{name}'.")
             continue
+            
         try:
-            # FIX: @function_tool wraps async def functions — calling fn(**params)
-            # without await just created a coroutine object that was immediately
-            # discarded, so every tool silently no-oped. Now we check the underlying
-            # function (_func) and await when it's a coroutine.
-            raw_fn = fn._func if hasattr(fn, "_func") else fn
-            if inspect.iscoroutinefunction(raw_fn):
-                result = await raw_fn(**params)
-            else:
-                result = raw_fn(**params)
+            result = fn(**params)
+            if inspect.isawaitable(result):
+                result = await result
             results.append(f"Task {i} ({name}): {result}")
         except Exception as e:
             results.append(f"Task {i} ({name}) failed: {e}")
 
     return "Multi-Task Results:\n" + "\n".join(results)
-
