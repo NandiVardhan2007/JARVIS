@@ -150,24 +150,12 @@ def get_dynamic_system_prompt() -> str:
     except Exception:
         memories = "Memory system unavailable."
 
-    try:
-        location_path = os.path.join(os.path.dirname(__file__), "jarvis_memory", "location.json")
-        if os.path.exists(location_path):
-            with open(location_path, "r") as f:
-                loc_data = json.load(f)
-                location_str = f"{loc_data.get('address', 'Unknown')} (Lat: {loc_data.get('lat')}, Lon: {loc_data.get('lon')})"
-        else:
-            location_str = "Location unknown."
-    except Exception:
-        location_str = "Location parsing error."
-
     dynamic_context = f"""
 ## LIVE CONTEXT
 - Current Time: {now}
 - User: {user}
 - Hostname: {host}
 - Active App: {active_app}
-- User Location: {location_str}
 
 ## PERSISTENT MEMORIES
 {memories}
@@ -611,35 +599,6 @@ async def main() -> None:
                             send_message(chat_id, "Sorry, I couldn't transcribe that voice note.")
                             continue
                         logger.info(f"Transcribed voice note: {text}")
-
-                location = msg.get("location")
-                if location:
-                    lat = location.get("latitude")
-                    lon = location.get("longitude")
-                    send_message(chat_id, "Received location. Updating JARVIS context...")
-                    # Reverse geocode using Nominatim
-                    try:
-                        headers = {"User-Agent": "JARVIS-Assistant/1.0"}
-                        geo_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
-                        geo_resp = requests.get(geo_url, headers=headers, timeout=5)
-                        if geo_resp.status_code == 200:
-                            geo_data = geo_resp.json()
-                            address = geo_data.get("display_name", "Unknown Address")
-                        else:
-                            address = f"Coordinates: {lat}, {lon}"
-                            
-                        # Save to memory
-                        mem_dir = os.path.join(os.path.dirname(__file__), "jarvis_memory")
-                        os.makedirs(mem_dir, exist_ok=True)
-                        loc_path = os.path.join(mem_dir, "location.json")
-                        with open(loc_path, "w") as f:
-                            json.dump({"lat": lat, "lon": lon, "address": address, "timestamp": time.time()}, f)
-                            
-                        send_message(chat_id, f"Location updated to:\n{address}")
-                    except Exception as e:
-                        logger.error(f"Geocoding failed: {e}")
-                        send_message(chat_id, "Location received, but reverse geocoding failed.")
-                    continue
 
                 if not text:
                     continue

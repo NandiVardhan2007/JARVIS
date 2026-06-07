@@ -1061,8 +1061,6 @@ class PremiumDynamicIsland(QWidget):
         mute_lbl = "Unmute Mic" if getattr(self, 'mic_muted', False) else "Mute Mic"
         mute_a = QAction(f"🎤  {mute_lbl}  (Ctrl+M)", self)
         
-        settings_a = QAction("⚙  Settings", self)
-        
         sep1 = menu.addSeparator()
         stop_a     = QAction("⊘  Stop JARVIS", self)
         hide_a     = QAction("◎  Hide  (Ctrl+J)", self)
@@ -1071,7 +1069,6 @@ class PremiumDynamicIsland(QWidget):
         menu.addAction(history_a)
         menu.addAction(reset_pos_a)
         menu.addAction(mute_a)
-        menu.addAction(settings_a)
         menu.addSeparator()
         menu.addAction(hide_a)
         menu.addSeparator()
@@ -1089,8 +1086,6 @@ class PremiumDynamicIsland(QWidget):
             self.custom_y = 14
         elif action == mute_a:
             self._toggle_mute()
-        elif action == settings_a:
-            self._open_settings()
         elif action == hide_a:
             self._toggle_visibility()
         elif action == stop_a:
@@ -1098,43 +1093,6 @@ class PremiumDynamicIsland(QWidget):
             os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Token Server" >nul 2>&1')
             os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Telegram Bot" >nul 2>&1')
             QTimer.singleShot(500, QApplication.quit)
-
-    def _open_settings(self):
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton
-        dlg = QDialog(self)
-        dlg.setWindowTitle("JARVIS HUD Settings")
-        dlg.setFixedSize(300, 150)
-        dlg.setStyleSheet("background-color: #1e1e22; color: white;")
-        layout = QVBoxLayout()
-        
-        row1 = QHBoxLayout()
-        lbl1 = QLabel("Auto-collapse Timeout (s):")
-        spn1 = QSpinBox()
-        spn1.setRange(3, 60)
-        spn1.setValue(self.auto_collapse_s)
-        spn1.setStyleSheet("background-color: #2a2a32; color: white; border: 1px solid #3a3a4a;")
-        row1.addWidget(lbl1)
-        row1.addWidget(spn1)
-        layout.addLayout(row1)
-        
-        btn_box = QHBoxLayout()
-        save_btn = QPushButton("Save")
-        save_btn.setStyleSheet("background-color: #007aff; color: white; padding: 5px;")
-        save_btn.clicked.connect(lambda: dlg.accept())
-        btn_box.addStretch()
-        btn_box.addWidget(save_btn)
-        layout.addLayout(btn_box)
-        
-        dlg.setLayout(layout)
-        if dlg.exec_():
-            self.auto_collapse_s = spn1.value()
-            try:
-                import json, os
-                s_path = os.path.join(os.path.dirname(__file__), "jarvis_memory", "hud_settings.json")
-                with open(s_path, "w") as f:
-                    json.dump({"auto_collapse_s": self.auto_collapse_s}, f)
-            except Exception as e:
-                print("Failed to save settings:", e)
 
     def _bounce(self, s=0.95):
         self.target_click_scale = s

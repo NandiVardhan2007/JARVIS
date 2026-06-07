@@ -22,3 +22,4 @@ token.pickle
 models/
 jarvis.db
 jarvis_waha.db
+pretrained_models/

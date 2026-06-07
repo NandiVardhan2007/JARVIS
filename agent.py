@@ -61,11 +61,6 @@ MAX_HISTORY_MESSAGES = 20  # keep system prompt + last ~10 user/assistant turns
 class JarvisAgent(Agent):
     """Agent subclass that trims conversation history before each LLM call."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Store the LLM to use it for background tasks if needed
-        self.llm_engine = kwargs.get('llm')
-
     def llm_node(self, chat_ctx, tools, model_settings):
         """Override the LLM pipeline node to trim history first and dynamically filter tools."""
         msgs = chat_ctx.messages()
@@ -74,29 +69,6 @@ class JarvisAgent(Agent):
         dynamic_prompt = get_dynamic_system_prompt()
         if len(msgs) > 0 and msgs[0].role == "system":
             msgs[0].content = [dynamic_prompt]
-            
-        # --- Voice Security Check ---
-        from Tools.voice_security import voice_security
-        # In a real pipeline, we pass the actual audio frame from the STT stream
-        is_authorized = voice_security.verify_audio_frame(None)
-        
-        # Debug/Testing hook: If user types [unauthorized], simulate rejection
-        recent_user_text = []
-        for m in reversed(msgs):
-            if m.role == "user":
-                recent_user_text.append("".join(str(c) for c in m.content) if isinstance(m.content, list) else str(m.content))
-                if len(recent_user_text) >= 2:
-                    break
-                    
-        if recent_user_text and "[unauthorized]" in recent_user_text[0].lower():
-            is_authorized = False
-            
-        if not is_authorized:
-            logger.warning("Unauthorized voice detected. Rejecting command.")
-            async def reject_stream():
-                from livekit.agents.llm import ChatChunk, ChoiceDelta
-                yield ChatChunk(choices=[ChoiceDelta(role="assistant", content="I'm sorry, you are not authorized to use this system.")])
-            return reject_stream()
 
         # 2. Trim chat history
         if len(msgs) > MAX_HISTORY_MESSAGES:
@@ -117,30 +89,6 @@ class JarvisAgent(Agent):
             # Try current message intent first
             current_text = recent_user_text[0]
             intent = classify_intent(current_text)
-            
-            # --- Implicit Learning from Corrections ---
-            lower_text = current_text.lower()
-            if any(x in lower_text for x in ["no,", "wrong", "not what i meant", "correction"]):
-                logger.info("Detected correction. Triggering implicit memory extraction.")
-                async def extract_and_memorize():
-                    try:
-                        from livekit.agents.llm import ChatContext, ChatMessage
-                        summary_ctx = ChatContext()
-                        summary_ctx._items.append(ChatMessage(role="system", content="Extract the specific user preference or correction from the following message as a concise fact (e.g. 'User prefers X over Y'). If it's not a factual correction, output 'NONE'."))
-                        summary_ctx._items.append(ChatMessage(role="user", content=current_text))
-                        stream = self.llm_engine.chat(chat_ctx=summary_ctx)
-                        fact = ""
-                        async for chunk in stream:
-                            if chunk.choices and chunk.choices[0].delta.content:
-                                fact += chunk.choices[0].delta.content
-                        if fact and "NONE" not in fact:
-                            from Tools.user_memory import memorize_fact
-                            await memorize_fact(fact.strip())
-                    except Exception as e:
-                        logger.error(f"Implicit memory error: {e}")
-                
-                import asyncio
-                asyncio.create_task(extract_and_memorize())
             
             # If default intent and we have history, fallback to combined context
             if intent == ["core"] and len(recent_user_text) >= 2:
@@ -197,6 +145,18 @@ LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 JARVIS_SYSTEM_PROMPT = """
 # JARVIS — Voice Agent Specification
 
+## Identity
+You are JARVIS, a real-time voice AI assistant with full desktop control, built for speed and precision. You speak with calm confidence, dry wit, and zero filler. Think Tony Stark's AI — competent, sharp, and effortlessly helpful.
+
+## Voice Output Rules
+Your responses are spoken aloud via TTS. Follow these rules strictly:
+1. **Be extremely concise.** 1-2 sentences for confirmations. 3-4 max for explanations.
+2. **No markdown, no bullet points, no numbered lists.** Speak naturally like a human would.
+3. **No emoji.** They can't be spoken.
+4. **Lead with the answer.** Never start with "Sure!", "Of course!", "Absolutely!" or other filler.
+5. **Never narrate your actions.** Don't say "Let me search for that" — just do it and report the result.
+6. **Use natural spoken English.** Say "three thirty PM" not "15:30". Say "about two gigs" not "2,048 MB".
+
 ## Tool Usage
 - You have 40+ tools for desktop control, email, web, code, files, media, and more.
 - **Act first, ask later.** If the intent is clear, execute immediately. Only ask for clarification when genuinely ambiguous.
@@ -204,10 +164,18 @@ JARVIS_SYSTEM_PROMPT = """
 - **Chain tools when needed.** For complex requests, use execute_multi_task or call tools sequentially.
 - **On failure:** Explain what went wrong in plain language and suggest an alternative. Never give raw tracebacks.
 
+## Behavior
+- **Decisive:** Choose the most likely interpretation and act on it.
+- **Proactive:** If you notice something useful (e.g., an error on screen, a relevant memory), mention it briefly.
+- **Protective:** Confirm before destructive actions (shutdown, delete, format). Everything else: just do it.
+- **Context-aware:** Use the active window, time of day, and user memories to personalize responses.
+- **Consistent identity:** You are always JARVIS. Never break character or reference being an AI model.
+
 ## Language
 Respond only in English. If the user speaks another language, acknowledge it and respond in English.
-"""
 
+You are JARVIS. Precise. Efficient. At your service.
+"""
 
 _cached_prompt = ""
 _cache_time = 0.0
@@ -253,25 +221,12 @@ def get_dynamic_system_prompt() -> str:
     except Exception:
         memories = "Memory system unavailable."
 
-    try:
-        location_path = os.path.join(os.path.dirname(__file__), "jarvis_memory", "location.json")
-        if os.path.exists(location_path):
-            import json
-            with open(location_path, "r") as f:
-                loc_data = json.load(f)
-                location_str = f"{loc_data.get('address', 'Unknown')} (Lat: {loc_data.get('lat')}, Lon: {loc_data.get('lon')})"
-        else:
-            location_str = "Location unknown."
-    except Exception:
-        location_str = "Location parsing error."
-
     dynamic_context = f"""
 ## LIVE CONTEXT
 - Current Time: {now}
 - User: {user}
 - Hostname: {host}
 - Active App: {active_app}
-- User Location: {location_str}
 
 ## PERSISTENT MEMORIES
 {memories}
@@ -326,13 +281,13 @@ async def entrypoint(ctx: agents.JobContext):
                         logger.info(f"Detected dropped items: {item_str}")
                         
                         msg = ChatMessage(
-                            content=f"I just dragged and dropped the following file into your HUD dropzone: {item_str}. Please use the `process_document_query` tool (or another relevant tool) to analyze it and give me a summary.", 
+                            content=f"SYSTEM NOTIFICATION: The user just dragged and dropped the following file(s) into your HUD dropzone: {item_str}. You can now analyze them if requested.", 
                             role="user"
                         )
                         session.chat_ctx._items.append(msg)
                         
-                        # Trigger LLM explicitly
-                        asyncio.create_task(session.generate_reply())
+                        fname = os.path.basename(items[0])
+                        await session.say(f"I've received the file {fname}. What would you like me to do with it?", allow_interruptions=True)
                 except Exception as e:
                     logger.error(f"Dropzone error: {e}")
             await asyncio.sleep(1)
@@ -386,40 +341,9 @@ async def entrypoint(ctx: agents.JobContext):
     import asyncio
     await asyncio.sleep(1)
     
+    
     # Start dropzone monitor
     asyncio.create_task(monitor_dropzone(session))
-    
-    # Start Proactive Monitor
-    from Tools.proactive_monitor import start_proactive_monitor
-    asyncio.create_task(start_proactive_monitor(session, lambda: _active_app))
-    
-    # Start Periodic Summarization
-    async def periodic_summarization():
-        from Tools.user_memory import save_episodic_summary
-        from livekit.agents.llm import ChatContext, ChatMessage
-        while True:
-            await asyncio.sleep(1200) # 20 minutes
-            try:
-                msgs = session.chat_ctx.messages()
-                if len(msgs) > 2:
-                    summary_ctx = ChatContext()
-                    summary_ctx._items.append(ChatMessage(role="system", content="Summarize the following conversation in 1-2 brief sentences, capturing key decisions or topics discussed. Ignore tool calls and errors. Just output the summary text."))
-                    for m in msgs[-10:]:
-                        summary_ctx._items.append(m)
-                    
-                    stream = agent_llm.chat(chat_ctx=summary_ctx)
-                    summary = ""
-                    async for chunk in stream:
-                        if chunk.choices and chunk.choices[0].delta.content:
-                            summary += chunk.choices[0].delta.content
-                    
-                    if summary:
-                        logger.info(f"Generated 20-min rolling episodic summary: {summary}")
-                        save_episodic_summary(summary)
-            except Exception as e:
-                logger.error(f"Periodic summarization error: {e}")
-                
-    asyncio.create_task(periodic_summarization())
     
     # --- HUD UDP Server ---
     class HUDUDPProtocol(asyncio.DatagramProtocol):
