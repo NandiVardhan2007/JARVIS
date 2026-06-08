@@ -43,6 +43,13 @@ from .terminal import run_terminal_command
 from .github_tool import list_github_repos, get_github_pull_requests, create_github_issue, get_github_recent_commits
 from .knowledge_base import save_note, search_knowledge_base
 from .error_telemetry import get_error_summary, get_recent_errors
+from .mobile_control import (
+    connect_phone, get_phone_status, unlock_phone, lock_phone,
+    phone_tap, phone_swipe, phone_type, phone_press_key,
+    open_phone_app, close_phone_app, list_installed_apps,
+    send_phone_notification, read_phone_screen, phone_ocr_tap,
+    push_file_to_phone, pull_file_from_phone, run_phone_command
+)
 
 # ── NOVA features ─────────────────────────────────────────────────────────────
 from .document_processor import process_document_query
@@ -114,6 +121,13 @@ TOOL_CATEGORIES = {
     "scheduler": [
         schedule_task, view_scheduled_tasks, cancel_scheduled_task,
         morning_briefing
+    ],
+    "mobile": [
+        connect_phone, get_phone_status, unlock_phone, lock_phone,
+        phone_tap, phone_swipe, phone_type, phone_press_key,
+        open_phone_app, close_phone_app, list_installed_apps,
+        send_phone_notification, read_phone_screen, phone_ocr_tap,
+        push_file_to_phone, pull_file_from_phone, run_phone_command
     ]
 }
 
@@ -165,6 +179,8 @@ _INTENT_KEYWORDS = {
                       "song", "media", "youtube", "monitor"],
     "creative":      ["image", "video", "generate", "draw", "art", "picture", "photo"],
     "reminder":      ["remind"],
+    "mobile":        ["phone", "mobile", "android", "unlock", "notification", 
+                      "app on phone", "my phone", "send to phone"],
 }
 
 _INTENT_PATTERNS = {}
