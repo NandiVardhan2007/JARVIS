@@ -349,9 +349,20 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
             
         # Inform user a tool is running
         
+        has_new_tool_calls = False
         for tc in res.tool_calls:
             tool_name = tc.name
             args_str = tc.arguments
+            
+            # Check for identical repeated tool calls
+            call_signature = f"{tool_name}:{args_str}"
+            if getattr(ctx, '_last_tool_call_signature', None) == call_signature:
+                logger.warning(f"Preventing repeated identical tool call: {call_signature}")
+                ctx.insert(FunctionCallOutput(call_id=tc.call_id, name=tool_name, output="System Error: You already made this exact tool call. Please stop looping and provide a final text response to the user.", is_error=True))
+                continue
+                
+            ctx._last_tool_call_signature = call_signature
+            has_new_tool_calls = True
             
             try:
                 args = json.loads(args_str) if args_str.strip() else {}
@@ -389,6 +400,10 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
                 send_whatsapp_reply(chat_id, f"❌ *Failed:* `{tool_name}`")
             else:
                 send_whatsapp_reply(chat_id, f"✅ *Finished:* `{tool_name}`")
+                
+        if not has_new_tool_calls:
+            logger.info("No new tool calls executed (duplicate detection). Breaking loop.")
+            break
                 
             # Intercept image tools
             if not is_error and "Saved to: " in result:

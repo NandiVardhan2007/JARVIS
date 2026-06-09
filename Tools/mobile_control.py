@@ -20,7 +20,7 @@ PHONE_PATTERN = os.getenv("JARVIS_PHONE_PATTERN", "")
 ADB_PATH   = os.getenv("ADB_PATH", "adb")           # full path if not in PATH
 
 
-def _adb(*args, timeout: int = 10) -> tuple[str, str, int]:
+def _adb(*args, timeout: int = 10, retry: bool = True) -> tuple[str, str, int]:
     """Run an ADB command against the configured phone. Returns (stdout, stderr, returncode)."""
     if not PHONE_IP:
         return "", "JARVIS_PHONE_IP not set in .env", 1
@@ -31,6 +31,12 @@ def _adb(*args, timeout: int = 10) -> tuple[str, str, int]:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout
         )
+        
+        # Auto-reconnect if device dropped
+        if retry and (result.returncode != 0 and ("device offline" in result.stderr or "not found" in result.stderr)):
+            subprocess.run([ADB_PATH, "connect", target], capture_output=True, text=True, timeout=10)
+            return _adb(*args, timeout=timeout, retry=False)
+            
         return result.stdout.strip(), result.stderr.strip(), result.returncode
     except subprocess.TimeoutExpired:
         return "", f"ADB command timed out after {timeout}s", 1
@@ -273,7 +279,7 @@ async def phone_type(text: str) -> str:
     # Use clipboard method for reliability
     encoded = text.replace(" ", "%s").replace("'", "")
     stdout, stderr, code = await _adb_async("shell", "input", "text", encoded)
-    return f"Typed text on phone." if code == 0 else f"Type failed: {stderr}"
+    return "Typed text on phone." if code == 0 else f"Type failed: {stderr}"
 
 
 @function_tool
@@ -583,7 +589,7 @@ async def run_phone_command(command: str) -> str:
     # Basic safety filter
     blocked = ["rm -rf", "format", "wipe", "reboot bootloader"]
     if any(b in command.lower() for b in blocked):
-        return f"Command blocked for safety."
+        return "Command blocked for safety."
 
     stdout, stderr, code = await _adb_async("shell", command, timeout=15)
     if stdout:
@@ -591,3 +597,43 @@ async def run_phone_command(command: str) -> str:
     if stderr:
         return f"Error: {stderr[:500]}"
     return "Command executed (no output)."
+
+
+# ── Phone Calling (Native) ──────────────────────────────────────────────────
+
+@function_tool
+async def android_make_call(phone_number: str) -> str:
+    """
+    Makes a direct phone call using the native Android dialer on the user's phone via LiveKit DataChannel.
+    IMPORTANT: You must format the phone number properly with the country code (e.g. +919876543210).
+    
+    Args:
+        phone_number: The number to call.
+    """
+    clean_number = "".join(c for c in phone_number if c.isdigit() or c == "+")
+    
+    try:
+        import __main__ as agent
+        import json
+        if hasattr(agent, "current_room") and agent.current_room:
+            payload = json.dumps({"action": "make_call", "number": clean_number})
+            await agent.current_room.local_participant.publish_data(payload.encode('utf-8'))
+            return f"Sent native call intent to JARVIS Mobile App for {clean_number}."
+        else:
+            return "Failed to call: JARVIS Mobile is not connected to the LiveKit room."
+    except Exception as e:
+        return f"Failed to dial via JARVIS Mobile: {e}"
+
+
+@function_tool
+async def android_end_call() -> str:
+    """Ends the current active phone call on the Android phone."""
+    stdout, stderr, code = await _adb_async("shell", "input", "keyevent", "KEYCODE_ENDCALL")
+    return "Call ended on Android phone." if code == 0 else f"Failed to end call: {stderr}"
+
+
+@function_tool
+async def android_answer_call() -> str:
+    """Answers an incoming phone call on the Android phone."""
+    stdout, stderr, code = await _adb_async("shell", "input", "keyevent", "KEYCODE_CALL")
+    return "Answered call on Android phone." if code == 0 else f"Failed to answer call: {stderr}"

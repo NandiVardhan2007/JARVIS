@@ -35,11 +35,17 @@ async def search_web(query: str) -> str:
 
     # 2. DuckDuckGo Instant Answer API
     try:
-        resp = requests.get(
-            "https://api.duckduckgo.com/",
-            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
-            timeout=8,
-        )
+        from tenacity import retry, stop_after_attempt, wait_exponential
+        
+        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+        def _fetch_ddg_api():
+            return requests.get(
+                "https://api.duckduckgo.com/",
+                params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
+                timeout=8,
+            )
+            
+        resp = _fetch_ddg_api()
         data = resp.json()
         if data.get("AbstractText"):
             return f"DuckDuckGo:\n{data['AbstractText']}"
@@ -57,7 +63,13 @@ async def search_web(query: str) -> str:
     # 3. LangChain DuckDuckGo search
     try:
         from langchain_community.tools import DuckDuckGoSearchRun
-        result = DuckDuckGoSearchRun().run(query)
+        from tenacity import retry, stop_after_attempt, wait_fixed
+        
+        @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+        def _fetch_ddg_search():
+            return DuckDuckGoSearchRun().run(query)
+            
+        result = _fetch_ddg_search()
         if result and len(result) > 20:
             return f"Search results:\n{result}"
     except Exception as e:

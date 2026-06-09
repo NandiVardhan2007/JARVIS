@@ -28,7 +28,7 @@ from .notepad import write_in_notepad
 from .file_ops import (
     open_file_command, list_directory, search_files, create_file, 
     create_folder, copy_file_or_folder, move_or_rename_path, 
-    delete_path, read_text_file
+    delete_path, read_text_file, edit_file_diff
 )
 from .ai_image import generate_local_image_comfyui, generate_ai_video, get_generation_presets
 from .code_generator import generate_and_type_code, run_file_in_vscode
@@ -48,7 +48,8 @@ from .mobile_control import (
     phone_tap, phone_swipe, phone_type, phone_press_key,
     open_phone_app, close_phone_app, list_installed_apps,
     send_phone_notification, read_phone_screen, phone_ocr_tap,
-    push_file_to_phone, pull_file_from_phone, run_phone_command
+    push_file_to_phone, pull_file_from_phone, run_phone_command,
+    android_make_call
 )
 
 # ── NOVA features ─────────────────────────────────────────────────────────────
@@ -56,6 +57,8 @@ from .document_processor import process_document_query
 from .scheduler import schedule_task, view_scheduled_tasks, cancel_scheduled_task
 from .code_fixer import fix_code_error
 from .briefing import morning_briefing
+from .coder_agent import auto_write_and_debug_code
+from .codebase_rag import index_project_codebase, search_codebase
 
 # ── Tool Categories ───────────────────────────────────────────────────────────
 
@@ -90,7 +93,7 @@ TOOL_CATEGORIES = {
         generate_and_type_code, run_file_in_vscode, review_file, 
         review_pr, suggest_refactor, run_terminal_command,
         list_github_repos, get_github_pull_requests, create_github_issue, get_github_recent_commits,
-        fix_code_error
+        fix_code_error, auto_write_and_debug_code, index_project_codebase, search_codebase
     ],
     "system": [
         system_power_action, get_system_info, control_screen_brightness,
@@ -105,12 +108,13 @@ TOOL_CATEGORIES = {
         open_file_command, read_screen, read_selected_region, list_monitors,
         process_document_query, list_directory, search_files,
         create_file, create_folder, copy_file_or_folder, 
-        move_or_rename_path, delete_path, read_text_file
+        move_or_rename_path, delete_path, read_text_file, edit_file_diff
     ],
     "communication": [
         send_telegram_message, get_telegram_messages, 
         send_discord_message, get_discord_messages,
-        send_whatsapp_message, send_whatsapp_media, search_google_contact
+        send_whatsapp_message, send_whatsapp_media, search_google_contact,
+        android_make_call
     ],
     "creative": [
         generate_local_image_comfyui, generate_ai_video, get_generation_presets
@@ -131,6 +135,29 @@ TOOL_CATEGORIES = {
     ]
 }
 
+import functools
+import traceback
+import logging
+
+def _safe_tool_wrapper(func):
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            logging.getLogger("JARVIS.Tools").error(f"Tool {func.__name__} crashed: {e}\n{traceback.format_exc()}")
+            return f"SYSTEM EXCEPTION: The tool '{func.__name__}' encountered a runtime error: {e}. Please inform the user."
+    return wrapper
+
+def _sandbox_tools(tool_list):
+    """Wraps the underlying function of LiveKit FunctionTool objects to prevent crashes."""
+    unique_tools = list({t.__name__: t for t in tool_list}.values())
+    for t in unique_tools:
+        if hasattr(t, "_fnc") and getattr(t, "_sandboxed", False) is False:
+            t._fnc = _safe_tool_wrapper(t._fnc)
+            t._sandboxed = True
+    return unique_tools
+
 def get_all_tools() -> list:
     """
     Return all JARVIS tool functions for the agent.
@@ -140,8 +167,7 @@ def get_all_tools() -> list:
     all_tools = list(CORE_TOOLS)
     for cat_tools in TOOL_CATEGORIES.values():
         all_tools.extend(cat_tools)
-    # Deduplicate just in case
-    return list({t.__name__: t for t in all_tools}.values())
+    return _sandbox_tools(all_tools)
 
 def get_tools_for_category(category) -> list:
     """
@@ -153,7 +179,7 @@ def get_tools_for_category(category) -> list:
     for cat in categories:
         if cat in TOOL_CATEGORIES:
             tools.extend(TOOL_CATEGORIES[cat])
-    return list({t.__name__: t for t in tools}.values())
+    return _sandbox_tools(tools)
 
 
 # ── Pre-compiled intent patterns (compiled once at module load) ───────────────
@@ -170,7 +196,7 @@ _INTENT_KEYWORDS = {
     "system":        ["process", "brightness", "volume", "system", "virus", "shut down",
                       "shutdown", "restart", "sleep", "pc", "computer", "power", "battery",
                       "cpu", "ram", "storage", "disk"],
-    "communication": ["telegram", "discord", "whatsapp", "message"],
+    "communication": ["telegram", "discord", "whatsapp", "message", "call", "phone", "ring", "dial", "hang up", "end call"],
     "scheduler":     ["schedule", "timer", "remind me at", "remind me after", "briefing",
                       "morning briefing"],
     "desktop":       ["window", "open app", "open folder", "open file", "type", "click",

@@ -269,3 +269,43 @@ async def read_text_file(path: str) -> str:
         return f"Error: '{path}' appears to be a binary file and cannot be read as text."
     except Exception as e:
         return f"Failed to read file: {str(e)}"
+
+@function_tool
+async def edit_file_diff(file_path: str, target_content: str, replacement_content: str) -> str:
+    """
+    Edits a file by replacing a specific block of text (target_content) with new text (replacement_content).
+    This is highly preferred over rewriting entire files for minor changes.
+    
+    Args:
+        file_path: Absolute or relative path to the file to edit.
+        target_content: The EXACT string in the file to be replaced (including exact indentation).
+        replacement_content: The new text that will replace target_content.
+    """
+    try:
+        path = _resolve_path(file_path)
+        if not os.path.isfile(path):
+            return f"Error: '{path}' does not exist or is not a file."
+            
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        if target_content not in content:
+            return (
+                f"Error: The target_content was not found exactly as provided in '{path}'. "
+                "Ensure your indentation and line breaks perfectly match the source file."
+            )
+            
+        if content.count(target_content) > 1:
+            return (
+                f"Error: The target_content appears {content.count(target_content)} times in '{path}'. "
+                "Please provide a larger, more unique target_content block to ensure the correct code is replaced."
+            )
+            
+        new_content = content.replace(target_content, replacement_content)
+        
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+            
+        return f"Successfully updated '{path}'. The code block was replaced."
+    except Exception as e:
+        return f"Failed to edit file: {str(e)}"

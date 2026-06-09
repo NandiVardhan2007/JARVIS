@@ -126,13 +126,9 @@ async def control_system_volume(prompt: str, volume_level: int) -> str:
         return "Volume level must be between 0 and 100."
     try:
         if platform.system() == "Windows":
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities
             devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
-            volume.SetMasterVolumeLevelScalar(volume_level / 100, None)
+            devices.EndpointVolume.SetMasterVolumeLevelScalar(volume_level / 100, None)
         else:
             os.system(f"pactl set-sink-volume @DEFAULT_SINK@ {volume_level}%")
         return f"System volume set to {volume_level}%."

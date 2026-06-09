@@ -2,7 +2,6 @@
 
 import subprocess
 import logging
-import re
 import os
 from livekit.agents import function_tool
 
@@ -68,7 +67,7 @@ async def run_terminal_command(command: str) -> str:
         stderr = result.stderr.strip()
 
         if result.returncode == 0:
-            out = f"Command succeeded.\n"
+            out = "Command succeeded.\n"
             if stdout: out += f"[STDOUT]:\n{stdout}"
             if stderr: out += f"\n[STDERR]:\n{stderr}"
             return out.strip()

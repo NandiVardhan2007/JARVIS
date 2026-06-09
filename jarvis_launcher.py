@@ -68,6 +68,10 @@ def main():
     env_path = os.path.join(get_base_path(), ".env")
     if os.path.exists(env_path):
         load_dotenv(env_path)
+        
+    # Run Centralized Configuration Validator
+    import config
+    config.validate_environment()
     
     # Generate a unique room name for this session to prevent clashes
     room_name = f"jarvis-room-{uuid.uuid4().hex[:8]}"
@@ -104,21 +108,39 @@ def main():
     else:
         print("WHATSAPP_WEBHOOK_ENABLED is not true, skipping WAHA webhook server.")
     
+    # Watchdog loop
     try:
-        # Wait for UI to close
-        ui_proc.wait()
+        while ui_proc.poll() is None:
+            # Check agent
+            if agent_proc.poll() is not None:
+                print("[WATCHDOG] Agent process crashed. Restarting...")
+                agent_proc = subprocess.Popen(cmd + ["agent", room_name])
+            
+            # Check telegram
+            if telegram_proc and telegram_proc.poll() is not None:
+                print("[WATCHDOG] Telegram process crashed. Restarting...")
+                telegram_proc = subprocess.Popen(cmd + ["telegram"])
+                
+            # Check whatsapp
+            if whatsapp_proc and whatsapp_proc.poll() is not None:
+                print("[WATCHDOG] WhatsApp process crashed. Restarting...")
+                whatsapp_proc = subprocess.Popen(cmd + ["whatsapp"])
+                
+            time.sleep(1)
     except KeyboardInterrupt:
         pass
     finally:
         print("Shutting down JARVIS...")
-        agent_proc.terminate()
-        agent_proc.wait()
-        if telegram_proc:
+        if agent_proc and agent_proc.poll() is None:
+            agent_proc.terminate()
+            agent_proc.wait()
+        if telegram_proc and telegram_proc.poll() is None:
             telegram_proc.terminate()
             telegram_proc.wait()
-        if whatsapp_proc:
+        if whatsapp_proc and whatsapp_proc.poll() is None:
             whatsapp_proc.terminate()
             whatsapp_proc.wait()
+
 
 if __name__ == "__main__":
     # Windows multiprocessing/subprocess support for PyInstaller

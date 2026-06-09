@@ -112,8 +112,6 @@ async def send_whatsapp_message(contact_number: str, message: str) -> str:
         import pyautogui
         import time
         
-        import time
-        
         # 1. Open Windows Search and open WhatsApp
         pyautogui.press("win")
         time.sleep(1)
