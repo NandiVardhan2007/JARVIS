@@ -3,6 +3,7 @@ import json
 import logging
 import asyncio
 import requests
+import aiohttp
 from dotenv import load_dotenv
 
 # Ensure dotenv is loaded before anything else
@@ -548,172 +549,173 @@ async def main() -> None:
     retry_count = 0
     max_backoff = 60
 
-    while True:
-        try:
-            resp = requests.get(
-                TELEGRAM_API + "getUpdates",
-                params={
-                    "timeout": 30,
-                    "allowed_updates": ["message"],
-                    **({"offset": offset} if offset is not None else {}),
-                },
-                timeout=40,
-            )
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(
+                    TELEGRAM_API + "getUpdates",
+                    params={
+                        "timeout": 30,
+                        "allowed_updates": json.dumps(["message"]),
+                        **({"offset": offset} if offset is not None else {}),
+                    },
+                    timeout=40,
+                ) as resp:
 
-            if resp.status_code != 200:
-                logger.error(f"Telegram API error: {resp.text}")
+                    if resp.status != 200:
+                        logger.error(f"Telegram API error: {await resp.text()}")
+                        retry_count += 1
+                        backoff_time = min(max_backoff, (2 ** retry_count) + random.uniform(0, 2))
+                        await asyncio.sleep(backoff_time)
+                        continue
+
+                    # Reset backoff on success
+                    retry_count = 0
+
+                    for update in (await resp.json()).get("result", []):
+                        offset = update["update_id"] + 1
+                        save_offset(offset)
+
+                        msg = update.get("message", {})
+                
+                        # Ignore messages older than 60 seconds before bot startup
+                        if msg.get("date", 0) < start_time - 60:
+                            logger.info(f"Ignoring stale message from {msg.get('date')}")
+                            continue
+                    
+                        chat_id = str(msg.get("chat", {}).get("id", ""))
+                        text = msg.get("text", "")
+                        voice = msg.get("voice", {})
+
+                        if not chat_id:
+                            continue
+                    
+                        if not text and voice:
+                            # Handle Voice Note
+                            file_id = voice.get("file_id")
+                            if file_id:
+                                _send_typing(chat_id)
+                                send_hud_state("thinking", context="tool", tool_name="Transcribing Voice", category="MESSAGING", desc="Processing voice note...")
+                                text = await _transcribe_voice(file_id)
+                                if not text:
+                                    send_message(chat_id, "Sorry, I couldn't transcribe that voice note.")
+                                    continue
+                                logger.info(f"Transcribed voice note: {text}")
+
+                        if not text:
+                            continue
+
+                        user = msg.get("from", {})
+                        username = user.get("username", "Unknown")
+
+                        # Security check
+                        if not ALLOWED_USERS_LIST:
+                            send_message(chat_id, "Bot is not configured for any users. Set TELEGRAM_ALLOWED_USERS in .env.")
+                            continue
+                        if (
+                            chat_id not in ALLOWED_USERS_LIST
+                            and username not in ALLOWED_USERS_LIST
+                        ):
+                            logger.warning(f"Unauthorized: {chat_id} (@{username})")
+                            send_message(chat_id, "You are not authorized to use this JARVIS instance.")
+                            continue
+
+                        if text.startswith("/start"):
+                            send_message(chat_id, "🔷 *JARVIS Online*\nAll systems operational.\n\nUse /help to see what I can do, or simply speak/type to me.")
+                            continue
+                        elif text.startswith("/mute"):
+                            import socket
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                            sock.sendto(json.dumps({"state": "idle", "mic_muted": True, "notify": {"title": "JARVIS", "body": "Muted via Telegram", "category": "SYSTEM"}}).encode('utf-8'), ("127.0.0.1", 5005))
+                            send_message(chat_id, "🔇 *Desktop Microphone Muted*")
+                            continue
+                        elif text.startswith("/unmute"):
+                            import socket
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                            sock.sendto(json.dumps({"state": "idle", "mic_muted": False, "notify": {"title": "JARVIS", "body": "Unmuted via Telegram", "category": "SYSTEM"}}).encode('utf-8'), ("127.0.0.1", 5005))
+                            send_message(chat_id, "🎙️ *Desktop Microphone Unmuted*")
+                            continue
+                        elif text.startswith("/status"):
+                            import psutil
+                            cpu = psutil.cpu_percent(interval=0.1)
+                            ram = psutil.virtual_memory().percent
+                            status_msg = f"📊 *JARVIS System Status*\n\n💻 *CPU:* `{cpu}%`\n🧠 *RAM:* `{ram}%`\n⚡ *Connection:* `Online`\n🔗 *LLM:* `NVIDIA / Groq`"
+                            send_message(chat_id, status_msg)
+                            continue
+                        elif text.startswith("/voice"):
+                            try:
+                                from livekit import api
+                                import uuid
+                                token = api.AccessToken(
+                                    os.getenv("LIVEKIT_API_KEY"),
+                                    os.getenv("LIVEKIT_API_SECRET")
+                                )
+                                room_name = os.getenv("LIVEKIT_ROOM", "jarvis-room")
+                                token.with_identity(f"telegram_user_{chat_id}_{str(uuid.uuid4())[:8]}")
+                                token.with_name(username)
+                                import datetime
+                                token.with_ttl(datetime.timedelta(minutes=30))
+                                token.with_grants(api.VideoGrants(
+                                    room_join=True,
+                                    room=room_name,
+                                ))
+                                jwt_token = token.to_jwt()
+                        
+                                livekit_url = os.getenv("LIVEKIT_URL", "wss://your-project.livekit.cloud")
+                                meet_url = f"https://meet.livekit.io/custom?liveKitUrl={livekit_url}&token={jwt_token}"
+                        
+                                send_message(chat_id, f"🎤 *Voice Bridge Ready*\n\nJoin the JARVIS voice room here:\n[Connect to Voice]({meet_url})")
+                            except Exception as e:
+                                logger.error(f"Failed to generate LiveKit token: {e}", exc_info=True)
+                                send_message(chat_id, f"Failed to generate voice bridge token: {e}")
+                            continue
+                        elif text.startswith("/help"):
+                            help_msg = (
+                                "🔷 *JARVIS Commands*\n\n"
+                                "*/voice* - Join the LiveKit voice bridge\n"
+                                "*/mute* - Mute the desktop microphone remotely\n"
+                                "*/unmute* - Unmute the desktop microphone\n"
+                                "*/status* - Check PC hardware status\n"
+                                "*/clear* - Reset conversation memory\n\n"
+                                "*Capabilities:*\n"
+                                "📧 *Email*: Read, search, summarize, and reply.\n"
+                                "🌐 *Web*: Search Google, summarize URLs, scrape websites.\n"
+                                "📅 *Calendar*: Check schedule, find free slots, create events.\n"
+                                "📈 *Finance*: Track stocks, crypto, and portfolio.\n"
+                                "💻 *System*: Process management, volume, brightness, viruses.\n"
+                                "⌨️ *Desktop*: Automate apps, typing, clicking, WhatsApp.\n"
+                                "🖼️ *Creative*: Generate images and videos.\n"
+                            )
+                            send_message(chat_id, help_msg)
+                            continue
+                        elif text.startswith("/clear"):
+                            if chat_id in USER_CONTEXTS:
+                                del USER_CONTEXTS[chat_id]
+                            send_message(chat_id, "Conversation memory cleared. Ready for a new task.")
+                            continue
+
+                        logger.info(f"Received from {chat_id} (@{username}): {text}")
+
+                        if not _check_rate_limit(chat_id):
+                            logger.warning(f"Rate limit exceeded for {chat_id} (@{username})")
+                            send_message(chat_id, "Rate limit exceeded. Please wait a moment before sending more messages.")
+                            continue
+
+                        # BUG FIX: await directly — create_task() caused replies to be
+                        # garbage-collected before they could run.
+                        await handle_message(chat_id, text)
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.warning(f"Network error: {e}")
+                retry_count += 1
+                backoff_time = min(max_backoff, (2 ** retry_count) + random.uniform(0, 2))
+                logger.info(f"Backing off for {backoff_time:.1f}s")
+                await asyncio.sleep(backoff_time)
+            except Exception as e:
+                logger.error(f"Polling loop error: {e}", exc_info=True)
                 retry_count += 1
                 backoff_time = min(max_backoff, (2 ** retry_count) + random.uniform(0, 2))
                 await asyncio.sleep(backoff_time)
-                continue
-            
-            # Reset backoff on success
-            retry_count = 0
-
-            for update in resp.json().get("result", []):
-                offset = update["update_id"] + 1
-                save_offset(offset)
-
-                msg = update.get("message", {})
-                
-                # Ignore messages older than 60 seconds before bot startup
-                if msg.get("date", 0) < start_time - 60:
-                    logger.info(f"Ignoring stale message from {msg.get('date')}")
-                    continue
-                    
-                chat_id = str(msg.get("chat", {}).get("id", ""))
-                text = msg.get("text", "")
-                voice = msg.get("voice", {})
-
-                if not chat_id:
-                    continue
-                    
-                if not text and voice:
-                    # Handle Voice Note
-                    file_id = voice.get("file_id")
-                    if file_id:
-                        _send_typing(chat_id)
-                        send_hud_state("thinking", context="tool", tool_name="Transcribing Voice", category="MESSAGING", desc="Processing voice note...")
-                        text = await _transcribe_voice(file_id)
-                        if not text:
-                            send_message(chat_id, "Sorry, I couldn't transcribe that voice note.")
-                            continue
-                        logger.info(f"Transcribed voice note: {text}")
-
-                if not text:
-                    continue
-
-                user = msg.get("from", {})
-                username = user.get("username", "Unknown")
-
-                # Security check
-                if not ALLOWED_USERS_LIST:
-                    send_message(chat_id, "Bot is not configured for any users. Set TELEGRAM_ALLOWED_USERS in .env.")
-                    continue
-                if (
-                    chat_id not in ALLOWED_USERS_LIST
-                    and username not in ALLOWED_USERS_LIST
-                ):
-                    logger.warning(f"Unauthorized: {chat_id} (@{username})")
-                    send_message(chat_id, "You are not authorized to use this JARVIS instance.")
-                    continue
-
-                if text.startswith("/start"):
-                    send_message(chat_id, "🔷 *JARVIS Online*\nAll systems operational.\n\nUse /help to see what I can do, or simply speak/type to me.")
-                    continue
-                elif text.startswith("/mute"):
-                    import socket
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    sock.sendto(json.dumps({"state": "idle", "mic_muted": True, "notify": {"title": "JARVIS", "body": "Muted via Telegram", "category": "SYSTEM"}}).encode('utf-8'), ("127.0.0.1", 5005))
-                    send_message(chat_id, "🔇 *Desktop Microphone Muted*")
-                    continue
-                elif text.startswith("/unmute"):
-                    import socket
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    sock.sendto(json.dumps({"state": "idle", "mic_muted": False, "notify": {"title": "JARVIS", "body": "Unmuted via Telegram", "category": "SYSTEM"}}).encode('utf-8'), ("127.0.0.1", 5005))
-                    send_message(chat_id, "🎙️ *Desktop Microphone Unmuted*")
-                    continue
-                elif text.startswith("/status"):
-                    import psutil
-                    cpu = psutil.cpu_percent(interval=0.1)
-                    ram = psutil.virtual_memory().percent
-                    status_msg = f"📊 *JARVIS System Status*\n\n💻 *CPU:* `{cpu}%`\n🧠 *RAM:* `{ram}%`\n⚡ *Connection:* `Online`\n🔗 *LLM:* `NVIDIA / Groq`"
-                    send_message(chat_id, status_msg)
-                    continue
-                elif text.startswith("/voice"):
-                    try:
-                        from livekit import api
-                        import uuid
-                        token = api.AccessToken(
-                            os.getenv("LIVEKIT_API_KEY"),
-                            os.getenv("LIVEKIT_API_SECRET")
-                        )
-                        room_name = os.getenv("LIVEKIT_ROOM", "jarvis-room")
-                        token.with_identity(f"telegram_user_{chat_id}_{str(uuid.uuid4())[:8]}")
-                        token.with_name(username)
-                        import datetime
-                        token.with_ttl(datetime.timedelta(minutes=30))
-                        token.with_grants(api.VideoGrants(
-                            room_join=True,
-                            room=room_name,
-                        ))
-                        jwt_token = token.to_jwt()
-                        
-                        livekit_url = os.getenv("LIVEKIT_URL", "wss://your-project.livekit.cloud")
-                        meet_url = f"https://meet.livekit.io/custom?liveKitUrl={livekit_url}&token={jwt_token}"
-                        
-                        send_message(chat_id, f"🎤 *Voice Bridge Ready*\n\nJoin the JARVIS voice room here:\n[Connect to Voice]({meet_url})")
-                    except Exception as e:
-                        logger.error(f"Failed to generate LiveKit token: {e}", exc_info=True)
-                        send_message(chat_id, f"Failed to generate voice bridge token: {e}")
-                    continue
-                elif text.startswith("/help"):
-                    help_msg = (
-                        "🔷 *JARVIS Commands*\n\n"
-                        "*/voice* - Join the LiveKit voice bridge\n"
-                        "*/mute* - Mute the desktop microphone remotely\n"
-                        "*/unmute* - Unmute the desktop microphone\n"
-                        "*/status* - Check PC hardware status\n"
-                        "*/clear* - Reset conversation memory\n\n"
-                        "*Capabilities:*\n"
-                        "📧 *Email*: Read, search, summarize, and reply.\n"
-                        "🌐 *Web*: Search Google, summarize URLs, scrape websites.\n"
-                        "📅 *Calendar*: Check schedule, find free slots, create events.\n"
-                        "📈 *Finance*: Track stocks, crypto, and portfolio.\n"
-                        "💻 *System*: Process management, volume, brightness, viruses.\n"
-                        "⌨️ *Desktop*: Automate apps, typing, clicking, WhatsApp.\n"
-                        "🖼️ *Creative*: Generate images and videos.\n"
-                    )
-                    send_message(chat_id, help_msg)
-                    continue
-                elif text.startswith("/clear"):
-                    if chat_id in USER_CONTEXTS:
-                        del USER_CONTEXTS[chat_id]
-                    send_message(chat_id, "Conversation memory cleared. Ready for a new task.")
-                    continue
-
-                logger.info(f"Received from {chat_id} (@{username}): {text}")
-
-                if not _check_rate_limit(chat_id):
-                    logger.warning(f"Rate limit exceeded for {chat_id} (@{username})")
-                    send_message(chat_id, "Rate limit exceeded. Please wait a moment before sending more messages.")
-                    continue
-
-                # BUG FIX: await directly — create_task() caused replies to be
-                # garbage-collected before they could run.
-                await handle_message(chat_id, text)
-
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Network error: {e}")
-            retry_count += 1
-            backoff_time = min(max_backoff, (2 ** retry_count) + random.uniform(0, 2))
-            logger.info(f"Backing off for {backoff_time:.1f}s")
-            await asyncio.sleep(backoff_time)
-        except Exception as e:
-            logger.error(f"Polling loop error: {e}", exc_info=True)
-            retry_count += 1
-            backoff_time = min(max_backoff, (2 ** retry_count) + random.uniform(0, 2))
-            await asyncio.sleep(backoff_time)
 
 
 if __name__ == "__main__":
