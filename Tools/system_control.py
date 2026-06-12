@@ -186,7 +186,7 @@ async def use_smart_clipboard(
         item_index: 1-based index of the clipboard item to paste (required for paste_item).
     """
     try:
-        import pyautogui, time
+        import pyautogui, time, asyncio
         if action == "open_history":
             pyautogui.hotkey("win", "v")
             return "Clipboard history opened."
@@ -194,10 +194,10 @@ async def use_smart_clipboard(
             if not item_index or item_index < 1:
                 return "Please specify a valid item index (1 or greater)."
             pyautogui.hotkey("win", "v")
-            time.sleep(0.5)
+            await asyncio.sleep(0.5)
             for _ in range(item_index - 1):
                 pyautogui.press("tab")
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
             pyautogui.press("enter")
             return f"Pasted clipboard item #{item_index}."
         return "Unknown clipboard action."
