@@ -2,6 +2,7 @@
 
 import logging
 import time
+import asyncio
 from typing import Literal, Optional
 from livekit.agents import function_tool
 
@@ -71,7 +72,7 @@ async def type_user_message_auto(message: str) -> str:
         return "No message provided to type."
     try:
         import pyautogui
-        time.sleep(0.3)
+        await asyncio.sleep(0.3)
         pyautogui.write(message, interval=0.04)
         preview = message[:60] + ("..." if len(message) > 60 else "")
         return f'Typed: "{preview}"'
