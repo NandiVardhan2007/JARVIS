@@ -28,9 +28,11 @@ LOCAL_LLM_URL   = os.getenv("LOCAL_LLM_URL", "")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
 
+SCREENSHOTS_DIR = "/run/media/nandu/Data/JARVIS/JARVIS_Screenshots"
+
 def _cleanup_old_screenshots() -> None:
     """Delete screenshots older than 24 hours."""
-    save_dir = "/run/media/nandu/Data/JARVIS/Output/jarvis_screenshots"
+    save_dir = SCREENSHOTS_DIR
     if not os.path.exists(save_dir):
         return
         
@@ -63,33 +65,83 @@ _start_cleanup_task()
 
 
 def _take_screenshot(save_dir: Optional[str] = None, monitor_index: int = 1) -> str:
-    """Take a screenshot using mss, save to disk, return file path."""
-    import mss
-    from PIL import Image
+    """Take a non-black screenshot on Linux (Wayland / X11), save to disk, return file path."""
+    import glob
+    import subprocess
+    from PIL import Image, ImageStat
 
     if save_dir is None:
-        save_dir = "/run/media/nandu/Data/JARVIS/Output/jarvis_screenshots"
+        save_dir = SCREENSHOTS_DIR
     os.makedirs(save_dir, exist_ok=True)
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     path = os.path.join(save_dir, f"screen_{timestamp}.png")
 
-    with mss.mss() as sct:
-        if monitor_index >= len(sct.monitors) or monitor_index < 0:
-            monitor_index = 0 # Default to all monitors
-            
-        sct_img = sct.grab(sct.monitors[monitor_index])
-        screenshot = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+    # Strategy 1: Freedesktop D-Bus portal screenshot (Wayland native)
+    try:
+        pic_dirs = [
+            os.path.expanduser("~/Pictures"),
+            os.path.expanduser("~/Pictures/Screenshots"),
+            os.path.expanduser("~/.cache/portal/screenshot"),
+        ]
+        before_files = {}
+        for d in pic_dirs:
+            if os.path.exists(d):
+                before_files[d] = set(glob.glob(os.path.join(d, "*.png")) + glob.glob(os.path.join(d, "*.jpg")))
 
-    # Resize to max 1920x1080 to keep payload small
-    max_w, max_h = 1920, 1080
-    w, h = screenshot.size
-    if w > max_w or h > max_h:
-        ratio = min(max_w / w, max_h / h)
-        screenshot = screenshot.resize(
-            (int(w * ratio), int(h * ratio)), Image.LANCZOS
+        subprocess.run(
+            [
+                "gdbus", "call", "--session",
+                "--dest", "org.freedesktop.portal.Desktop",
+                "--object-path", "/org/freedesktop/portal/desktop",
+                "--method", "org.freedesktop.portal.Screenshot.Screenshot",
+                "", "{'interactive': <false>}"
+            ],
+            capture_output=True, text=True, timeout=3
         )
-    screenshot.save(path, "PNG", optimize=True)
+        time.sleep(1.2)
+
+        newest_file = None
+        newest_mtime = 0
+        for d in pic_dirs:
+            if os.path.exists(d):
+                after = set(glob.glob(os.path.join(d, "*.png")) + glob.glob(os.path.join(d, "*.jpg")))
+                created = after - before_files.get(d, set())
+                for f in created:
+                    mt = os.path.getmtime(f)
+                    if mt > newest_mtime:
+                        newest_mtime = mt
+                        newest_file = f
+
+        if newest_file and os.path.exists(newest_file):
+            img = Image.open(newest_file)
+            if sum(ImageStat.Stat(img).mean[:3]) > 2.0:
+                img.save(path, "PNG")
+                logger.info(f"Screenshot captured via Wayland portal: {newest_file}")
+                return path
+    except Exception as portal_err:
+        logger.debug(f"Portal screenshot failed: {portal_err}")
+
+    # Strategy 2: Fallback to mss (for X11)
+    try:
+        import mss
+        with mss.mss() as sct:
+            if monitor_index >= len(sct.monitors) or monitor_index < 0:
+                monitor_index = 0
+            sct_img = sct.grab(sct.monitors[monitor_index])
+            screenshot = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+
+            max_w, max_h = 1920, 1080
+            w, h = screenshot.size
+            if w > max_w or h > max_h:
+                ratio = min(max_w / w, max_h / h)
+                screenshot = screenshot.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+            screenshot.save(path, "PNG", optimize=True)
+            return path
+    except Exception as mss_err:
+        logger.warning(f"mss screenshot failed: {mss_err}")
+
     return path
 
 
@@ -355,7 +407,7 @@ async def read_selected_region(
         from PIL import Image
 
         screenshot = pyautogui.screenshot(region=(x, y, width, height))
-        save_dir = "/run/media/nandu/Data/JARVIS/Output/jarvis_screenshots"
+        save_dir = SCREENSHOTS_DIR
         os.makedirs(save_dir, exist_ok=True)
         path = os.path.join(save_dir, f"region_{time.strftime('%H%M%S')}.png")
         screenshot.save(path)

@@ -18,46 +18,17 @@ class _TranscriptionPanelState extends State<TranscriptionPanel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _caret;
 
-  // Typewriter state for JARVIS's reply.
-  String _fullReply = '';
-  int _shown = 0;
-  DateTime _lastTick = DateTime.now();
-
   @override
   void initState() {
     super.initState();
-    _caret = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    _caret = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
       ..repeat(reverse: true);
-    _caret.addListener(_advanceTypewriter);
   }
 
   @override
   void dispose() {
-    _caret.removeListener(_advanceTypewriter);
     _caret.dispose();
     super.dispose();
-  }
-
-  void _advanceTypewriter() {
-    final reply = widget.snapshot.response.trim();
-    if (reply != _fullReply) {
-      // New reply → restart reveal.
-      _fullReply = reply;
-      _shown = 0;
-      _lastTick = DateTime.now();
-    }
-    if (_shown < _fullReply.length) {
-      final now = DateTime.now();
-      final elapsed = now.difference(_lastTick).inMilliseconds;
-      // ~45 chars/sec reveal.
-      final add = (elapsed / 22).floor();
-      if (add > 0) {
-        setState(() {
-          _shown = (_shown + add).clamp(0, _fullReply.length);
-          _lastTick = now;
-        });
-      }
-    }
   }
 
   @override
@@ -65,12 +36,11 @@ class _TranscriptionPanelState extends State<TranscriptionPanel>
     final s = widget.snapshot;
     final accent = s.colors.primary;
     final you = s.transcript.trim();
-    final reply = _fullReply;
-    final revealed = reply.substring(0, _shown.clamp(0, reply.length));
-    final showCaret = s.state == AssistantState.speaking && _shown < reply.length;
+    final reply = s.response.trim();
+    final showCaret = s.state == AssistantState.speaking;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 620),
+      constraints: const BoxConstraints(maxWidth: 640),
       child: Container(
         padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
         decoration: BoxDecoration(
@@ -95,7 +65,7 @@ class _TranscriptionPanelState extends State<TranscriptionPanel>
               _line(label: 'YOU', text: you, color: JarvisTheme.textDim, labelColor: accent, dim: true),
               const SizedBox(height: 10),
             ],
-            _replyLine(revealed, reply, showCaret, accent, s),
+            _replyLine(reply, reply, showCaret, accent, s),
           ],
         ),
       ),

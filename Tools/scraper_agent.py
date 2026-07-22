@@ -232,7 +232,7 @@ async def take_web_screenshot(url: str) -> str:
         import os
         import urllib.parse
 
-        output_dir = "/run/media/nandu/Data/JARVIS/Output/Web_Screenshots"
+        output_dir = "/run/media/nandu/Data/JARVIS/JARVIS_Screenshots"
         os.makedirs(output_dir, exist_ok=True)
         hti = Html2Image(output_path=output_dir)
 

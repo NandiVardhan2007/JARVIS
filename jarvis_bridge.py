@@ -107,18 +107,20 @@ class Hub:
 
 
 def derive_state(raw: dict) -> str:
-    """Pick the face state from the HUD state + live audio levels."""
+    """Pick the face state from the explicit agent state + live audio levels."""
     hud_state = str(raw.get("state", "idle")).lower()
     ai = float(raw.get("ai_level", 0.0) or 0.0)
     mic = float(raw.get("mic_level", 0.0) or 0.0)
     muted = bool(raw.get("mic_muted", False))
 
-    state = hud_state if hud_state in _FACE_STATES else "idle"
+    if hud_state in ("speaking", "listening", "thinking", "alert", "input"):
+        return hud_state
+
     if ai > SPEAK_THRESHOLD:
-        state = "speaking"
+        return "speaking"
     elif not muted and mic > LISTEN_THRESHOLD:
-        state = "listening"
-    return state
+        return "listening"
+    return "idle"
 
 
 def build_payload(raw: dict) -> dict:

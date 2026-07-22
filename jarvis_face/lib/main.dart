@@ -6,6 +6,7 @@ import 'models/jarvis_state.dart';
 import 'services/jarvis_connection.dart';
 import 'theme.dart';
 import 'widgets/music_player_card.dart';
+import 'widgets/system_monitor_card.dart';
 import 'widgets/transcription_panel.dart';
 import 'widgets/weather_card.dart';
 
@@ -72,7 +73,7 @@ class _JarvisHomeState extends State<JarvisHome> {
             decoration: JarvisTheme.backgroundDecoration(glow),
             child: LayoutBuilder(
               builder: (context, c) {
-                final wide = c.maxWidth >= 940;
+                final wide = c.maxWidth >= 960;
                 return Stack(
                   children: [
                     SafeArea(
@@ -93,9 +94,11 @@ class _JarvisHomeState extends State<JarvisHome> {
                                     const SizedBox(height: 12),
                                     TranscriptionPanel(snapshot: snap),
                                     if (!wide) ...[
-                                      const SizedBox(height: 24),
+                                      const SizedBox(height: 20),
+                                      const SystemMonitorCard(),
+                                      const SizedBox(height: 14),
                                       WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
-                                      const SizedBox(height: 16),
+                                      const SizedBox(height: 14),
                                       _musicCard(snap),
                                     ],
                                   ],
@@ -103,12 +106,24 @@ class _JarvisHomeState extends State<JarvisHome> {
                               ),
                             ),
                           ),
+                          _quickChips(),
+                          const SizedBox(height: 6),
                           _commandBar(snap),
                         ],
                       ),
                     ),
                     if (wide) ...[
-                      Positioned(left: 28, top: 92, child: WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity)),
+                      Positioned(
+                        left: 28,
+                        top: 92,
+                        child: Column(
+                          children: [
+                            const SystemMonitorCard(),
+                            const SizedBox(height: 14),
+                            WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
+                          ],
+                        ),
+                      ),
                       Positioned(right: 28, top: 92, child: _musicCard(snap)),
                     ],
                   ],
@@ -270,6 +285,34 @@ class _JarvisHomeState extends State<JarvisHome> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _quickChips() {
+    final chips = [
+      ('📝 Text Editor', 'open text editor'),
+      ('📸 Screenshot', 'take screenshot'),
+      ('👁️ What\'s on screen?', 'what is on my screen'),
+      ('💻 System Info', 'show system info'),
+      ('☀️ Weather', 'what is the weather'),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: chips.map((c) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: ActionChip(
+              label: Text(c.$1, style: const TextStyle(fontSize: 11.5, color: JarvisTheme.textPrimary)),
+              backgroundColor: Colors.white.op(0.04),
+              side: const BorderSide(color: JarvisTheme.cardBorder),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              onPressed: () => _conn.sendText(c.$2),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

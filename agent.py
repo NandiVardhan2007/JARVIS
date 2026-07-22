@@ -358,7 +358,61 @@ async def entrypoint(ctx: agents.JobContext):
     import asyncio
     await asyncio.sleep(1)
     
-    
+    # ── Live UI state & caption synchronization ────────────────────────────
+    import socket
+    from livekit.agents.voice import events
+    _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def send_hud_state(payload: dict):
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            _udp_sock.sendto(data, ("127.0.0.1", 5005))
+            _udp_sock.sendto(data, ("127.0.0.1", 5016))
+        except Exception:
+            pass
+
+    @session.on("user_input_transcribed")
+    def _on_user_input_transcribed(ev: events.UserInputTranscribedEvent):
+        text = ev.transcript.strip()
+        if text:
+            logger.info(f"User transcribed: {text}")
+            send_hud_state({"state": "listening", "transcript": text})
+
+    @session.on("agent_state_changed")
+    def _on_agent_state_changed(ev: events.AgentStateChangedEvent):
+        st_str = str(ev.new_state).lower()
+        if st_str in ("idle", "listening", "thinking", "speaking"):
+            send_hud_state({"state": st_str})
+
+    @session.on("user_state_changed")
+    def _on_user_state_changed(ev: events.UserStateChangedEvent):
+        st_str = str(ev.new_state).lower()
+        if st_str in ("speaking", "listening"):
+            send_hud_state({"state": "listening"})
+
+    @session.on("conversation_item_added")
+    def _on_conversation_item_added(ev: events.ConversationItemAddedEvent):
+        try:
+            item = ev.item
+            role = getattr(item, "role", "")
+            if role in ("assistant", "agent"):
+                content = getattr(item, "content", "")
+                if isinstance(content, list):
+                    text = " ".join([str(c) for c in content if isinstance(c, str)])
+                else:
+                    text = str(content)
+                text = text.strip()
+                if text:
+                    logger.info(f"Agent reply committed: {text[:60]}")
+                    send_hud_state({
+                        "state": "speaking",
+                        "context": "response",
+                        "transcript": text,
+                        "last_response": text,
+                    })
+        except Exception as e:
+            logger.warning(f"Error in conversation_item_added: {e}")
+
     # Start dropzone monitor
     asyncio.create_task(monitor_dropzone(session))
     
@@ -374,12 +428,20 @@ async def entrypoint(ctx: agents.JobContext):
                     text = msg.get('text', '')
                     if text:
                         logger.info(f"Received text input from HUD: {text}")
-                        asyncio.create_task(self.session.generate_reply(user_input=text))
+                        async def _run_text():
+                            h = self.session.generate_reply(user_input=text)
+                            if asyncio.iscoroutine(h) or hasattr(h, '__await__'):
+                                await h
+                        asyncio.create_task(_run_text())
                 elif msg.get('type') == 'action':
                     action = msg.get('action', '')
                     if action == 'screenshot':
                         logger.info("Received screenshot action from HUD")
-                        asyncio.create_task(self.session.generate_reply(user_input="Take a screenshot"))
+                        async def _run_screenshot():
+                            h = self.session.generate_reply(user_input="Take a screenshot")
+                            if asyncio.iscoroutine(h) or hasattr(h, '__await__'):
+                                await h
+                        asyncio.create_task(_run_screenshot())
             except Exception as e:
                 logger.error(f"HUD UDP server error: {e}")
 
@@ -405,5 +467,6 @@ if __name__ == "__main__":
             entrypoint_fnc=entrypoint,
             worker_type=agents.WorkerType.ROOM,
             agent_name="jarvis",   # Used by LiveKit for auto-dispatch in 'dev' mode
+            memory_warn_mb=4096,   # Increase threshold to suppress high memory warnings
         )
     )

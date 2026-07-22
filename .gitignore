@@ -23,3 +23,8 @@ models/
 jarvis.db
 jarvis_waha.db
 pretrained_models/
+
+# Screenshot output directories
+JARVIS_Screenshots/
+Output/
+
