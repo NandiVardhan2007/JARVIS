@@ -33,14 +33,14 @@ async def generate_ai_video(
 
     Args:
         prompt: English description of the video to generate.
-        output_path: Where to save the video (defaults to Desktop/jarvis_videos/).
+        output_path: Where to save the video (defaults to JARVIS/Output/Media).
         duration: Length in seconds (default: 3).
         fps: Frames per second (default: 24).
         model: AI model to use (default: "runway").
         timeout: Maximum wait time in seconds (default: 120).
     """
-    if not output_path:
-        save_dir = os.path.join(os.path.expanduser("~/Desktop"), "jarvis_videos")
+    if output_path is None:
+        save_dir = "/run/media/nandu/Data/JARVIS/Output/Media"
         os.makedirs(save_dir, exist_ok=True)
         output_path = os.path.join(save_dir, f"jarvis_{datetime.now().strftime('%H%M%S')}.mp4")
 

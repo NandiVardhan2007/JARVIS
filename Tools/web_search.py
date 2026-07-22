@@ -2,7 +2,13 @@
 
 import logging
 import requests
+import warnings
 from livekit.agents import function_tool
+
+# Suppress noisy rust debug logs and DDGS rename warning
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="duckduckgo_search")
+for _name in ["rustls", "reqwest", "hickory_net", "hickory_resolver", "h2", "hyper_util", "cookie_store"]:
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -60,19 +66,22 @@ async def search_web(query: str) -> str:
     except Exception as e:
         logger.debug(f"DuckDuckGo API failed: {e}")
 
-    # 3. LangChain DuckDuckGo search
+    # 3. Direct DuckDuckGo search (Fallback)
     try:
-        from langchain_community.tools import DuckDuckGoSearchRun
+        from duckduckgo_search import DDGS
         from tenacity import retry, stop_after_attempt, wait_fixed
         
         @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
         def _fetch_ddg_search():
-            return DuckDuckGoSearchRun().run(query)
+            results = DDGS().text(query, max_results=5)
+            if results:
+                return "\n".join([f"• {r.get('title', '')}: {r.get('body', '')}" for r in results])
+            return None
             
         result = _fetch_ddg_search()
         if result and len(result) > 20:
             return f"Search results:\n{result}"
     except Exception as e:
-        logger.debug(f"DuckDuckGo search tool failed: {e}")
+        logger.debug(f"DuckDuckGo direct search failed: {e}")
 
     return "Sorry sir, I could not find any useful information on that topic right now."

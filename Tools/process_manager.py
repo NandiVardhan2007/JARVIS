@@ -11,11 +11,10 @@ logger = logging.getLogger(__name__)
 
 # Processes that must never be killed — system-critical
 _PROTECTED = {
-    "system", "smss.exe", "csrss.exe", "wininit.exe", "winlogon.exe",
-    "lsass.exe", "services.exe", "svchost.exe", "dwm.exe", "explorer.exe",
-    "ntoskrnl.exe", "audiodg.exe", "registry", "secure system",
-    # macOS / Linux equivalents
-    "launchd", "kernel_task", "systemd", "init", "kthreadd",
+    "systemd", "init", "kthreadd", "systemd-journald", "systemd-logind",
+    "systemd-resolved", "systemd-udevd", "dbus-daemon", "Xorg", "wayland",
+    "gnome-shell", "pulseaudio", "pipewire", "journald", "udevd", "launchd",
+    "kernel_task", "system", "csrss.exe", "winlogon.exe", "svchost.exe",
 }
 
 
@@ -288,18 +287,16 @@ async def restart_process(name: str) -> str:
     """
     logger.info(f"Restart request: {name}")
 
-    # Special case: explorer.exe restart on Windows
-    import platform
-    if "explorer" in name.lower() and platform.system() == "Windows":
+    # Special case: nautilus restart on Ubuntu
+    if "nautilus" in name.lower():
         import subprocess
         try:
-            subprocess.run(["taskkill", "/f", "/im", "explorer.exe"], check=True,
-                           capture_output=True)
+            subprocess.run(["pkill", "-f", "nautilus"], check=False, capture_output=True)
             await asyncio.sleep(1)
-            subprocess.Popen("explorer.exe")
-            return "Windows Explorer restarted successfully."
+            subprocess.Popen("nautilus")
+            return "Nautilus restarted successfully."
         except Exception as e:
-            return f"Explorer restart failed: {e}"
+            return f"Nautilus restart failed: {e}"
 
     # Generic restart: kill → open
     kill_result = await kill_process(name, method="graceful")
@@ -308,14 +305,10 @@ async def restart_process(name: str) -> str:
 
     await asyncio.sleep(1)
 
-    # Re-launch via Start Menu
+    # Re-launch via subprocess directly
     try:
-        import pyautogui
-        pyautogui.press("win")
-        await asyncio.sleep(0.8)
-        pyautogui.write(name, interval=0.05)
-        await asyncio.sleep(0.8)
-        pyautogui.press("enter")
-        return f"'{name}' killed and relaunched via Start Menu."
+        import subprocess
+        subprocess.Popen(name, shell=True)
+        return f"'{name}' killed and relaunched."
     except Exception as e:
         return f"'{name}' killed but relaunch failed: {e}. Launch it manually."

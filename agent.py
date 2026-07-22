@@ -1,6 +1,6 @@
 """
 JARVIS - Just A Rather Very Intelligent System
-LiveKit Agents-powered English voice assistant for Windows desktop control.
+LiveKit Agents-powered English voice assistant for Linux desktop control.
 
 Stack (zero OpenAI dependency):
     LLM  — Groq (llama-3.3-70b-versatile)  →  NVIDIA NIM fallback (llama-3.3-70b-instruct)
@@ -121,8 +121,12 @@ class JarvisAgent(Agent):
             except Exception as e:
                 logger.error(f"Tool execution failed in llm_node: {e}")
                 from livekit.agents.llm import ChatMessage, ChatChunk, ChoiceDelta
-                chat_ctx._items.append(ChatMessage(role="system", content=f"Tool error: {e}. Inform the user gracefully."))
-                yield ChatChunk(choices=[ChoiceDelta(role="assistant", content="I encountered a technical issue executing that task. Let's try another approach.")])
+                chat_ctx._items.append(ChatMessage(role="system", content=[f"Tool error: {e}. Inform the user gracefully."]))
+                import uuid
+                yield ChatChunk(
+                    id=str(uuid.uuid4()),
+                    choices=[ChoiceDelta(role="assistant", content="I encountered a technical issue executing that task. Let's try another approach.")]
+                )
 
         return safe_stream()
 
@@ -172,7 +176,10 @@ Your responses are spoken aloud via a local TTS engine. Follow these rules stric
 - **Consistent identity:** You are always JARVIS. You speak like a highly intelligent human butler.
 
 ## Language
-Respond primarily in English. If the user speaks or explicitly requests Telugu, you MUST respond fluently in Telugu using the natural conversational Telugu script. Otherwise, default to English.
+Reply in EXACTLY ONE language per response. Never repeat the same content in two languages, and never say a line in Telugu and then again in English (or vice-versa).
+- Default to English.
+- If the user explicitly requests Telugu (or speaks to you in Telugu), respond ENTIRELY in natural, conversational Telugu script. You MUST translate any English source material yourself — headlines from the news tool, web-search results, or any other tool output — and speak ONLY the Telugu version. Do NOT include the original English text, an English translation, a transliteration, or an English summary alongside it.
+- No bilingual, side-by-side, or "English then Telugu" output. Every sentence must be in a single language only.
 
 You are JARVIS. Brilliant, highly capable, and completely conversational. At your service.
 """
@@ -187,13 +194,20 @@ _active_app = "Unknown"
 
 def _poll_active_window():
     global _active_app
+    import subprocess
     while True:
         try:
-            import pygetwindow as gw
-            active_window = gw.getActiveWindow()
-            _active_app = active_window.title if active_window else "None"
+            res = subprocess.run(
+                ["xdotool", "getactivewindow", "getwindowname"],
+                capture_output=True, text=True, timeout=2
+            )
+            title = res.stdout.strip()
+            if title:
+                _active_app = title
+            else:
+                _active_app = "Desktop"
         except Exception:
-            _active_app = "Unknown"
+            _active_app = "Linux Desktop"
         time.sleep(5)
 
 threading.Thread(target=_poll_active_window, daemon=True).start()
@@ -284,7 +298,7 @@ async def entrypoint(ctx: agents.JobContext):
                         logger.info(f"Detected dropped items: {item_str}")
                         
                         msg = ChatMessage(
-                            content=f"SYSTEM NOTIFICATION: The user just dragged and dropped the following file(s) into your HUD dropzone: {item_str}. You can now analyze them if requested.", 
+                            content=[f"SYSTEM NOTIFICATION: The user just dragged and dropped the following file(s) into your HUD dropzone: {item_str}. You can now analyze them if requested."], 
                             role="user"
                         )
                         session.chat_ctx._items.append(msg)
@@ -297,21 +311,21 @@ async def entrypoint(ctx: agents.JobContext):
 
     # --- Setup Modular Voice Pipeline ---
     
-    # 1. VAD: Silero
-    agent_vad = silero.VAD.load()
+    # 1. VAD: Silero (tuned for faster response)
+    agent_vad = silero.VAD.load(min_silence_duration=0.1)
 
     # 2. STT: Groq Whisper -> NVIDIA Parakeet
     stt_primary = groq.STT(model=GROQ_STT_MODEL)
     stt_fallback = nvidia.STT()
     agent_stt = stt.FallbackAdapter([stt_primary, stt_fallback], vad=agent_vad)
 
-    # 2. LLM: Local LM Studio/Ollama -> NVIDIA Llama3 -> Groq Llama3
+    # 2. LLM: Local LM Studio/Ollama -> Groq Llama3 -> NVIDIA Llama3
     if LOCAL_LLM_URL:
         logger.info(f"Routing LLM requests to local server: {LOCAL_LLM_URL}")
         agent_llm = openai.LLM(model=LOCAL_LLM_MODEL, base_url=LOCAL_LLM_URL, api_key="local-key")
     else:
-        llm_primary = openai.LLM(model=NIM_LLM_MODEL, base_url=NIM_BASE_URL, api_key=NVIDIA_API_KEY)
-        llm_fallback = groq.LLM(model=GROQ_LLM_MODEL)
+        llm_primary = groq.LLM(model=GROQ_LLM_MODEL)
+        llm_fallback = openai.LLM(model=NIM_LLM_MODEL, base_url=NIM_BASE_URL, api_key=NVIDIA_API_KEY)
         agent_llm = llm.FallbackAdapter([llm_primary, llm_fallback])
 
     # 3. TTS: Piper TTS (Local, Free, Offline)

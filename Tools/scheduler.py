@@ -150,14 +150,7 @@ async def _monitor():
                         result = res
                         logger.info(f"Task {tid} result: {str(result)[:120]}")
                         
-                        # Send proactive Telegram notification
-                        try:
-                            from telegram_bot import send_message, ALLOWED_USERS_LIST
-                            if ALLOWED_USERS_LIST:
-                                msg = f"🔔 *Scheduled Task Executed*\n📝 {task['task_description']}\n🛠️ Tool: `{task['tool_name']}`\n\n*Result:*\n```text\n{str(result)}\n```"
-                                send_message(ALLOWED_USERS_LIST[0], msg)
-                        except Exception as e:
-                            logger.error(f"Failed to send Telegram notification: {e}")
+
                     else:
                         logger.warning(f"Task {tid}: tool '{task['tool_name']}' not found.")
                 except Exception as exc:

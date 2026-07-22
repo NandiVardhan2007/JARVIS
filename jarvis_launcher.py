@@ -53,11 +53,7 @@ def main():
             import dynamic_island
             dynamic_island.main()
             return
-        elif sys.argv[1] == "telegram":
-            import telegram_bot
-            import asyncio
-            asyncio.run(telegram_bot.main())
-            return
+
         elif sys.argv[1] == "whatsapp":
             import whatsapp_webhook
             whatsapp_webhook.run_server()
@@ -92,14 +88,7 @@ def main():
     # Launch UI
     ui_proc = subprocess.Popen(cmd + ["ui", room_name])
     
-    # Launch Telegram Bot (if token is configured)
-    telegram_proc = None
-    if os.getenv("TELEGRAM_BOT_TOKEN", "").strip():
-        print("Starting Telegram Bot...")
-        telegram_proc = subprocess.Popen(cmd + ["telegram"])
-    else:
-        print("No TELEGRAM_BOT_TOKEN found, skipping Telegram bot.")
-        
+
     # Launch WhatsApp Webhook Server (if enabled)
     whatsapp_proc = None
     if os.getenv("WHATSAPP_WEBHOOK_ENABLED", "false").lower() == "true":
@@ -116,11 +105,7 @@ def main():
                 print("[WATCHDOG] Agent process crashed. Restarting...")
                 agent_proc = subprocess.Popen(cmd + ["agent", room_name])
             
-            # Check telegram
-            if telegram_proc and telegram_proc.poll() is not None:
-                print("[WATCHDOG] Telegram process crashed. Restarting...")
-                telegram_proc = subprocess.Popen(cmd + ["telegram"])
-                
+
             # Check whatsapp
             if whatsapp_proc and whatsapp_proc.poll() is not None:
                 print("[WATCHDOG] WhatsApp process crashed. Restarting...")
@@ -134,9 +119,7 @@ def main():
         if agent_proc and agent_proc.poll() is None:
             agent_proc.terminate()
             agent_proc.wait()
-        if telegram_proc and telegram_proc.poll() is None:
-            telegram_proc.terminate()
-            telegram_proc.wait()
+
         if whatsapp_proc and whatsapp_proc.poll() is None:
             whatsapp_proc.terminate()
             whatsapp_proc.wait()

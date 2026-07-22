@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 
 # ── Allowlist: base command names that are allowed ───────────────────────────
 ALLOWED_COMMANDS = {
-    "git", "echo", "dir", "ls", "pwd",
-    "whoami", "ipconfig", "ping", "cd", "type", "cat", "grep",
-    "mkdir", "find", "python", "pip", "npm", "node"
+    "git", "echo", "ls", "pwd", "whoami", "ifconfig", "ip", "ping", "cd",
+    "cat", "grep", "mkdir", "find", "python", "python3", "pip", "pip3",
+    "npm", "node", "top", "ps", "df", "free", "uptime", "curl", "wget",
+    "systemctl", "journalctl", "which", "head", "tail", "clear"
 }
 
 

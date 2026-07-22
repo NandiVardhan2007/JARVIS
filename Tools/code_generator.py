@@ -132,15 +132,18 @@ async def generate_and_type_code(
             pyautogui.FAILSAFE = False
             
             if open_notepad:
-                # Open Notepad
-                pyautogui.hotkey("win", "r")
-                time.sleep(0.5)
-                pyautogui.write("notepad", interval=0.05)
-                pyautogui.press("enter")
-                time.sleep(1.5)
-                # clear pre-existing content just in case
-                pyautogui.hotkey("ctrl", "a")
-                pyautogui.press("delete")
+                # Open Linux Text Editor
+                import shutil
+                editor_cmd = None
+                for ed in ["gnome-text-editor", "gedit", "mousepad", "kate", "xed"]:
+                    if shutil.which(ed):
+                        editor_cmd = ed
+                        break
+                if editor_cmd:
+                    subprocess.Popen([editor_cmd])
+                    time.sleep(1.5)
+                    pyautogui.hotkey("ctrl", "a")
+                    pyautogui.press("delete")
                 
             pyautogui.write(code, interval=0.02)
             
@@ -150,9 +153,9 @@ async def generate_and_type_code(
                 pyautogui.hotkey("ctrl", "s")
                 time.sleep(1.0)
                 
-                # Documents folder path
-                docs_dir = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS")
-                os.makedirs(docs_dir, exist_ok=True)
+                # Output folder path
+                code_dir = "/run/media/nandu/Data/JARVIS/Output/Code"
+                os.makedirs(code_dir, exist_ok=True)
                 
                 ext_map = {
                     "python": "py", "javascript": "js", "typescript": "ts",
@@ -161,7 +164,7 @@ async def generate_and_type_code(
                     "text": "txt", "plain": "txt", "txt": "txt"
                 }
                 ext = ext_map.get(language.lower(), language.lower())
-                save_path = os.path.join(docs_dir, f"{filename}.{ext}")
+                save_path = os.path.join(code_dir, f"{filename}.{ext}")
                 
                 pyautogui.write(save_path, interval=0.02)
                 time.sleep(0.5)
@@ -179,7 +182,10 @@ async def generate_and_type_code(
                 "text": "txt", "plain": "txt", "txt": "txt"
             }
             ext = ext_map.get(language.lower(), language.lower())
-            save_path = os.path.join(os.path.expanduser("~/Desktop"), f"{filename}.{ext}")
+            
+            code_dir = "/run/media/nandu/Data/JARVIS/Output/Code"
+            os.makedirs(code_dir, exist_ok=True)
+            save_path = os.path.join(code_dir, f"{filename}.{ext}")
             with open(save_path, "w", encoding="utf-8") as f:
                 f.write(code)
             return (

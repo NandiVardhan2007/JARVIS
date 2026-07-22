@@ -23,9 +23,14 @@ async def desktop_control(
         amount: Scroll distance in units (default: 3).
     """
     try:
+        import os
+        import subprocess
         import pyautogui
         if action == "show":
-            pyautogui.hotkey("win", "d")
+            try:
+                subprocess.run(["wmctrl", "-k", "on"], check=False)
+            except Exception:
+                pyautogui.hotkey("super", "d")
             return "Desktop revealed."
         elif action == "scroll":
             dy = amount * 100 if direction == "up" else -amount * 100
@@ -46,14 +51,15 @@ async def press_key(key: str) -> str:
     Simulates a keyboard key press or hotkey combination.
 
     Args:
-        key: Single key ("enter", "tab") or combo ("ctrl+c", "win+d", "ctrl+alt+del").
+        key: Single key ("enter", "tab") or combo ("ctrl+c", "super+d", "ctrl+alt+t").
     """
     try:
         import pyautogui
-        if "+" in key:
-            pyautogui.hotkey(*key.split("+"))
+        key_clean = key.lower().replace("win", "super")
+        if "+" in key_clean:
+            pyautogui.hotkey(*key_clean.split("+"))
         else:
-            pyautogui.press(key)
+            pyautogui.press(key_clean)
         return f"Key '{key}' pressed."
     except Exception as e:
         return f"Key press failed: {e}"
@@ -88,12 +94,15 @@ async def click_on_text(target_text: str) -> str:
         target_text: The exact or partial text visible on screen to click.
     """
     try:
+        import os
+        import shutil
         import pyautogui
         import pytesseract
 
-        pytesseract.pytesseract.tesseract_cmd = (
-            r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-        )
+        tess_bin = shutil.which("tesseract") or "/usr/bin/tesseract"
+        if os.path.exists(tess_bin):
+            pytesseract.pytesseract.tesseract_cmd = tess_bin
+
         screenshot = pyautogui.screenshot()
         data = pytesseract.image_to_data(screenshot, output_type=pytesseract.Output.DICT)
 

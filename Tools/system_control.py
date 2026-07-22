@@ -23,26 +23,13 @@ async def system_power_action(action: Literal["shutdown", "restart", "lock"]) ->
     try:
         sys = platform.system()
         if action == "shutdown":
-            {"Windows": lambda: os.system("shutdown /s /t 1"),
-             "Darwin":  lambda: os.system("sudo shutdown -h now"),
-             "Linux":   lambda: os.system("shutdown now")}.get(sys, lambda: None)()
+            os.system("shutdown now")
             return "Shutting the system down now, sir."
         elif action == "restart":
-            {"Windows": lambda: os.system("shutdown /r /t 1"),
-             "Darwin":  lambda: os.system("sudo shutdown -r now"),
-             "Linux":   lambda: os.system("reboot")}.get(sys, lambda: None)()
+            os.system("reboot")
             return "Restarting the system now, sir."
         elif action == "lock":
-            if sys == "Windows":
-                import ctypes
-                ctypes.windll.user32.LockWorkStation()
-            elif sys == "Darwin":
-                os.system(
-                    "/System/Library/CoreServices/Menu Extras/User.menu"
-                    "/Contents/Resources/CGSession -suspend"
-                )
-            else:
-                os.system("loginctl lock-session")
+            os.system("loginctl lock-session")
             return "Screen locked."
         return f"Unknown action: {action}"
     except Exception as e:
@@ -125,12 +112,7 @@ async def control_system_volume(prompt: str, volume_level: int) -> str:
     if not 0 <= volume_level <= 100:
         return "Volume level must be between 0 and 100."
     try:
-        if platform.system() == "Windows":
-            from pycaw.pycaw import AudioUtilities
-            devices = AudioUtilities.GetSpeakers()
-            devices.EndpointVolume.SetMasterVolumeLevelScalar(volume_level / 100, None)
-        else:
-            os.system(f"pactl set-sink-volume @DEFAULT_SINK@ {volume_level}%")
+        os.system(f"pactl set-sink-volume @DEFAULT_SINK@ {volume_level}%")
         return f"System volume set to {volume_level}%."
     except Exception as e:
         return f"Failed to adjust volume: {e}"
@@ -158,12 +140,10 @@ async def control_media(prompt: str, action: Literal["play_pause", "next", "prev
                 _media_player.stop()
                 return f"Background music stopped (skip {action} requested)."
             
-        import pyautogui
-        key_map = {"previous": "prevtrack", "play_pause": "playpause", "next": "nexttrack"}
-        key = key_map.get(action)
-        if not key:
+        cmd_map = {"previous": "previous", "play_pause": "play-pause", "next": "next"}
+        if action not in cmd_map:
             return f"Unknown action '{action}'. Use play_pause, next, or previous."
-        pyautogui.press(key)
+        os.system(f"playerctl {cmd_map[action]}")
         label = {"play_pause": "Play/Pause toggled.", "next": "Skipped to next track.",
                  "previous": "Went back to previous track."}
         return label[action]
@@ -178,29 +158,17 @@ async def use_smart_clipboard(
     item_index: Optional[int] = None,
 ) -> str:
     """
-    Manages the Windows clipboard history.
+    Manages system clipboard history on Linux.
 
     Args:
         prompt: The user's original request.
-        action: "open_history" to open the clipboard panel, "paste_item" to paste a specific entry.
+        action: "open_history" to view clipboard history, "paste_item" to paste a specific entry.
         item_index: 1-based index of the clipboard item to paste (required for paste_item).
     """
     try:
-        import pyautogui, time
-        if action == "open_history":
-            pyautogui.hotkey("win", "v")
-            return "Clipboard history opened."
-        elif action == "paste_item":
-            if not item_index or item_index < 1:
-                return "Please specify a valid item index (1 or greater)."
-            pyautogui.hotkey("win", "v")
-            time.sleep(0.5)
-            for _ in range(item_index - 1):
-                pyautogui.press("tab")
-                time.sleep(0.1)
-            pyautogui.press("enter")
-            return f"Pasted clipboard item #{item_index}."
-        return "Unknown clipboard action."
+        from Tools.clipboard_manager import get_recent_clipboard
+        history = await get_recent_clipboard(limit=5)
+        return f"Clipboard History:\n{history}"
     except Exception as e:
         return f"Clipboard operation failed: {e}"
 
@@ -208,15 +176,15 @@ async def use_smart_clipboard(
 @function_tool
 async def scan_system_for_viruses() -> str:
     """
-    Runs a quick virus scan using Windows Defender and returns the summary.
+    Runs a virus and malware scan on Linux using ClamAV.
     """
-    if platform.system() != "Windows":
-        return "Virus scanning via Windows Defender is only available on Windows."
     try:
+        import shutil
+        if not shutil.which("clamscan"):
+            return "ClamAV (clamscan) is not installed on this system. You can install it using 'sudo apt install clamav'."
+        
         result = subprocess.run(
-            ["powershell", "-Command",
-             "Start-MpScan -ScanType QuickScan; "
-             "Get-MpThreatDetection | Select-Object -First 5 | Format-List"],
+            ["clamscan", "-r", "--no-summary", os.path.expanduser("~")],
             capture_output=True, text=True, timeout=120,
         )
         output = (result.stdout or result.stderr or "").strip()

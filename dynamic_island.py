@@ -300,6 +300,7 @@ class PremiumDynamicIsland(QWidget):
             {'icon': '◫',  'label': 'History',    'action': 'history',    'rect': QRectF()},
         ]
         self.qa_hover_index = -1  # which quick action is hovered
+        self.qa_hover_scales = [1.0] * 6
         self.pinned = False
 
         # ── Segmented Progress (Phase 4) ──
@@ -317,15 +318,16 @@ class PremiumDynamicIsland(QWidget):
             QLineEdit {
                 background-color: rgba(20, 20, 25, 200);
                 color: #ffffff;
-                border: 1px solid rgba(255, 255, 255, 25);
-                border-radius: 12px;
-                padding: 6px 12px;
+                border: 1px solid rgba(255, 255, 255, 35);
+                border-radius: 16px;
+                padding: 8px 16px;
                 font-family: "Segoe UI";
-                font-size: 13px;
+                font-size: 14px;
+                selection-background-color: rgba(0, 212, 255, 120);
             }
             QLineEdit:focus {
-                border: 1px solid rgba(0, 212, 255, 180);
-                background-color: rgba(15, 15, 20, 220);
+                border: 1px solid rgba(0, 212, 255, 200);
+                background-color: rgba(10, 10, 15, 240);
             }
         ''')
 
@@ -340,10 +342,10 @@ class PremiumDynamicIsland(QWidget):
         self.udp.bind(QHostAddress.LocalHost, 5005)
         self.udp.readyRead.connect(self._read_udp)
 
-        # ── 60 FPS tick ──
+        # ── 120 FPS tick (Upgraded from 60) ──
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
-        self.timer.start(16)
+        self.timer.start(8)
 
         # ── Global hotkey: Ctrl+J ──
         from PyQt5.QtWidgets import QShortcut
@@ -668,8 +670,8 @@ class PremiumDynamicIsland(QWidget):
                     sz = self.PILL if self.state == 'thinking' else self._get_compact_size()
                     self.target_w, self.target_h = sz
 
-        # ── Spring physics ──
-        tension, damp = 0.04, 0.82
+        # ── Spring physics (Upgraded for snappier transitions) ──
+        tension, damp = 0.12, 0.75
         self.vel_w += (self.target_w - self.current_w) * tension
         self.vel_w *= damp
         self.current_w += self.vel_w
@@ -735,6 +737,12 @@ class PremiumDynamicIsland(QWidget):
         # ── Hover ──
         self.hover += (self.target_hover - self.hover) * 0.13
 
+        # ── QA Hover Scales ──
+        if hasattr(self, 'qa_hover_scales'):
+            for i in range(len(self.qa_hover_scales)):
+                tgt = 1.15 if i == self.qa_hover_index else 1.0
+                self.qa_hover_scales[i] += (tgt - self.qa_hover_scales[i]) * 0.25
+
         # ── Response Scroll ──
         self.response_scroll += (self.target_response_scroll - self.response_scroll) * 0.2
 
@@ -744,6 +752,9 @@ class PremiumDynamicIsland(QWidget):
         
         # Decay AI level so it drops smoothly to 0 when the AI stops speaking
         self.target_ai_level *= 0.85
+
+        # ── Mirror live state to the Flutter bridge (jarvis_bridge.py) ──
+        self._mirror_to_bridge()
 
         # ── Progress ──
         if self.progress_target > self.progress:
@@ -863,6 +874,50 @@ class PremiumDynamicIsland(QWidget):
             self.timer.setInterval(new_interval)
 
         self.update()
+
+    # ════════════════════════════════════════════════
+    #  Flutter bridge mirror
+    # ════════════════════════════════════════════════
+    def _mirror_to_bridge(self):
+        """Forward live state + audio levels to jarvis_bridge.py (Flutter UI).
+
+        Best-effort, throttled to ~30 fps, and fully guarded so it can never
+        disrupt the HUD. Safe no-op if the bridge isn't running.
+        """
+        try:
+            now = time.time()
+            if now - getattr(self, '_last_mirror', 0.0) < 0.033:
+                return
+            self._last_mirror = now
+            sock = getattr(self, '_bridge_sock', None)
+            if sock is None:
+                import socket as _socket
+                sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+                self._bridge_sock = sock
+            payload = {
+                'state': getattr(self, 'state', 'idle'),
+                'ai_level': round(float(getattr(self, 'ai_level', 0.0)), 3),
+                'mic_level': round(float(getattr(self, 'mic_level', 0.0)), 3),
+                'mouth': round(float(getattr(self, 'mouth', 0.0)), 3),
+                'mic_muted': bool(getattr(self, 'mic_muted', False)),
+                'category': getattr(self, 'tool_cat', '') or '',
+                'tool_name': getattr(self, 'tool_name', '') or '',
+                'description': getattr(self, 'tool_desc', '') or '',
+                'transcript': getattr(self, 'transcript', '') or '',
+                'last_response': getattr(self, 'last_response', '') or '',
+            }
+            # Reconstruct now-playing from the MEDIA tool card, if active.
+            if (payload['category'] or '').upper() == 'MEDIA' and payload['description']:
+                title, _, artist = payload['description'].partition('\n')
+                payload['now_playing'] = {
+                    'title': title.strip(),
+                    'artist': artist.replace('By ', '', 1).strip(),
+                    'image_url': getattr(self, 'current_image_url', '') or '',
+                    'playing': True,
+                }
+            sock.sendto(json.dumps(payload).encode('utf-8'), ('127.0.0.1', 5016))
+        except Exception:
+            pass
 
     # ════════════════════════════════════════════════
     #  Interaction
@@ -1089,9 +1144,8 @@ class PremiumDynamicIsland(QWidget):
         elif action == hide_a:
             self._toggle_visibility()
         elif action == stop_a:
-            os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Agent" >nul 2>&1')
-            os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Token Server" >nul 2>&1')
-            os.system('taskkill /F /FI "WINDOWTITLE eq JARVIS - Telegram Bot" >nul 2>&1')
+            os.system('pkill -f "jarvis_launcher.py"')
+            os.system('pkill -f "agent.py"')
             QTimer.singleShot(500, QApplication.quit)
 
     def _bounce(self, s=0.95):
@@ -1603,7 +1657,7 @@ class PremiumDynamicIsland(QWidget):
             elif self.source:
                 p.setFont(QFont("Segoe UI Emoji", 10))
                 p.setPen(QColor(180, 180, 195, 120))
-                p.drawText(QRectF(bar_x - 20, 0, 18, h), Qt.AlignCenter, "📱" if self.source == 'telegram' else "🎤")
+                p.drawText(QRectF(bar_x - 20, 0, 18, h), Qt.AlignCenter, "🎤")
         else:
             indicator_x = w - 50
             
@@ -2063,6 +2117,13 @@ class PremiumDynamicIsland(QWidget):
             if is_hover:
                 self.qa_hover_index = i
 
+            p.save()
+            scale = getattr(self, 'qa_hover_scales', [1.0]*6)[i]
+            if scale != 1.0:
+                p.translate(bx + btn_size/2, btn_y + btn_size/2)
+                p.scale(scale, scale)
+                p.translate(-(bx + btn_size/2), -(btn_y + btn_size/2))
+
             # Button background
             btn_path = QPainterPath()
             btn_path.addRoundedRect(br, btn_size / 2, btn_size / 2)
@@ -2093,6 +2154,7 @@ class PremiumDynamicIsland(QWidget):
             p.setPen(QColor(220, 220, 230, 220 if is_hover else 160))
             p.drawText(br, Qt.AlignCenter, icon)
             p.setPen(Qt.NoPen)
+            p.restore()
 
             # Tooltip on hover
             if is_hover:
@@ -2372,22 +2434,46 @@ async def livekit_client_task(island_instance):
     loop = asyncio.get_running_loop()
     
     def capture_mic():
-        p = pyaudio.PyAudio()
-        try:
-            stream = p.open(format=pyaudio.paInt16,
-                            channels=1,
-                            rate=16000,
-                            input=True,
-                            frames_per_buffer=160)
-            print("PyAudio stream started for HUD.")
-        except Exception as e:
-            print(f"Failed to open PyAudio stream: {e}")
+        p = None
+        stream = None
+        import time
+        for attempt in range(5):
+            try:
+                p = pyaudio.PyAudio()
+                stream = p.open(format=pyaudio.paInt16,
+                                channels=1,
+                                rate=16000,
+                                input=True,
+                                frames_per_buffer=160)
+                print("PyAudio stream started for HUD.")
+                break
+            except Exception as e:
+                print(f"Failed to open PyAudio stream (Attempt {attempt+1}/5): {e}")
+                if p:
+                    p.terminate()
+                time.sleep(1)
+                
+        if not stream:
+            print("Could not start microphone. Voice commands will not work.")
             return
             
         while True:
             try:
                 data = stream.read(160, exception_on_overflow=False)
-                if getattr(island_instance, 'mic_muted', False):
+
+                # ── Half-duplex echo guard ──────────────────────────────────
+                # While JARVIS speaks, its voice leaves the speakers and leaks
+                # back into the mic. Publishing that makes the agent "hear"
+                # itself and interrupt its own reply. Suppress the mic whenever
+                # AI audio is active, plus a short hangover so trailing reverb
+                # can't re-trigger a false interruption.
+                ai_active = (getattr(island_instance, 'target_ai_level', 0.0) > 0.06
+                             or getattr(island_instance, 'ai_level', 0.0) > 0.06)
+                if ai_active:
+                    island_instance._mic_gate_until = time.time() + 0.35
+                gated = time.time() < getattr(island_instance, '_mic_gate_until', 0.0)
+
+                if getattr(island_instance, 'mic_muted', False) or gated:
                     data = b'\x00' * len(data)
                     island_instance.target_mic_level = 0.0
                 else:
@@ -2421,7 +2507,17 @@ def main():
 
     island = PremiumDynamicIsland()
     start_livekit_client(island)
-    island.show()
+
+    # When the Flutter frontend is in use, run the HUD invisibly: it still
+    # captures the mic, plays JARVIS's voice, and mirrors live state to the
+    # bridge — it just doesn't draw the on-screen pill. Set JARVIS_HUD_HIDDEN=1
+    # (start.sh does this automatically) to enable.
+    _hidden = os.environ.get("JARVIS_HUD_HIDDEN", "").strip().lower() in ("1", "true", "yes", "on")
+    if _hidden:
+        print("HUD running in hidden mode (Flutter frontend active).")
+    else:
+        island.show()
+
     sys.exit(app.exec_())
 
 if __name__ == '__main__':

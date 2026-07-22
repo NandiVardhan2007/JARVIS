@@ -25,20 +25,26 @@ async def write_in_notepad(
     """
     logger.info(f"Writing to Notepad: {title}")
     try:
+        import os
+        import shutil
+        import subprocess
         import pyautogui
         pyautogui.FAILSAFE = False
         pyautogui.PAUSE = 0.1
 
-        # Open Notepad
-        pyautogui.hotkey("win", "r")
-        time.sleep(0.5)
-        pyautogui.write("notepad", interval=0.05)
-        pyautogui.press("enter")
-        time.sleep(1.5)
+        # Open Linux Text Editor
+        editor_cmd = None
+        for ed in ["gnome-text-editor", "gedit", "mousepad", "kate", "xed"]:
+            if shutil.which(ed):
+                editor_cmd = ed
+                break
 
-        # Clear any pre-existing content
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.press("delete")
+        if editor_cmd:
+            subprocess.Popen([editor_cmd])
+            time.sleep(1.5)
+            # Clear pre-existing content
+            pyautogui.hotkey("ctrl", "a")
+            pyautogui.press("delete")
 
         date_str = datetime.now().strftime("%d %B %Y")
 

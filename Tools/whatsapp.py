@@ -112,12 +112,9 @@ async def send_whatsapp_message(contact_number: str, message: str) -> str:
         import pyautogui
         import time
         
-        # 1. Open Windows Search and open WhatsApp
-        pyautogui.press("win")
-        time.sleep(1)
-        pyautogui.write("WhatsApp", interval=0.05)
-        time.sleep(1)
-        pyautogui.press("enter")
+        # 1. Open WhatsApp via subprocess
+        import subprocess
+        subprocess.Popen(["whatsapp-for-linux"], shell=True) # Assumes whatsapp-for-linux or similar is installed
         
         # Wait for WhatsApp to open
         time.sleep(5)
@@ -187,12 +184,9 @@ async def send_whatsapp_media(contact_name: str) -> str:
         pyautogui.hotkey("ctrl", "c")
         time.sleep(0.5)
 
-        # Step 2: Open WhatsApp via Start Menu
-        pyautogui.press("win")
-        time.sleep(1)
-        pyautogui.write("WhatsApp", interval=0.05)
-        time.sleep(1)
-        pyautogui.press("enter")
+        # Step 2: Open WhatsApp via subprocess
+        import subprocess
+        subprocess.Popen(["whatsapp-for-linux"], shell=True)
         time.sleep(5)  # Wait for WhatsApp to open
 
         # Step 3: Search for the contact

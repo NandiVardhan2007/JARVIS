@@ -1,5 +1,6 @@
 """Autonomous AI Coder loop for generating and testing code."""
 
+import sys
 import logging
 import os
 import subprocess
@@ -75,7 +76,7 @@ async def auto_write_and_debug_code(prompt: str, filename: str) -> str:
             # 3. Execute code
             logger.info(f"Executing {save_path}...")
             result = subprocess.run(
-                ["python", save_path],
+                [sys.executable, save_path],
                 capture_output=True,
                 text=True,
                 timeout=30

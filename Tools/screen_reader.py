@@ -30,7 +30,7 @@ LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
 def _cleanup_old_screenshots() -> None:
     """Delete screenshots older than 24 hours."""
-    save_dir = os.path.join(os.path.expanduser("~/Desktop"), "jarvis_screenshots")
+    save_dir = "/run/media/nandu/Data/JARVIS/Output/jarvis_screenshots"
     if not os.path.exists(save_dir):
         return
         
@@ -67,8 +67,8 @@ def _take_screenshot(save_dir: Optional[str] = None, monitor_index: int = 1) -> 
     import mss
     from PIL import Image
 
-    if not save_dir:
-        save_dir = os.path.join(os.path.expanduser("~/Desktop"), "jarvis_screenshots")
+    if save_dir is None:
+        save_dir = "/run/media/nandu/Data/JARVIS/Output/jarvis_screenshots"
     os.makedirs(save_dir, exist_ok=True)
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -355,7 +355,7 @@ async def read_selected_region(
         from PIL import Image
 
         screenshot = pyautogui.screenshot(region=(x, y, width, height))
-        save_dir = os.path.join(os.path.expanduser("~/Desktop"), "jarvis_screenshots")
+        save_dir = "/run/media/nandu/Data/JARVIS/Output/jarvis_screenshots"
         os.makedirs(save_dir, exist_ok=True)
         path = os.path.join(save_dir, f"region_{time.strftime('%H%M%S')}.png")
         screenshot.save(path)
@@ -382,6 +382,21 @@ async def read_selected_region(
 
     except Exception as e:
         return f"Region capture failed: {e}"
+
+@function_tool
+async def take_screenshot(custom_name: Optional[str] = None) -> str:
+    """
+    Takes a full screenshot of the screen and saves it to disk.
+
+    Args:
+        custom_name: Optional label or filename note for the screenshot.
+    """
+    try:
+        path = _take_screenshot()
+        return f"Screenshot captured and saved to {path}, sir."
+    except Exception as e:
+        return f"Failed to take screenshot: {e}"
+
 
 @function_tool
 async def list_monitors() -> str:

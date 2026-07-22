@@ -230,12 +230,14 @@ async def take_web_screenshot(url: str) -> str:
     try:
         from html2image import Html2Image
         import os
+        import urllib.parse
 
-        output_dir = os.path.expanduser("~/Desktop")
+        output_dir = "/run/media/nandu/Data/JARVIS/Output/Web_Screenshots"
+        os.makedirs(output_dir, exist_ok=True)
         hti = Html2Image(output_path=output_dir)
 
         # Generate filename from URL
-        domain = urlparse(url).netloc.replace(".", "_")
+        domain = urllib.parse.urlparse(url).netloc.replace(".", "_")
         filename = f"screenshot_{domain}.png"
 
         hti.screenshot(url=url, save_as=filename, size=(1280, 900))

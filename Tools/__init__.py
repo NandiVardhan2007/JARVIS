@@ -34,8 +34,8 @@ from .ai_image import generate_local_image_comfyui, generate_ai_video, get_gener
 from .code_generator import generate_and_type_code, run_file_in_vscode
 from .iot_control import control_ac_bulb
 from .multi_task import execute_multi_task
-from .screen_reader import read_screen, read_selected_region, list_monitors
-from .messaging import send_telegram_message, get_telegram_messages, send_discord_message, get_discord_messages
+from .screen_reader import read_screen, read_selected_region, list_monitors, take_screenshot
+from .messaging import send_discord_message, get_discord_messages
 from .process_manager import list_processes, find_process, kill_process, get_top_resource_hogs, restart_process
 from .user_memory import memorize_fact, recall_memory, forget_fact
 from .task_manager import add_task, complete_task, list_tasks, prioritize_task
@@ -105,13 +105,12 @@ TOOL_CATEGORIES = {
         manage_window, manage_window_state, list_active_windows, 
         open_app_on_screen, open_app, play_media, desktop_control, 
         press_key, type_user_message_auto, click_on_text, write_in_notepad,
-        open_file_command, read_screen, read_selected_region, list_monitors,
+        open_file_command, read_screen, read_selected_region, list_monitors, take_screenshot,
         process_document_query, list_directory, search_files,
         create_file, create_folder, copy_file_or_folder, 
         move_or_rename_path, delete_path, read_text_file, edit_file_diff
     ],
     "communication": [
-        send_telegram_message, get_telegram_messages, 
         send_discord_message, get_discord_messages,
         send_whatsapp_message, send_whatsapp_media, search_google_contact,
         android_make_call
@@ -196,13 +195,13 @@ _INTENT_KEYWORDS = {
     "system":        ["process", "brightness", "volume", "system", "virus", "shut down",
                       "shutdown", "restart", "sleep", "pc", "computer", "power", "battery",
                       "cpu", "ram", "storage", "disk"],
-    "communication": ["telegram", "discord", "whatsapp", "message", "call", "phone", "ring", "dial", "hang up", "end call"],
+    "communication": ["discord", "whatsapp", "message", "call", "phone", "ring", "dial", "hang up", "end call"],
     "scheduler":     ["schedule", "timer", "remind me at", "remind me after", "briefing",
                       "morning briefing"],
-    "desktop":       ["window", "open app", "open folder", "open file", "type", "click",
-                      "screen", "notepad", "file", "folder", "directory", "copy", "move",
-                      "delete", "pdf", "document", "docx", "analyze my", "play", "music",
-                      "song", "media", "youtube", "monitor"],
+    "desktop":       ["window", "open", "launch", "open app", "open folder", "open file", "type", "click",
+                      "screen", "screenshot", "snapshot", "take screenshot", "notepad", "editor", "text editor", "file", "folder",
+                      "directory", "copy", "move", "delete", "pdf", "document", "docx", "analyze my", "play",
+                      "music", "song", "media", "youtube", "monitor"],
     "creative":      ["image", "video", "generate", "draw", "art", "picture", "photo"],
     "reminder":      ["remind"],
     "mobile":        ["phone", "mobile", "android", "unlock", "notification", 

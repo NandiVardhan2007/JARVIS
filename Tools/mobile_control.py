@@ -509,12 +509,13 @@ async def phone_ocr_tap(target_text: str) -> str:
             return f"Screenshot failed: {stderr}"
 
         try:
+            import shutil
             import pytesseract
             from PIL import Image
 
-            pytesseract.pytesseract.tesseract_cmd = (
-                r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-            )
+            tess_bin = shutil.which("tesseract") or "/usr/bin/tesseract"
+            if os.path.exists(tess_bin):
+                pytesseract.pytesseract.tesseract_cmd = tess_bin
             img = Image.open(local_path)
             data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
 
@@ -562,11 +563,13 @@ async def pull_file_from_phone(
 
     Args:
         remote_path: Path on the phone, e.g. '/sdcard/DCIM/photo.jpg'.
-        local_path: Where to save on PC (defaults to Desktop).
+        local_path: Where to save on PC (defaults to JARVIS/Output/Mobile).
     """
     if not local_path:
         filename = remote_path.split("/")[-1]
-        local_path = os.path.join(os.path.expanduser("~/Desktop"), filename)
+        local_dir = "/run/media/nandu/Data/JARVIS/Output/Mobile"
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, filename)
 
     stdout, stderr, code = await _adb_async(
         "pull", remote_path, local_path, timeout=60
