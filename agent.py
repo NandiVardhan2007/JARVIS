@@ -31,7 +31,9 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 import logging
 import os
 import json
+import socket
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -40,19 +42,36 @@ from livekit.agents import AgentSession, Agent, RoomInputOptions, llm, stt, tts
 from livekit.agents.llm import ChatContext, ChatMessage
 from livekit.plugins import groq, nvidia, silero, openai, google
 import piper_tts_plugin
-import xtts_tts_plugin
+
 
 from Tools import get_all_tools, classify_intent, get_tools_for_category
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("JARVIS.log", mode="a", encoding="utf-8")
+    ]
 )
 logger = logging.getLogger(__name__)
+
 
 # Suppress verbose third-party loggers (e.g. numba SSA rewrite pass spam)
 for _noisy in ["numba", "numba.core", "numba.core.ssa", "numba.core.byteflow", "numba.core.interpreter", "numba.core.typeinfer"]:
     logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+# ── Global HUD UDP broadcast socket ──────────────────────────────────────────
+_hud_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+def send_hud_state(payload: dict):
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        _hud_udp_sock.sendto(data, ("127.0.0.1", 5005))
+        _hud_udp_sock.sendto(data, ("127.0.0.1", 5016))
+    except Exception:
+        pass
+
 
 # ── Chat history trimming ─────────────────────────────────────────────────────
 # Groq llama-3.3-70b-versatile has a ~12,000 token input limit.
@@ -108,6 +127,14 @@ class JarvisAgent(Agent):
                 logger.info(f"Intent classified as '{intent}' -> loaded {len(active_tools)} tools.")
             else:
                 logger.warning(f"Intent '{intent}' yielded no tools. Using all {len(tools)} tools.")
+
+            cat_label = str(intent[0]).upper() if intent else "CORE"
+            send_hud_state({
+                "state": "thinking",
+                "category": cat_label,
+                "description": f"Routing task ({cat_label}) · {len(active_tools)} tools active",
+            })
+
 
         # 4. Truncate tool outputs in history
         MAX_TOOL_OUTPUT = 2000
@@ -316,8 +343,9 @@ async def entrypoint(ctx: agents.JobContext):
 
     # --- Setup Modular Voice Pipeline ---
     
-    # 1. VAD: Silero (tuned for faster response)
-    agent_vad = silero.VAD.load(min_silence_duration=0.1)
+    # 1. VAD: Silero (tuned for clean speech without accidental interruptions)
+    agent_vad = silero.VAD.load(min_silence_duration=0.55)
+
 
     # 2. STT: Groq Whisper -> NVIDIA Parakeet
     stt_primary = groq.STT(model=GROQ_STT_MODEL)
@@ -333,14 +361,11 @@ async def entrypoint(ctx: agents.JobContext):
         llm_fallback = openai.LLM(model=NIM_LLM_MODEL, base_url=NIM_BASE_URL, api_key=NVIDIA_API_KEY)
         agent_llm = llm.FallbackAdapter([llm_primary, llm_fallback])
 
-    # 3. TTS: Emotive XTTSv2 (Local Server) -> Piper TTS (Offline Fallback)
-    try:
-        agent_tts = xtts_tts_plugin.XTTSTTS()
-        logger.info("Using local XTTSv2 for emotive TTS.")
-    except Exception as e:
-        logger.warning(f"XTTS fallback triggered ({e}). Using local Piper TTS.")
-        agent_tts = piper_tts_plugin.PiperTTS()
-        logger.info("Using local Piper TTS as the primary engine.")
+    # 3. TTS: Piper TTS (Fast Sub-Second Local Engine)
+    agent_tts = piper_tts_plugin.PiperTTS()
+    logger.info("Using local Piper TTS (Fast Sub-Second Engine).")
+
+
 
     # Create the Agent with history trimming (JarvisAgent overrides llm_node
     # to keep context under Groq's 12,000 token limit)
@@ -358,8 +383,19 @@ async def entrypoint(ctx: agents.JobContext):
         stt=agent_stt,
         llm=agent_llm,
         tts=agent_tts,
-        vad=agent_vad
+        vad=agent_vad,
+        # Interruption protection — prevent room noise from cutting off JARVIS mid-sentence.
+        # User must speak for at least 1.2s with ≥4 words before we interrupt.
+        allow_interruptions=True,
+        min_interruption_duration=1.2,
+        min_interruption_words=4,
+        # If VAD fires but then goes silent quickly, treat it as a false positive.
+        false_interruption_timeout=1.8,
+        resume_false_interruption=True,
+        # Do not discard buffered audio for uninterruptible speech segments.
+        discard_audio_if_uninterruptible=False,
     )
+
     
     # FIX: agent must be passed as keyword arg in livekit-agents 1.5.x;
     # passing it positionally placed it where SessionConfig is expected → TypeError.
@@ -369,17 +405,8 @@ async def entrypoint(ctx: agents.JobContext):
     await asyncio.sleep(1)
 
     # ── Live UI state & caption synchronization ────────────────────────────
-    import socket
     from livekit.agents.voice import events
-    _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    def send_hud_state(payload: dict):
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            _udp_sock.sendto(data, ("127.0.0.1", 5005))
-            _udp_sock.sendto(data, ("127.0.0.1", 5016))
-        except Exception:
-            pass
 
     # ── Voice Authentication Gate ──────────────────────────────────────────
     # JARVIS is locked on startup. The master must speak anything —
@@ -435,6 +462,7 @@ async def entrypoint(ctx: agents.JobContext):
             "Systems locked. Master, please speak anything to verify your voice print.",
             allow_interruptions=False
         )
+        await asyncio.sleep(2.8)
 
         attempts_left = _AUTH_MAX_ATTEMPTS
         while not _auth_unlocked and attempts_left > 0:
@@ -462,7 +490,11 @@ async def entrypoint(ctx: agents.JobContext):
                     "state": "auth_success",
                     "description": "Identity confirmed",
                 })
-                await asyncio.sleep(0.5)
+                await session.say(
+                    "Voice print confirmed. Welcome back, master Nandu.",
+                    allow_interruptions=False
+                )
+                await asyncio.sleep(2.8)
             else:
                 attempts_left -= 1
                 logger.warning(f"Voice mismatch. {attempts_left} attempt(s) remaining.")
@@ -475,6 +507,7 @@ async def entrypoint(ctx: agents.JobContext):
                         f"Voice print not recognised. Try again. {attempts_left} attempt{'s' if attempts_left > 1 else ''} remaining.",
                         allow_interruptions=False
                     )
+                    await asyncio.sleep(2.8)
                 else:
                     send_hud_state({
                         "state": "auth_lockout",
@@ -484,13 +517,20 @@ async def entrypoint(ctx: agents.JobContext):
                         "Authentication failed. Unauthorised access detected. Shutting down, sir.",
                         allow_interruptions=False
                     )
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(3.0)
                     import sys
                     sys.exit(1)
+
 
     if _auth_unlocked:
         # ── JARVIS is now LIVE ─────────────────────────────────────────────
         send_hud_state({"state": "idle"})
+        try:
+            from Tools.webcam_guard import start_webcam_guard
+            asyncio.create_task(start_webcam_guard())
+        except Exception as e:
+            logger.warning(f"Could not auto-start webcam guard on live: {e}")
+
     # ── End Voice Authentication Gate ─────────────────────────────────────────
 
     @session.on("user_input_transcribed")

@@ -58,7 +58,8 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
         return 0.0
     return float(dot / (norm_a * norm_b))
 
-async def verify_master_voice(audio_samples: np.ndarray, threshold: float = 0.65) -> bool:
+async def verify_master_voice(audio_samples: np.ndarray, threshold: float = 0.75) -> bool:
+
     """
     Verifies if the given audio samples match the master's voice.
 

@@ -12,6 +12,8 @@ import 'widgets/system_monitor_card.dart';
 import 'widgets/transcription_panel.dart';
 import 'widgets/weather_card.dart';
 import 'widgets/camera_card.dart';
+import 'widgets/agent_activity_card.dart';
+
 
 void main() {
   runApp(const JarvisApp());
@@ -102,84 +104,180 @@ class _JarvisHomeState extends State<JarvisHome> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 600),
             decoration: JarvisTheme.backgroundDecoration(glow),
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final wide = c.maxWidth >= 960;
-                return Stack(
-                  children: [
-                    SafeArea(
-                      child: Column(
-                        children: [
-                          _topBar(snap),
-                          Expanded(
-                            child: Center(
-                              child: SingleChildScrollView(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    JarvisFace(
-                                      snapshot: snap,
-                                      size: wide ? 380 : 300,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  _topBar(snap),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final height = constraints.maxHeight;
+
+                        // Calculate dynamic JarvisFace size based on available viewport
+                        final faceSize = (height * 0.42).clamp(220.0, 380.0);
+
+                        if (width >= 1100) {
+                          // ── 3-COLUMN DESKTOP / ULTRA-WIDE LAYOUT ─────────────
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Left Panel: Monitor, Weather, Agent Activity
+                                SizedBox(
+                                  width: 320,
+                                  child: SingleChildScrollView(
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Column(
+                                      children: [
+                                        const SystemMonitorCard(),
+                                        const SizedBox(height: 12),
+                                        WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
+                                        const SizedBox(height: 12),
+                                        AgentActivityCard(snapshot: snap),
+                                        const SizedBox(height: 12),
+                                      ],
                                     ),
-                                    const SizedBox(height: 12),
-                                    TranscriptionPanel(snapshot: snap),
-                                    if (!wide) ...[
-                                      const SizedBox(height: 20),
-                                      CameraCard(
-                                        onStartWebcam: () => _conn.sendText('start webcam'),
-                                        onStopWebcam: () => _conn.sendText('stop webcam'),
-                                      ),
-                                      const SizedBox(height: 14),
-                                      const SystemMonitorCard(),
-                                      const SizedBox(height: 14),
-                                      WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
-                                      const SizedBox(height: 14),
-                                      _musicCard(snap),
-                                    ],
-                                  ],
+                                  ),
                                 ),
-                              ),
+                                // Center Panel: Jarvis Face & Live Speech Transcript
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    child: Center(
+                                      child: SingleChildScrollView(
+                                        physics: const BouncingScrollPhysics(),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            JarvisFace(
+                                              snapshot: snap,
+                                              size: faceSize,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            TranscriptionPanel(snapshot: snap),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Right Panel: Camera & Music Player
+                                SizedBox(
+                                  width: 320,
+                                  child: SingleChildScrollView(
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Column(
+                                      children: [
+                                        CameraCard(
+                                          onStartWebcam: () => _conn.sendText('start webcam'),
+                                          onStopWebcam: () => _conn.sendText('stop webcam'),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _musicCard(snap),
+                                        const SizedBox(height: 12),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          _quickChips(),
-                          const SizedBox(height: 6),
-                          _commandBar(snap),
-                        ],
-                      ),
+                          );
+                        } else if (width >= 740) {
+                          // ── 2-COLUMN TABLET / MEDIUM LAYOUT ───────────────────
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Main Left Column: Face, Transcript & Activity
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Column(
+                                      children: [
+                                        JarvisFace(
+                                          snapshot: snap,
+                                          size: faceSize.clamp(200.0, 320.0),
+                                        ),
+                                        const SizedBox(height: 14),
+                                        TranscriptionPanel(snapshot: snap),
+                                        const SizedBox(height: 14),
+                                        AgentActivityCard(snapshot: snap),
+                                        const SizedBox(height: 12),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                // Right Utility Column: Camera, System, Weather, Music
+                                SizedBox(
+                                  width: 310,
+                                  child: SingleChildScrollView(
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Column(
+                                      children: [
+                                        CameraCard(
+                                          onStartWebcam: () => _conn.sendText('start webcam'),
+                                          onStopWebcam: () => _conn.sendText('stop webcam'),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        const SystemMonitorCard(),
+                                        const SizedBox(height: 12),
+                                        WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
+                                        const SizedBox(height: 12),
+                                        _musicCard(snap),
+                                        const SizedBox(height: 12),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          // ── 1-COLUMN COMPACT / MOBILE LAYOUT ─────────────────
+                          return SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Column(
+                              children: [
+                                JarvisFace(
+                                  snapshot: snap,
+                                  size: 240,
+                                ),
+                                const SizedBox(height: 12),
+                                TranscriptionPanel(snapshot: snap),
+                                const SizedBox(height: 14),
+                                AgentActivityCard(snapshot: snap),
+                                const SizedBox(height: 14),
+                                CameraCard(
+                                  onStartWebcam: () => _conn.sendText('start webcam'),
+                                  onStopWebcam: () => _conn.sendText('stop webcam'),
+                                ),
+                                const SizedBox(height: 14),
+                                const SystemMonitorCard(),
+                                const SizedBox(height: 14),
+                                WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
+                                const SizedBox(height: 14),
+                                _musicCard(snap),
+                                const SizedBox(height: 14),
+                              ],
+                            ),
+                          );
+                        }
+                      },
                     ),
-                    if (wide) ...[
-                      Positioned(
-                        left: 28,
-                        top: 92,
-                        child: Column(
-                          children: [
-                            const SystemMonitorCard(),
-                            const SizedBox(height: 14),
-                            WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        right: 28,
-                        top: 92,
-                        child: Column(
-                          children: [
-                            CameraCard(
-                              onStartWebcam: () => _conn.sendText('start webcam'),
-                              onStopWebcam: () => _conn.sendText('stop webcam'),
-                            ),
-                            const SizedBox(height: 14),
-                            _musicCard(snap),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
+                  ),
+                  _quickChips(),
+                  const SizedBox(height: 6),
+                  _commandBar(snap),
+                ],
+              ),
             ),
           );
+
         },
       ),
     );

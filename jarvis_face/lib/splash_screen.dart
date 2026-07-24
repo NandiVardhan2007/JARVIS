@@ -330,10 +330,7 @@ class _SplashBgPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF00D4FF).withAlpha(14)
-      ..strokeWidth = 0.6
-      ..style = PaintingStyle.stroke;
+
 
     const hexR = 28.0;
     final cols = (size.width / (hexR * 1.73)).ceil() + 2;
@@ -388,8 +385,9 @@ class _CornerHudPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     // L bracket
-    canvas.drawLine(Offset.zero, Offset(40, 0), paint);
-    canvas.drawLine(Offset.zero, Offset(0, 40), paint);
+    canvas.drawLine(Offset.zero, const Offset(40, 0), paint);
+    canvas.drawLine(Offset.zero, const Offset(0, 40), paint);
+
 
     // Inner corner detail
     canvas.drawLine(const Offset(8, 0), const Offset(8, 8), paint..color = const Color(0xFF00D4FF).withAlpha(50));

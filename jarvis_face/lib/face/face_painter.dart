@@ -401,7 +401,7 @@ class FacePainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..shader = RadialGradient(colors: [const Color(0xFFFF7EB0), const Color(0xFFFF2D6B)])
+        ..shader = const RadialGradient(colors: [Color(0xFFFF7EB0), Color(0xFFFF2D6B)])
             .createShader(Rect.fromCircle(center: c, radius: s)),
     );
   }
@@ -444,10 +444,11 @@ class FacePainter extends CustomPainter {
     canvas.drawPath(
       cavity,
       Paint()
-        ..shader = RadialGradient(
-          colors: [const Color(0xFF3A1420), const Color(0xFF14060B)],
+        ..shader = const RadialGradient(
+          colors: [Color(0xFF3A1420), Color(0xFF14060B)],
         ).createShader(rect),
     );
+
     // Lower-lip gloss.
     final gloss = Paint()
       ..style = PaintingStyle.stroke

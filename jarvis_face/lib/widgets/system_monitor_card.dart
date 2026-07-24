@@ -40,7 +40,8 @@ class _SystemMonitorCardState extends State<SystemMonitorCard> {
         final memFile = File('/proc/meminfo');
         if (memFile.existsSync()) {
           final lines = memFile.readAsLinesSync();
-          double total = 0, free = 0, avail = 0;
+          double total = 0, avail = 0;
+
           for (final l in lines) {
             if (l.startsWith('MemTotal:')) {
               total = double.tryParse(RegExp(r'\d+').stringMatch(l) ?? '0') ?? 0;

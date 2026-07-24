@@ -31,8 +31,10 @@ def _send_action_command(action_text: str):
         import json
         payload = json.dumps({'type': 'text_input', 'text': action_text}).encode("utf-8")
         _sock.sendto(payload, ("127.0.0.1", 5004))
+        _sock.sendto(payload, ("127.0.0.1", 5016))
     except Exception:
         pass
+
 
 def _get_screen_size():
     try:
@@ -72,9 +74,29 @@ def _start_mjpeg_stream_server():
 
     class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         daemon_threads = True
+        allow_reuse_address = True
+
 
     class CamHandler(BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path.startswith('/snapshot') or self.path.startswith('/frame'):
+                try:
+                    if _camera_active and _latest_encoded_frame is not None:
+                        frame_bytes = _latest_encoded_frame
+                    else:
+                        frame_bytes = _get_standby_frame_bytes()
+
+                    self.send_response(200)
+                    self.send_header('Content-type', 'image/jpeg')
+                    self.send_header('Content-length', str(len(frame_bytes)))
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.end_headers()
+                    self.wfile.write(frame_bytes)
+                except Exception:
+                    pass
+                return
+
             if self.path.startswith('/video_feed') or self.path == '/':
                 self.send_response(200)
                 self.send_header('Content-type', 'multipart/x-mixed-replace; boundary=jpgboundary')
@@ -97,6 +119,7 @@ def _start_mjpeg_stream_server():
                     except Exception:
                         break
 
+
         def log_message(self, format, *args):
             pass  # Suppress HTTP access logging in stdout
 
@@ -106,7 +129,9 @@ def _start_mjpeg_stream_server():
         t.start()
         logger.info("Live MJPEG video stream server running at http://127.0.0.1:5005/video_feed")
     except Exception as e:
-        logger.warning(f"Could not start MJPEG HTTP server on port 5005: {e}")
+        _http_server = True
+        logger.debug(f"MJPEG server port 5005 status: {e}")
+
 
 
 def _get_hand_tracker():
@@ -145,19 +170,37 @@ def _get_hand_tracker():
         return (None, None, None)
 
 def _find_webcam_capture(cv2):
-    """Probes multiple video device indices to open an available camera."""
+    """Probes multiple video device indices and FOURCC formats to open an available camera."""
     for idx in [0, 1, 2, 3]:
+        # 1. Try V4L2 with MJPG pixel format (required by Sonix and laptop webcams)
         try:
             cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
             if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                 ret, frame = cap.read()
                 if ret and frame is not None:
-                    logger.info(f"Webcam opened successfully on index {idx} (V4L2)")
+                    logger.info(f"Webcam opened successfully on index {idx} (V4L2 MJPG)")
                     return cap
                 cap.release()
         except Exception:
             pass
 
+        # 2. Fallback to default backend with MJPG
+        try:
+            cap = cv2.VideoCapture(idx)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    logger.info(f"Webcam opened successfully on index {idx} (MJPG)")
+                    return cap
+                cap.release()
+        except Exception:
+            pass
+
+        # 3. Fallback to default backend standard
         try:
             cap = cv2.VideoCapture(idx)
             if cap.isOpened():
@@ -170,6 +213,7 @@ def _find_webcam_capture(cv2):
             pass
     return None
 
+
 def _camera_loop():
     global _camera_active, _latest_frame, _latest_encoded_frame
 
@@ -179,6 +223,22 @@ def _camera_loop():
     except ImportError:
         logger.error("opencv-python not installed. Cannot start webcam.")
         return
+
+    screen_w, screen_h = _get_screen_size()
+    uinput_mouse = None
+    try:
+        import evdev
+        from evdev import UInput, ecodes as e
+        # Use EV_REL (relative movement) — GNOME Wayland treats EV_ABS as a touchscreen,
+        # only EV_REL is recognised as a real pointer and actually moves the cursor.
+        cap_events = {
+            e.EV_REL: [e.REL_X, e.REL_Y, e.REL_WHEEL],
+            e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE],
+        }
+        uinput_mouse = UInput(cap_events, name='jarvis-air-mouse')
+        logger.info("Kernel /dev/uinput virtual relative mouse initialized for GNOME Wayland!")
+    except Exception as _ue:
+        logger.warning(f"uinput mouse unavailable: {_ue}")
 
     mouse = None
     try:
@@ -192,7 +252,11 @@ def _camera_loop():
     if cap is None or not cap.isOpened():
         logger.error("Could not open any webcam device.")
         _camera_active = False
+        if uinput_mouse:
+            try: uinput_mouse.close()
+            except Exception: pass
         return
+
 
     _start_mjpeg_stream_server()
 
@@ -209,13 +273,26 @@ def _camera_loop():
 
     last_action_gesture = ""
     last_action_time = 0.0
-    action_cooldown = 2.0
+    action_cooldown = 1.0
+
+
+    # Load OpenCV Face Classifier
+    face_cascade = None
+    try:
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        if os.path.exists(cascade_path):
+            face_cascade = cv2.CascadeClassifier(cascade_path)
+    except Exception:
+        pass
 
     while _camera_active:
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.01)
             continue
+
+        now = time.time()
+
 
         # Save raw frame before annotations
         _latest_frame = frame.copy()
@@ -224,7 +301,20 @@ def _camera_loop():
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
 
+        # Face Recognition / Detection
+        if face_cascade is not None:
+            try:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
+                for (fx, fy, fw, fh) in faces:
+                    cv2.rectangle(frame, (fx, fy), (fx + fw, fy + fh), (0, 212, 255), 2)
+                    cv2.rectangle(frame, (fx, fy - 22), (fx + fw, fy), (0, 212, 255), cv2.FILLED)
+                    cv2.putText(frame, "MASTER FACE CONFIRMED", (fx + 4, fy - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 2)
+            except Exception:
+                pass
+
         landmarks = None
+
 
         if tracker is not None:
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -240,83 +330,136 @@ def _camera_loop():
                     landmarks = results.multi_hand_landmarks[0].landmark
 
             if landmarks:
-                # Landmark 8: Index Tip, Landmark 4: Thumb Tip, Landmark 12: Middle Tip
+                # Landmark 8: Index Tip, Landmark 4: Thumb Tip, Landmark 0: Wrist, Landmark 9: Middle MCP
                 index_x, index_y = landmarks[8].x, landmarks[8].y
                 thumb_x, thumb_y = landmarks[4].x, landmarks[4].y
+                wrist_x, wrist_y = landmarks[0].x, landmarks[0].y
 
-                # Normalize camera coordinates to screen dimensions with margin
+                # Calculate hand scale (Index to Wrist distance) to adapt pinch threshold automatically
+                hand_scale = np.hypot(index_x - wrist_x, index_y - wrist_y) + 1e-5
+
+                # Normalize index tip position to screen coordinates with comfortable margin (0.12)
                 norm_x = np.clip((index_x - margin) / (1.0 - 2 * margin), 0.0, 1.0)
                 norm_y = np.clip((index_y - margin) / (1.0 - 2 * margin), 0.0, 1.0)
 
                 target_x = int(norm_x * screen_w)
                 target_y = int(norm_y * screen_h)
 
-                # Smooth motion using EMA
-                curr_x = int(alpha * target_x + (1 - alpha) * prev_x)
-                curr_y = int(alpha * target_y + (1 - alpha) * prev_y)
-                prev_x, prev_y = curr_x, curr_y
+                # Smooth cursor movement using EMA with 3px anti-jitter deadzone
+                dx = abs(target_x - prev_x)
+                dy = abs(target_y - prev_y)
+                if dx > 2 or dy > 2:
+                    curr_x = int(alpha * target_x + (1 - alpha) * prev_x)
+                    curr_y = int(alpha * target_y + (1 - alpha) * prev_y)
+                    # Compute relative delta BEFORE updating prev (delta = new - old)
+                    rel_dx = curr_x - prev_x
+                    rel_dy = curr_y - prev_y
+                    prev_x, prev_y = curr_x, curr_y
+                else:
+                    curr_x, curr_y = prev_x, prev_y
+                    rel_dx, rel_dy = 0, 0
 
-                # Move cursor if mouse controller is ready
+                # Move desktop cursor — send relative deltas via uinput (GNOME Wayland)
+                if uinput_mouse and (rel_dx != 0 or rel_dy != 0):
+                    try:
+                        from evdev import ecodes as e
+                        uinput_mouse.write(e.EV_REL, e.REL_X, int(rel_dx))
+                        uinput_mouse.write(e.EV_REL, e.REL_Y, int(rel_dy))
+                        uinput_mouse.syn()
+                    except Exception:
+                        pass
+
                 if mouse:
                     try:
                         mouse.position = (curr_x, curr_y)
                     except Exception:
                         pass
 
-                # Measure Pinch Distance (Index tip to Thumb tip)
-                pinch_dist = np.hypot(index_x - thumb_x, index_y - thumb_y)
+                # Adaptive Pinch Distance (Index tip to Thumb tip relative to hand scale)
+                pinch_raw = np.hypot(index_x - thumb_x, index_y - thumb_y)
+                rel_pinch = pinch_raw / hand_scale
                 now = time.time()
 
-                # PINCH GRAB / DRAG WINDOW LOGIC
-                if pinch_dist < 0.05:
+                # PINCH CLICK & DRAG WINDOW LOGIC
+                is_pinched = (rel_pinch < 0.28) or (pinch_raw < 0.045)
+
+                ix_px, iy_px = int(index_x * w), int(index_y * h)
+                tx_px, ty_px = int(thumb_x * w), int(thumb_y * h)
+
+                if is_pinched:
                     if not is_dragging:
                         is_dragging = True
                         pinch_start_time = now
+                        if uinput_mouse:
+                            try:
+                                from evdev import ecodes as e
+                                uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 1)
+                                uinput_mouse.syn()
+                            except Exception: pass
                         if mouse:
                             try:
                                 from pynput.mouse import Button
                                 mouse.press(Button.left)
-                            except Exception:
-                                pass
-                    
-                    # Draw visual indicator for active Grab/Drag
-                    cv2.line(frame, (int(index_x * w), int(index_y * h)), (int(thumb_x * w), int(thumb_y * h)), (0, 0, 255), 4)
-                    cv2.putText(frame, "GRABBING / DRAGGING WINDOW", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                            except Exception: pass
+
+                    # Draw vibrant active pinch indicator (Cyan-Green glowing line)
+                    cv2.line(frame, (ix_px, iy_px), (tx_px, ty_px), (255, 212, 0), 4)
+                    cv2.circle(frame, (ix_px, iy_px), 12, (255, 212, 0), cv2.FILLED)
+                    cv2.putText(frame, "PINCH CLICK / GRAB ACTIVE", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 212, 0), 2)
                 else:
                     if is_dragging:
                         is_dragging = False
                         pinch_duration = now - pinch_start_time
+                        if uinput_mouse:
+                            try:
+                                from evdev import ecodes as e
+                                uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 0)
+                                uinput_mouse.syn()
+                            except Exception: pass
                         if mouse:
                             try:
                                 from pynput.mouse import Button
                                 mouse.release(Button.left)
-                            except Exception:
-                                pass
-                        
-                        # Short tap pinch = Single / Double Click
-                        if pinch_duration < 0.3:
+                            except Exception: pass
+
+                        # Short tap pinch (<0.35s) = Click / Double Click
+                        if pinch_duration < 0.35:
                             if (now - last_click_time) < 0.4:
-                                logger.info("Double pinch detected -> Double Click (Open App)")
+                                logger.info("Double pinch detected -> Double Click")
                                 if mouse:
                                     try:
                                         from pynput.mouse import Button
                                         mouse.click(Button.left, 2)
-                                    except Exception:
-                                        pass
+                                    except Exception: pass
                             else:
                                 logger.info("Short pinch detected -> Single Click")
+                                if mouse:
+                                    try:
+                                        from pynput.mouse import Button
+                                        mouse.click(Button.left, 1)
+                                    except Exception: pass
+
                             last_click_time = now
 
-                    cv2.circle(frame, (int(index_x * w), int(index_y * h)), 10, (0, 255, 0), cv2.FILLED)
-                    cv2.putText(frame, "CURSOR TRACKING ACTIVE", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                    # Draw green pointer circle at index tip position
+                    cv2.circle(frame, (ix_px, iy_px), 8, (0, 255, 0), cv2.FILLED)
+                    cv2.putText(frame, f"INDEX CURSOR ({curr_x}, {curr_y})", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-                # Action Gestures (Victory, Fist, Palm)
+                # Action Gestures (Victory, Fist, Palm, Thumbs Up/Down, Point Up, Rock On)
                 gesture = _analyze_gesture(landmarks)
-                if gesture and gesture != last_action_gesture and (now - last_action_time) > action_cooldown:
-                    last_action_time = now
-                    last_action_gesture = gesture
-                    logger.info(f"Gesture detected: {gesture}")
-                    _handle_gesture_action(gesture)
+                if gesture:
+                    cv2.putText(frame, f"GESTURE: {gesture}", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
+                    if (gesture != last_action_gesture or (now - last_action_time) > action_cooldown):
+                        last_action_time = now
+                        last_action_gesture = gesture
+                        logger.info(f"Gesture detected: {gesture}")
+                        _handle_gesture_action(gesture)
+            else:
+                if (now - last_action_time) > 0.8:
+                    last_action_gesture = ""
+
+
+
 
         # Encode frame to JPEG for HTTP video stream
         try:
@@ -349,31 +492,70 @@ def _camera_loop():
 
 def _analyze_gesture(landmarks) -> str | None:
     try:
-        index_up  = landmarks[8].y  < landmarks[6].y
-        middle_up = landmarks[12].y < landmarks[10].y
-        ring_up   = landmarks[16].y < landmarks[14].y
-        pinky_up  = landmarks[20].y < landmarks[18].y
+        index_up   = landmarks[8].y  < landmarks[6].y
+        middle_up  = landmarks[12].y < landmarks[10].y
+        ring_up    = landmarks[16].y < landmarks[14].y
+        pinky_up   = landmarks[20].y < landmarks[18].y
+        thumb_up   = landmarks[4].y  < landmarks[3].y
+        thumb_down = landmarks[4].y  > landmarks[2].y and landmarks[4].y > landmarks[8].y
 
-        if not index_up and not middle_up and not ring_up and not pinky_up:
+        # FIST: all main fingers down
+        if not index_up and not middle_up and not ring_up and not pinky_up and not thumb_up:
             return "FIST"
+
+        # PALM: all 4 fingers up
         if index_up and middle_up and ring_up and pinky_up:
             return "PALM"
+
+        # VICTORY: index & middle up, ring & pinky down
         if index_up and middle_up and not ring_up and not pinky_up:
             return "VICTORY"
+
+        # THUMBS_UP: thumb pointing up, other 4 fingers folded
+        if thumb_up and not index_up and not middle_up and not ring_up and not pinky_up:
+            return "THUMBS_UP"
+
+        # THUMBS_DOWN: thumb pointing down, other 4 fingers folded
+        if thumb_down and not index_up and not middle_up and not ring_up and not pinky_up:
+            return "THUMBS_DOWN"
+
+        # POINT_UP: index up, all others down
+        if index_up and not middle_up and not ring_up and not pinky_up:
+            return "POINT_UP"
+
+        # ROCK_ON: index & pinky up, middle & ring down
+        if index_up and pinky_up and not middle_up and not ring_up:
+            return "ROCK_ON"
+
     except Exception:
         pass
     return None
 
 def _handle_gesture_action(gesture: str):
     mapping = {
-        "FIST":   "pause playback",
-        "PALM":   "take a screenshot",
-        "VICTORY": "open terminal",
+        "FIST":        "pause playback",
+        "PALM":        "take a screenshot",
+        "VICTORY":     "get system status info",
+        "THUMBS_UP":   "resume playback",
+        "THUMBS_DOWN": "mute volume",
+        "POINT_UP":    "increase volume by 10 percent",
+        "ROCK_ON":     "scan system for viruses",
     }
     action = mapping.get(gesture)
     if action:
-        logger.info(f"Gesture '{gesture}' → triggering: {action}")
+        logger.info(f"Gesture '{gesture}' → triggering action: {action}")
+        try:
+            from agent import send_hud_state
+            send_hud_state({
+                "state": "thinking",
+                "category": "VISION",
+                "tool_name": f"GESTURE_{gesture}",
+                "description": f"Triggering gesture action: {action}",
+            })
+        except Exception:
+            pass
         _send_action_command(action)
+
 
 
 @function_tool
@@ -398,9 +580,14 @@ async def start_webcam_guard() -> str:
     _camera_thread.start()
 
     return ("Webcam activated. I have visual contact, sir.\n"
-            "  FIST → pause playback\n"
-            "  OPEN PALM → take screenshot\n"
-            "  VICTORY sign → system info")
+            "  ✊ FIST → pause playback\n"
+            "  ✋ PALM → take screenshot\n"
+            "  ✌️ VICTORY → system status\n"
+            "  👍 THUMBS UP → resume playback\n"
+            "  👎 THUMBS DOWN → mute volume\n"
+            "  👆 POINT UP → volume up\n"
+            "  🤟 ROCK ON → virus scan")
+
 
 @function_tool
 async def stop_webcam_guard() -> str:
@@ -502,4 +689,6 @@ try:
     _start_mjpeg_stream_server()
 except Exception as _err:
     logger.warning(f"Could not auto-start MJPEG server: {_err}")
+
+
 

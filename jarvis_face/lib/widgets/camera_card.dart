@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 
-/// Live Visual Feed widget connecting to JARVIS MJPEG video stream (http://127.0.0.1:5005/video_feed).
+/// Live Visual Feed widget connecting to JARVIS MJPEG video stream (http://127.0.0.1:5005/snapshot.jpg).
 class CameraCard extends StatefulWidget {
   final VoidCallback? onStartWebcam;
   final VoidCallback? onStopWebcam;
@@ -19,29 +19,26 @@ class CameraCard extends StatefulWidget {
 
 class _CameraCardState extends State<CameraCard> {
   bool _isOnline = false;
-  Timer? _checkTimer;
-  int _imageKey = 0;
+  Timer? _frameTimer;
+  int _seq = 0;
 
   @override
   void initState() {
     super.initState();
-    _startHealthCheck();
+    // Poll snapshot frames at ~25fps (40ms interval) for smooth live video
+    _frameTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      if (mounted) {
+        setState(() {
+          _seq++;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
-    _checkTimer?.cancel();
+    _frameTimer?.cancel();
     super.dispose();
-  }
-
-  void _startHealthCheck() {
-    _checkTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (mounted) {
-        setState(() {
-          _imageKey++;
-        });
-      }
-    });
   }
 
   @override
@@ -99,7 +96,7 @@ class _CameraCardState extends State<CameraCard> {
               width: double.infinity,
               color: Colors.black45,
               child: Image.network(
-                'http://127.0.0.1:5005/video_feed?k=$_imageKey',
+                'http://127.0.0.1:5005/snapshot.jpg?seq=$_seq',
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 errorBuilder: (context, error, stackTrace) {

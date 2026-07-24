@@ -16,6 +16,11 @@ FLUTTER_DIR="jarvis_face"
 BRIDGE="jarvis_bridge.py"
 PIDS=()
 
+# Truncate and reset JARVIS.log on startup
+: > JARVIS.log
+echo "[start] Reset JARVIS.log — recording clean logs for this session..."
+
+
 # A non-interactive ./start.sh does NOT read your shell profiles, so tools you
 # added to PATH there (most importantly `flutter`) are invisible — which makes
 # this script skip the rebuild and launch a STALE binary. Pull those PATH
@@ -94,19 +99,11 @@ if ! python3 -c "import websockets" &>/dev/null; then
     pip install websockets >/dev/null 2>&1 || python3 -m pip install websockets
 fi
 
-# ── 1. XTTS API Server (background) ──────────────────────────────────────────
-echo "[start] (1/4) Starting XTTS streaming server on http://localhost:8020 ..."
-(
-    source xtts_env/bin/activate
-    python -m xtts_api_server --port 8020 -sf /run/media/nandu/Data/JARVIS/models -o /tmp/xtts_output --lowvram > xtts.log 2>&1
-) &
-
-PIDS+=($!)
-
-# ── 2. WebSocket bridge (background) ──────────────────────────────────────────
-echo "[start] (2/4) Starting bridge on ws://127.0.0.1:8765 ..."
+# ── 1. WebSocket bridge (background) ──────────────────────────────────────────
+echo "[start] (1/3) Starting bridge on ws://127.0.0.1:8765 ..."
 python3 "$BRIDGE" &
 PIDS+=($!)
+
 
 # ── 3. Flutter frontend ───────────────────────────────────────────────────────
 # The shell that runs this script may not have Flutter on PATH even though your

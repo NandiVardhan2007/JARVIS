@@ -316,7 +316,8 @@ class _LockOrb extends CustomPainter {
     // Draw dashed ring
     const dashes = 12;
     const r = 72.0;
-    final dashLen = (2 * math.pi * r) / (dashes * 2);
+    const dashLen = (2 * math.pi * r) / (dashes * 2);
+
     for (int i = 0; i < dashes; i++) {
       final start = (i * 2) * dashLen / r;
       canvas.drawArc(
@@ -528,8 +529,9 @@ class _CornerPainter extends CustomPainter {
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
 
-    canvas.drawLine(Offset.zero, Offset(36, 0), paint);
-    canvas.drawLine(Offset.zero, Offset(0, 36), paint);
+    canvas.drawLine(Offset.zero, const Offset(36, 0), paint);
+    canvas.drawLine(Offset.zero, const Offset(0, 36), paint);
+
     canvas.drawLine(const Offset(6, 0), const Offset(6, 6), paint..color = const Color(0xFF00D4FF).withAlpha(40));
     canvas.drawLine(const Offset(0, 6), const Offset(6, 6), paint);
 
