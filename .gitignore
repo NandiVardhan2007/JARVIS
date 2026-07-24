@@ -5,6 +5,8 @@ __pycache__/
 venv/
 env/
 .venv/
+xtts_env/
+xtts_models/
 jarvis_memory/
 *.db
 *.sqlite3
@@ -13,18 +15,15 @@ token.pickle
 credentials.json
 .DS_Store
 
-jarvis_memory/
 jarvis-waha/
-credentials.json
 telegram_offset.txt
-token.pickle
 *.onnx
 models/
 jarvis.db
 jarvis_waha.db
 pretrained_models/
 
-# Screenshot output directories
+# Output and recording directories
 JARVIS_Screenshots/
 Output/
-
+output/

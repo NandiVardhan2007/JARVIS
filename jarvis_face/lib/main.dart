@@ -5,10 +5,13 @@ import 'face/jarvis_face.dart';
 import 'models/jarvis_state.dart';
 import 'services/jarvis_connection.dart';
 import 'theme.dart';
+import 'splash_screen.dart';
+import 'auth_screen.dart';
 import 'widgets/music_player_card.dart';
 import 'widgets/system_monitor_card.dart';
 import 'widgets/transcription_panel.dart';
 import 'widgets/weather_card.dart';
+import 'widgets/camera_card.dart';
 
 void main() {
   runApp(const JarvisApp());
@@ -23,8 +26,26 @@ class JarvisApp extends StatelessWidget {
       title: 'JARVIS',
       debugShowCheckedModeBanner: false,
       theme: JarvisTheme.build(),
-      home: const JarvisHome(),
+      home: const JarvisBootWrapper(),
     );
+  }
+}
+
+class JarvisBootWrapper extends StatefulWidget {
+  const JarvisBootWrapper({super.key});
+
+  @override
+  State<JarvisBootWrapper> createState() => _JarvisBootWrapperState();
+}
+
+class _JarvisBootWrapperState extends State<JarvisBootWrapper> {
+  bool _booted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return _booted
+        ? const JarvisHome()
+        : JarvisSplashScreen(onComplete: () => setState(() => _booted = true));
   }
 }
 
@@ -67,6 +88,16 @@ class _JarvisHomeState extends State<JarvisHome> {
         animation: _conn,
         builder: (context, _) {
           final snap = _conn.snapshot;
+
+          // Show the secure voice auth lock screen if JARVIS requests it
+          if (snap.stateString.contains('auth_') && snap.stateString != 'auth_success') {
+            return JarvisAuthScreen(
+              stateString: snap.stateString,
+              description: snap.description,
+              onAuthenticated: () {}, // Handled by state string reverting to idle
+            );
+          }
+
           final glow = snap.colors.primary;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 600),
@@ -95,6 +126,11 @@ class _JarvisHomeState extends State<JarvisHome> {
                                     TranscriptionPanel(snapshot: snap),
                                     if (!wide) ...[
                                       const SizedBox(height: 20),
+                                      CameraCard(
+                                        onStartWebcam: () => _conn.sendText('start webcam'),
+                                        onStopWebcam: () => _conn.sendText('stop webcam'),
+                                      ),
+                                      const SizedBox(height: 14),
                                       const SystemMonitorCard(),
                                       const SizedBox(height: 14),
                                       WeatherCard(city: JarvisConfig.weatherCity.isEmpty ? null : JarvisConfig.weatherCity),
@@ -124,7 +160,20 @@ class _JarvisHomeState extends State<JarvisHome> {
                           ],
                         ),
                       ),
-                      Positioned(right: 28, top: 92, child: _musicCard(snap)),
+                      Positioned(
+                        right: 28,
+                        top: 92,
+                        child: Column(
+                          children: [
+                            CameraCard(
+                              onStartWebcam: () => _conn.sendText('start webcam'),
+                              onStopWebcam: () => _conn.sendText('stop webcam'),
+                            ),
+                            const SizedBox(height: 14),
+                            _musicCard(snap),
+                          ],
+                        ),
+                      ),
                     ],
                   ],
                 );
@@ -291,6 +340,7 @@ class _JarvisHomeState extends State<JarvisHome> {
 
   Widget _quickChips() {
     final chips = [
+      ('🧠 Knowledge RAG', 'search the knowledge base'),
       ('📝 Text Editor', 'open text editor'),
       ('📸 Screenshot', 'take screenshot'),
       ('👁️ What\'s on screen?', 'what is on my screen'),

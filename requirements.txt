@@ -33,6 +33,11 @@ duckduckgo-search>=6.0.0
 # ── Utilities ────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0
 send2trash>=1.8.2
+# ── Vision & Gesture Control (new) ─────────────────────────────────────────────
+opencv-python>=4.9.0
+mediapipe>=0.10.0
+playwright>=1.42.0
+
 
 # ── Document handling ─────────────────────────────────────────────────────────
 PyPDF2>=3.0.1
@@ -81,3 +86,10 @@ tenacity==8.3.0
 
 # Flutter frontend bridge (jarvis_bridge.py)
 websockets
+
+# ── Voice Verification & Speaker Enrollment (new) ─────────────────────────────
+sounddevice>=0.4.6
+scipy>=1.11.0
+resemblyzer>=0.1.4
+pypdf>=3.17.0
+

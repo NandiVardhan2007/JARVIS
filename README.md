@@ -4,11 +4,27 @@ A LiveKit Agents-powered voice assistant for Windows desktop control, combined w
 
 **Fully Localized AI Stack:** JARVIS is designed to run completely offline/locally, maximizing privacy and avoiding API limits.
 
+---
+
+## Key Advanced Features
+
 ### Dynamic Island UI
 Features a premium, Apple-inspired Dynamic Island desktop HUD that provides contextual alerts, microphone levels, and tool execution status. 
 - **Hover-Only Expansion**: Keeps your workspace clean by expanding only when hovered.
 - **Smooth Transitions**: Fluid spring-physics based animations.
 - **History Drawer**: Long-press to see recent tool usage.
+
+### High-Tech Frontend Motion Splash Page
+- Displays a stunning enterprise-grade reactive canvas featuring rotating reactor rings and a glowing core.
+- Progressively prints system initialization logs and integrates a localized glitch effect for the J.A.R.V.I.S logo overlay.
+
+### Secure Voice-Signature Unlock (Voice verification)
+- **Vocal Biometrics**: Protects your system from unauthorized users. JARVIS identifies the *vocal signature* of the speaker dynamically rather than relying on text keywords.
+- **Boot Lock State**: Upon startup, JARVIS enters a locked state and displays a secure biometric padlock overlay on the Flutter UI interface. 
+- **Cosine Similarity Verification**: Records a 4-second audio sample from the microphone, processes it against your saved Voice Print template using a 128-dimensional embedding comparator, and authenticates the session only on match. 
+
+### Document & Note RAG Pipeline
+- **General Knowledge RAG**: Extends standard project indexing. Allows users to upload personal documents, notes, or index PDF files into a vector store (via ChromaDB) and semantically retrieve details directly from the frontend interface using a quick choice shortcut.
 
 ---
 

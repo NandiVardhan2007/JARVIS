@@ -9,6 +9,8 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
+from .whatsapp_web_control import open_whatsapp_web, read_unreads_on_whatsapp, send_whatsapp_reply
+
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_API       = "https://api.telegram.org/bot{token}/{method}"

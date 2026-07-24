@@ -41,7 +41,8 @@ from .user_memory import memorize_fact, recall_memory, forget_fact
 from .task_manager import add_task, complete_task, list_tasks, prioritize_task
 from .terminal import run_terminal_command
 from .github_tool import list_github_repos, get_github_pull_requests, create_github_issue, get_github_recent_commits
-from .knowledge_base import save_note, search_knowledge_base
+from .knowledge_base import save_note
+from .knowledge_rag import add_document_to_knowledge, index_pdf_file, search_knowledge_base, list_knowledge_documents
 from .error_telemetry import get_error_summary, get_recent_errors
 from .mobile_control import (
     connect_phone, get_phone_status, unlock_phone, lock_phone,
@@ -62,13 +63,17 @@ from .codebase_rag import index_project_codebase, search_codebase
 
 # ── Tool Categories ───────────────────────────────────────────────────────────
 
+from .web_automation import open_webpage, click_web_element, type_into_form, scroll_webpage, close_browser
+from .webcam_guard import start_webcam_guard, stop_webcam_guard, analyze_what_master_is_doing, analyze_webcam_frame_vlm
+from .whatsapp_web_control import open_whatsapp_web, read_unreads_on_whatsapp, send_whatsapp_reply
+
 # Core tools are always loaded regardless of intent
 CORE_TOOLS = [
     search_web, get_weather, get_time_info, get_news,
     get_error_summary, get_recent_errors,
     memorize_fact, recall_memory, forget_fact,
     add_task, complete_task, list_tasks, prioritize_task,
-    save_note, search_knowledge_base, execute_multi_task
+    save_note, search_knowledge_base, add_document_to_knowledge, list_knowledge_documents, execute_multi_task
 ]
 
 TOOL_CATEGORIES = {
@@ -77,7 +82,8 @@ TOOL_CATEGORIES = {
         search_emails, reply_email, mark_email_read, label_email, summarize_email, delete_emails
     ],
     "scraper": [
-        scrape_url, extract_tables, get_page_links, take_web_screenshot, ai_summarize_page
+        scrape_url, extract_tables, get_page_links, take_web_screenshot, ai_summarize_page,
+        open_webpage, click_web_element, type_into_form, scroll_webpage, close_browser
     ],
     "calendar": [
         get_today_schedule, list_upcoming_events, create_event, 
@@ -97,9 +103,10 @@ TOOL_CATEGORIES = {
     ],
     "system": [
         system_power_action, get_system_info, control_screen_brightness,
-        control_system_volume, control_media, use_smart_clipboard, 
-        scan_system_for_viruses, list_processes, find_process, 
-        kill_process, get_top_resource_hogs, restart_process, control_ac_bulb
+        control_system_volume, control_media, use_smart_clipboard,
+        scan_system_for_viruses, list_processes, find_process,
+        kill_process, get_top_resource_hogs, restart_process, control_ac_bulb,
+        start_webcam_guard, stop_webcam_guard, analyze_what_master_is_doing, analyze_webcam_frame_vlm
     ],
     "desktop": [
         manage_window, manage_window_state, list_active_windows, 
@@ -194,14 +201,14 @@ _INTENT_KEYWORDS = {
                       "fix error", "debug code", "code error", "compile error", "traceback"],
     "system":        ["process", "brightness", "volume", "system", "virus", "shut down",
                       "shutdown", "restart", "sleep", "pc", "computer", "power", "battery",
-                      "cpu", "ram", "storage", "disk"],
+                      "cpu", "ram", "storage", "disk", "webcam", "camera", "vision", "gesture", "gestures", "hand"],
     "communication": ["discord", "whatsapp", "message", "call", "phone", "ring", "dial", "hang up", "end call"],
     "scheduler":     ["schedule", "timer", "remind me at", "remind me after", "briefing",
                       "morning briefing"],
     "desktop":       ["window", "open", "launch", "open app", "open folder", "open file", "type", "click",
                       "screen", "screenshot", "snapshot", "take screenshot", "notepad", "editor", "text editor", "file", "folder",
                       "directory", "copy", "move", "delete", "pdf", "document", "docx", "analyze my", "play",
-                      "music", "song", "media", "youtube", "monitor"],
+                      "music", "song", "media", "youtube", "monitor", "webcam", "camera"],
     "creative":      ["image", "video", "generate", "draw", "art", "picture", "photo"],
     "reminder":      ["remind"],
     "mobile":        ["phone", "mobile", "android", "unlock", "notification", 

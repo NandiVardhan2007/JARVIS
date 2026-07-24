@@ -72,9 +72,7 @@ def validate_environment():
             else:
                 logger.warning(f"Local LLM returned unexpected status code: {resp.status_code}")
         except Exception as e:
-            logger.error(f"CRITICAL: Failed to connect to Local LLM at {local_llm_url}.")
-            logger.error(f"Error: {str(e)}")
-            logger.error("Ensure LM Studio server is running and the port is correct, otherwise code generation tools will fail.")
+            logger.warning(f"Local LLM offline at {local_llm_url}. Defaulting to Cloud LLM models (Groq / NVIDIA NIM).")
 
     logger.info("Pre-flight checks complete. Booting JARVIS...\n")
 

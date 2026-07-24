@@ -58,7 +58,12 @@ class JarvisConnection extends ChangeNotifier {
     try {
       final decoded = jsonDecode(data as String);
       if (decoded is Map<String, dynamic>) {
-        _apply(snapshot.merge(decoded).copyWith(connected: true));
+        final merged = snapshot.merge(decoded).copyWith(connected: true);
+        // Explicitly extract 'state' to update stateString if it exists in JSON
+        final updated = merged.copyWith(
+          stateString: decoded['state']?.toString() ?? merged.stateString
+        );
+        _apply(updated);
       }
     } catch (_) {
       // Ignore malformed frames.

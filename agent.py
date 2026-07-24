@@ -40,6 +40,7 @@ from livekit.agents import AgentSession, Agent, RoomInputOptions, llm, stt, tts
 from livekit.agents.llm import ChatContext, ChatMessage
 from livekit.plugins import groq, nvidia, silero, openai, google
 import piper_tts_plugin
+import xtts_tts_plugin
 
 from Tools import get_all_tools, classify_intent, get_tools_for_category
 
@@ -48,6 +49,10 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Suppress verbose third-party loggers (e.g. numba SSA rewrite pass spam)
+for _noisy in ["numba", "numba.core", "numba.core.ssa", "numba.core.byteflow", "numba.core.interpreter", "numba.core.typeinfer"]:
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 # ── Chat history trimming ─────────────────────────────────────────────────────
 # Groq llama-3.3-70b-versatile has a ~12,000 token input limit.
@@ -328,9 +333,14 @@ async def entrypoint(ctx: agents.JobContext):
         llm_fallback = openai.LLM(model=NIM_LLM_MODEL, base_url=NIM_BASE_URL, api_key=NVIDIA_API_KEY)
         agent_llm = llm.FallbackAdapter([llm_primary, llm_fallback])
 
-    # 3. TTS: Piper TTS (Local, Free, Offline)
-    agent_tts = piper_tts_plugin.PiperTTS()
-    logger.info("Using local Piper TTS as the primary engine.")
+    # 3. TTS: Emotive XTTSv2 (Local Server) -> Piper TTS (Offline Fallback)
+    try:
+        agent_tts = xtts_tts_plugin.XTTSTTS()
+        logger.info("Using local XTTSv2 for emotive TTS.")
+    except Exception as e:
+        logger.warning(f"XTTS fallback triggered ({e}). Using local Piper TTS.")
+        agent_tts = piper_tts_plugin.PiperTTS()
+        logger.info("Using local Piper TTS as the primary engine.")
 
     # Create the Agent with history trimming (JarvisAgent overrides llm_node
     # to keep context under Groq's 12,000 token limit)
@@ -354,10 +364,10 @@ async def entrypoint(ctx: agents.JobContext):
     # FIX: agent must be passed as keyword arg in livekit-agents 1.5.x;
     # passing it positionally placed it where SessionConfig is expected → TypeError.
     await session.start(agent=agent, room=ctx.room)
-    
+
     import asyncio
     await asyncio.sleep(1)
-    
+
     # ── Live UI state & caption synchronization ────────────────────────────
     import socket
     from livekit.agents.voice import events
@@ -370,6 +380,118 @@ async def entrypoint(ctx: agents.JobContext):
             _udp_sock.sendto(data, ("127.0.0.1", 5016))
         except Exception:
             pass
+
+    # ── Voice Authentication Gate ──────────────────────────────────────────
+    # JARVIS is locked on startup. The master must speak anything —
+    # JARVIS identifies the VOICE, not the words. 3 attempts allowed.
+    from Tools.voice_verification import verify_master_voice, load_master_embedding
+    import numpy as np
+
+    _auth_unlocked = False
+    _AUTH_RECORD_SECONDS = 4
+    _AUTH_SAMPLE_RATE = 16000
+    _AUTH_MAX_ATTEMPTS = 3
+
+    async def capture_auth_audio() -> np.ndarray:
+        """Record a short clip from the mic via sounddevice for voice comparison."""
+        try:
+            import sounddevice as sd
+            logger.info("Auth: capturing audio sample...")
+            audio = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: sd.rec(
+                    int(_AUTH_RECORD_SECONDS * _AUTH_SAMPLE_RATE),
+                    samplerate=_AUTH_SAMPLE_RATE,
+                    channels=1,
+                    dtype='float32',
+                    blocking=True,
+                )
+            )
+            return audio.flatten()
+        except Exception as e:
+            logger.error(f"Auth audio capture failed: {e}")
+            return np.zeros(1)
+
+    master_profile = load_master_embedding()
+    voice_auth_enabled = os.getenv("JARVIS_VOICE_AUTH_ENABLED", "true").lower() == "true"
+    auth_threshold = float(os.getenv("JARVIS_VOICE_AUTH_THRESHOLD", "0.65"))
+
+    if master_profile is None or not voice_auth_enabled:
+        # No master profile enrolled or disabled via env — skip lock
+        logger.info("Voice authentication disabled or no profile found. Unlocking automatically.")
+        send_hud_state({"state": "alert", "description": "Voice lock disabled"})
+        await asyncio.sleep(0.5)
+        _auth_unlocked = True
+    else:
+        # Enter locked state — notify frontend
+        send_hud_state({
+            "state": "auth_locked",
+            "description": "Voice authentication required",
+            "transcript": "",
+        })
+        logger.info("JARVIS is LOCKED. Awaiting master voice authentication...")
+
+        await session.say(
+            "Systems locked. Master, please speak anything to verify your voice print.",
+            allow_interruptions=False
+        )
+
+        attempts_left = _AUTH_MAX_ATTEMPTS
+        while not _auth_unlocked and attempts_left > 0:
+            await asyncio.sleep(0.5)
+
+            # Signal frontend we're listening for auth
+            send_hud_state({
+                "state": "auth_listening",
+                "description": f"Listening... ({attempts_left} attempt{'s' if attempts_left > 1 else ''} left)",
+            })
+
+            audio_clip = await capture_auth_audio()
+
+            send_hud_state({
+                "state": "auth_verifying",
+                "description": "Analysing voice print...",
+            })
+
+            matched = await verify_master_voice(audio_clip, threshold=auth_threshold)
+
+            if matched:
+                _auth_unlocked = True
+                logger.info("Voice authentication SUCCESSFUL. JARVIS unlocked.")
+                send_hud_state({
+                    "state": "auth_success",
+                    "description": "Identity confirmed",
+                })
+                await asyncio.sleep(0.5)
+            else:
+                attempts_left -= 1
+                logger.warning(f"Voice mismatch. {attempts_left} attempt(s) remaining.")
+                if attempts_left > 0:
+                    send_hud_state({
+                        "state": "auth_failed",
+                        "description": f"Voice not recognised. {attempts_left} attempt{'s' if attempts_left > 1 else ''} left.",
+                    })
+                    await session.say(
+                        f"Voice print not recognised. Try again. {attempts_left} attempt{'s' if attempts_left > 1 else ''} remaining.",
+                        allow_interruptions=False
+                    )
+                else:
+                    send_hud_state({
+                        "state": "auth_lockout",
+                        "description": "Authentication failed. Shutting down.",
+                    })
+                    await session.say(
+                        "Authentication failed. Unauthorised access detected. Shutting down, sir.",
+                        allow_interruptions=False
+                    )
+                    await asyncio.sleep(3)
+                    import sys
+                    sys.exit(1)
+
+    if _auth_unlocked:
+        # ── JARVIS is now LIVE ─────────────────────────────────────────────
+        send_hud_state({"state": "idle"})
+    # ── End Voice Authentication Gate ─────────────────────────────────────────
 
     @session.on("user_input_transcribed")
     def _on_user_input_transcribed(ev: events.UserInputTranscribedEvent):
@@ -455,8 +577,8 @@ async def entrypoint(ctx: agents.JobContext):
     except Exception as e:
         logger.error(f"Failed to start HUD UDP Server: {e}")
     
-    # Generate the initial greeting directly via TTS to avoid LLM tool-calling hallucinations!
-    await session.say("JARVIS online. All systems operational. How may I assist you, sir?", allow_interruptions=True)
+    # Generate the initial greeting only AFTER successful voice authentication
+    await session.say("JARVIS online. Welcome back, master nandu. All systems at your disposal.", allow_interruptions=True)
 
 
 # ── CLI entry ─────────────────────────────────────────────────────────────────
