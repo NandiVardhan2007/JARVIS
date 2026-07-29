@@ -21,6 +21,7 @@ import uuid
 import time
 from dotenv import load_dotenv
 
+
 def get_base_path():
     """Get the absolute path to the resource, works for dev and for PyInstaller"""
     try:
@@ -29,6 +30,7 @@ def get_base_path():
     except Exception:
         base_path = os.path.abspath(".")
     return base_path
+
 
 def main():
     # If this is a child process, dispatch it
@@ -46,17 +48,13 @@ def main():
             )
             return
         elif sys.argv[1] == "ui":
-            # Set the room name in env so dynamic island picks it up
+            # Set the room name in env so the voice client picks it up
             os.environ["LIVEKIT_ROOM_NAME"] = sys.argv[2]
-            # Override sys.argv for dynamic island to parse
-            sys.argv = [sys.argv[0]]
-            import dynamic_island
-            dynamic_island.main()
-            return
-
-        elif sys.argv[1] == "whatsapp":
-            import whatsapp_webhook
-            whatsapp_webhook.run_server()
+            # Headless native audio client (mic capture + speech playback +
+            # state mirror to jarvis_bridge.py / the Flutter UI). Replaces the
+            # old PyQt "Dynamic Island" HUD, which has been removed.
+            import voice_client
+            voice_client.main()
             return
 
     # MAIN LAUNCHER LOGIC
@@ -64,11 +62,11 @@ def main():
     env_path = os.path.join(get_base_path(), ".env")
     if os.path.exists(env_path):
         load_dotenv(env_path)
-        
+
     # Run Centralized Configuration Validator
     import config
     config.validate_environment()
-    
+
     # Generate a unique room name for this session to prevent clashes
     room_name = f"jarvis-room-{uuid.uuid4().hex[:8]}"
     print(f"Starting JARVIS in room: {room_name}")
@@ -81,36 +79,22 @@ def main():
 
     # Launch Agent
     agent_proc = subprocess.Popen(cmd + ["agent", room_name])
-    
+
     # Wait a second for agent to initialize
     time.sleep(2)
-    
-    # Launch UI
-    ui_proc = subprocess.Popen(cmd + ["ui", room_name])
-    
 
-    # Launch WhatsApp Webhook Server (if enabled)
-    whatsapp_proc = None
-    if os.getenv("WHATSAPP_WEBHOOK_ENABLED", "false").lower() == "true":
-        print("Starting WAHA Webhook Server...")
-        whatsapp_proc = subprocess.Popen(cmd + ["whatsapp"])
-    else:
-        print("WHATSAPP_WEBHOOK_ENABLED is not true, skipping WAHA webhook server.")
-    
+    # Launch the headless voice client (mic/audio + state mirror to the
+    # Flutter frontend via jarvis_bridge.py)
+    voice_proc = subprocess.Popen(cmd + ["ui", room_name])
+
     # Watchdog loop
     try:
-        while ui_proc.poll() is None:
+        while voice_proc.poll() is None:
             # Check agent
             if agent_proc.poll() is not None:
                 print("[WATCHDOG] Agent process crashed. Restarting...")
                 agent_proc = subprocess.Popen(cmd + ["agent", room_name])
-            
 
-            # Check whatsapp
-            if whatsapp_proc and whatsapp_proc.poll() is not None:
-                print("[WATCHDOG] WhatsApp process crashed. Restarting...")
-                whatsapp_proc = subprocess.Popen(cmd + ["whatsapp"])
-                
             time.sleep(1)
     except KeyboardInterrupt:
         pass
@@ -120,9 +104,9 @@ def main():
             agent_proc.terminate()
             agent_proc.wait()
 
-        if whatsapp_proc and whatsapp_proc.poll() is None:
-            whatsapp_proc.terminate()
-            whatsapp_proc.wait()
+        if voice_proc and voice_proc.poll() is None:
+            voice_proc.terminate()
+            voice_proc.wait()
 
 
 if __name__ == "__main__":

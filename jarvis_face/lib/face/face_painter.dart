@@ -31,10 +31,19 @@ class FacePainter extends CustomPainter {
 
     if (p.state == AssistantState.speaking) _waveform(canvas, c, r);
 
+    // Head movement: subtle turn + tilt, applied only to the face features
+    // (not the HUD rings/aura/particles), so the head reads as turning
+    // inside a stable holographic frame rather than the whole widget wobbling.
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(p.headTilt);
+    canvas.translate(p.headTurn * r * 0.15, 0);
+    canvas.translate(-c.dx, -c.dy);
     _blush(canvas, c, r);
     _brows(canvas, c, r);
     _eyes(canvas, c, r);
     _mouth(canvas, c, r);
+    canvas.restore();
 
     if (p.state == AssistantState.listening) _micRing(canvas, c, r);
     _particles(canvas, c, r);

@@ -1,13 +1,16 @@
-"""Write formatted documents directly into Notepad."""
+"""
+Write Formatted Documents directly into Windows Notepad.
+"""
 
 import logging
+import os
+import subprocess
 import time
 from datetime import datetime
 from typing import Literal
 from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
-
 
 @function_tool
 async def write_in_notepad(
@@ -16,35 +19,27 @@ async def write_in_notepad(
     document_type: Literal["letter", "report", "notes", "email", "general"] = "general",
 ) -> str:
     """
-    Opens Notepad and types a formatted document into it.
+    Opens Windows Notepad and writes a formatted document into it.
 
     Args:
         title: Document heading or subject.
-        content: Main body text (in English for best typing accuracy).
+        content: Main body text.
         document_type: Formatting template to use — letter, report, notes, email, or general.
     """
-    logger.info(f"Writing to Notepad: {title}")
+    logger.info(f"Writing document to Windows Notepad: {title}")
     try:
-        import os
-        import shutil
-        import subprocess
         import pyautogui
+        import pyperclip
         pyautogui.FAILSAFE = False
-        pyautogui.PAUSE = 0.1
+        pyautogui.PAUSE = 0.05
 
-        # Open Linux Text Editor
-        editor_cmd = None
-        for ed in ["gnome-text-editor", "gedit", "mousepad", "kate", "xed"]:
-            if shutil.which(ed):
-                editor_cmd = ed
-                break
+        # Launch Windows Notepad
+        subprocess.Popen(["notepad.exe"], shell=False, creationflags=subprocess.DETACHED_PROCESS)
+        time.sleep(1.2)
 
-        if editor_cmd:
-            subprocess.Popen([editor_cmd])
-            time.sleep(1.5)
-            # Clear pre-existing content
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.press("delete")
+        # Clear existing text in active Notepad window
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("delete")
 
         date_str = datetime.now().strftime("%d %B %Y")
 
@@ -66,13 +61,16 @@ async def write_in_notepad(
                 "End of Report\n"
             ),
             "email": f"Subject: {title}\nDate: {date_str}\n\n{content}\n",
-            "notes": f"Notes — {title}\n{date_str}\n\n{content}\n",
+            "notes": f"Notes — {title}\nDate: {date_str}\n\n{content}\n",
             "general": f"{title}\n{'=' * len(title)}\n\n{content}\n",
         }
 
-        doc = templates.get(document_type, templates["general"])
-        pyautogui.write(doc, interval=0.02)
+        doc_text = templates.get(document_type, templates["general"])
 
-        return f"Document '{title}' written to Notepad."
+        # Inject formatted document instantly via Windows Clipboard
+        pyperclip.copy(doc_text)
+        pyautogui.hotkey("ctrl", "v")
+
+        return f"Document '{title}' successfully written to Windows Notepad, sir."
     except Exception as e:
         return f"Notepad writing failed: {e}"

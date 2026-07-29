@@ -1,93 +1,34 @@
-"""Knowledge Base Tool for JARVIS using ChromaDB."""
+"""
+Note-saving tool for JARVIS.
 
-import os
+IMPORTANT: this used to maintain its OWN separate ChromaDB collection
+("jarvis_notes" at jarvis_memory/knowledge_base), while the actually-exposed
+search_knowledge_base tool queried a completely different collection
+("jarvis_knowledge" at ~/Documents/JARVIS/chromadb, see Tools/knowledge_rag.py).
+That meant anything saved via save_note was permanently unsearchable — two
+disconnected silos with only one side wired up as a queryable tool.
+
+save_note now delegates straight into knowledge_rag's add_document_to_knowledge,
+so notes land in the one knowledge store that search_knowledge_base actually
+queries.
+"""
+
 import logging
 from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "jarvis_memory", "knowledge_base")
-
-import threading
-_client = None
-_lock = threading.Lock()
-
-def _get_collection():
-    global _client
-    try:
-        import chromadb
-        with _lock:
-            if _client is None:
-                # Initialize persistent client
-                _client = chromadb.PersistentClient(path=DB_PATH)
-        collection = _client.get_or_create_collection(name="jarvis_notes")
-        return collection
-    except ImportError:
-        logger.error("ChromaDB not installed.")
-        return None
-    except Exception as e:
-        logger.error(f"ChromaDB initialization failed: {e}")
-        return None
 
 @function_tool
 async def save_note(title: str, content: str) -> str:
     """
-    Saves a detailed note, article, or document into the personal knowledge base.
-    
+    Saves a detailed note, article, or document into the personal knowledge
+    base for later semantic retrieval via search_knowledge_base.
+
     Args:
         title: Short title for the note.
         content: The full text content to save and index.
     """
-    collection = _get_collection()
-    if collection is None:
-        return "Knowledge base is not available. Please ensure chromadb is installed."
-        
-    try:
-        # We use a simple hash or safe string for ID, but let's just use a timestamp-based ID or just the title.
-        import time
-        note_id = f"note_{int(time.time())}"
-        
-        collection.add(
-            documents=[content],
-            metadatas=[{"title": title}],
-            ids=[note_id]
-        )
-        return f"Note saved to knowledge base: '{title}'"
-    except Exception as e:
-        logger.error(f"Failed to save note: {e}")
-        return f"Failed to save note: {e}"
-
-@function_tool
-async def search_knowledge_base(query: str, n_results: int = 3) -> str:
-    """
-    Searches the personal knowledge base for relevant notes and documents.
-    
-    Args:
-        query: The search question or keywords.
-        n_results: Number of results to return (default 3).
-    """
-    collection = _get_collection()
-    if collection is None:
-        return "Knowledge base is not available. Please ensure chromadb is installed."
-        
-    try:
-        results = collection.query(
-            query_texts=[query],
-            n_results=max(1, min(n_results, 5))
-        )
-        
-        if not results["documents"] or not results["documents"][0]:
-            return f"No relevant notes found for '{query}'."
-            
-        docs = results["documents"][0]
-        metas = results["metadatas"][0]
-        
-        output = [f"Found {len(docs)} relevant notes:"]
-        for i, doc in enumerate(docs):
-            title = metas[i].get("title", "Untitled") if metas and i < len(metas) else "Untitled"
-            output.append(f"\n--- Note: {title} ---\n{doc}")
-            
-        return "\n".join(output)
-    except Exception as e:
-        logger.error(f"Failed to search knowledge base: {e}")
-        return f"Failed to search knowledge base: {e}"
+    from Tools.knowledge_rag import add_document_to_knowledge
+    result = await add_document_to_knowledge(title, content)
+    return result.replace("Indexed", "Note saved and indexed", 1) if result.startswith("Indexed") else result

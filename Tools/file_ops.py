@@ -5,8 +5,8 @@ import os
 import subprocess
 import shutil
 import send2trash
-from pathlib import Path
 from livekit.agents import function_tool
+from Tools.voice_verification import requires_live_master_voice
 
 logger = logging.getLogger(__name__)
 
@@ -232,8 +232,20 @@ async def move_or_rename_path(source: str, destination: str) -> str:
 
 
 @function_tool
-async def delete_path(path: str) -> str:
-    """Deletes a file or directory permanently."""
+@requires_live_master_voice()
+async def delete_path(path: str, confirm: bool = False) -> str:
+    """
+    Deletes a file or directory. Sends it to the recycle bin (reversible),
+    never a permanent delete.
+
+    Args:
+        path: File or folder to delete.
+        confirm: Must be explicitly True — this was not performed until you
+            call again with confirm=True, so the user gets a chance to say
+            yes before anything moves to the recycle bin.
+    """
+    if not confirm:
+        return f"'{path}' was NOT deleted. Confirm with the user first, then call again with confirm=True."
     try:
         path = _resolve_path(path)
         if not os.path.exists(path):

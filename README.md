@@ -1,61 +1,143 @@
-# JARVIS — Just A Rather Very Intelligent System
+# JARVIS — Just A Rather Very Intelligent System (Windows Native & Vision Core)
 
-A LiveKit Agents-powered voice assistant for Windows desktop control, combined with a Telegram Bot and a WhatsApp Webhook (WAHA) integration.  
+A LiveKit Agents-powered Vision and Voice assistant for **Windows Desktop Control**,
+featuring real-time visual perception, OpenCV & MediaPipe hand gesture control, live animated
+Flutter frontend, local voice biometric security, and a large Windows-native tool set spanning system
+administration, application launching, document writing, browser automation, RAG, and multi-agent
+task orchestration.
 
-**Fully Localized AI Stack:** JARVIS is designed to run completely offline/locally, maximizing privacy and avoiding API limits.
+**Fully local-first AI stack:** LLM, STT, and TTS can all run entirely
+offline (LM Studio + Piper), with cloud (Groq / NVIDIA NIM) as an automatic
+fallback.
 
 ---
 
-## Key Advanced Features
+## 🚀 How to Run on Windows
 
-### Dynamic Island UI
-Features a premium, Apple-inspired Dynamic Island desktop HUD that provides contextual alerts, microphone levels, and tool execution status. 
-- **Hover-Only Expansion**: Keeps your workspace clean by expanding only when hovered.
-- **Smooth Transitions**: Fluid spring-physics based animations.
-- **History Drawer**: Long-press to see recent tool usage.
+To start JARVIS on Windows, simply run either the Batch script or the PowerShell script:
 
-### High-Tech Frontend Motion Splash Page
-- Displays a stunning enterprise-grade reactive canvas featuring rotating reactor rings and a glowing core.
-- Progressively prints system initialization logs and integrates a localized glitch effect for the J.A.R.V.I.S logo overlay.
+```cmd
+:: Using Command Prompt (Batch)
+start.bat
 
-### Secure Voice-Signature Unlock (Voice verification)
-- **Vocal Biometrics**: Protects your system from unauthorized users. JARVIS identifies the *vocal signature* of the speaker dynamically rather than relying on text keywords.
-- **Boot Lock State**: Upon startup, JARVIS enters a locked state and displays a secure biometric padlock overlay on the Flutter UI interface. 
-- **Cosine Similarity Verification**: Records a 4-second audio sample from the microphone, processes it against your saved Voice Print template using a 128-dimensional embedding comparator, and authenticates the session only on match. 
+:: Or using PowerShell
+.\start.ps1
+```
 
-### Document & Note RAG Pipeline
-- **General Knowledge RAG**: Extends standard project indexing. Allows users to upload personal documents, notes, or index PDF files into a vector store (via ChromaDB) and semantically retrieve details directly from the frontend interface using a quick choice shortcut.
+To stop all JARVIS services:
+```cmd
+:: Using Command Prompt (Batch)
+stop_jarvis.bat
+
+:: Or using PowerShell
+.\stop_jarvis.ps1
+```
+
+---
+
+
+## Architecture
+
+```
+                     ┌──────────────────┐
+                     │   agent.py       │  LiveKit Agent: STT → LLM → TTS,
+                     │  (voice pipeline)│  tool-calling, personality, memory
+                     └────────┬─────────┘
+                              │ UDP state pings
+                     ┌────────▼─────────┐
+                     │ voice_client.py  │  Headless: mic capture + speech
+                     │ (native audio)   │  playback (LiveKit room client)
+                     └────────┬─────────┘
+                              │ UDP mirror
+                     ┌────────▼─────────┐
+                     │ jarvis_bridge.py │  WebSocket bridge (localhost:8765)
+                     └────────┬─────────┘
+                              │ WebSocket
+                     ┌────────▼─────────┐
+                     │  jarvis_face/    │  Flutter frontend — animated
+                     │  (Flutter app)   │  avatar, dashboard, controls
+                     └──────────────────┘
+```
+
+`jarvis_launcher.py` starts `agent.py` and `voice_client.py` as separate
+processes with a watchdog that restarts the agent if it crashes. The
+Flutter app is a separate process you run yourself (`flutter run`) and
+connects over WebSocket — it also runs a believable demo-mode animation
+automatically if the backend isn't running yet, and switches to live data
+the moment it connects.
+
+---
+
+## Key Features
+
+### Voice authentication
+On first launch with no master voice enrolled, JARVIS walks you through
+registering one: it displays and speaks a short sample paragraph, records
+you reading it, and stores the voiceprint locally (resemblyzer embeddings,
+cosine similarity — nothing leaves your machine). Destructive actions
+(shutdown, deleting files, killing processes) re-check your live voice
+right before executing, not just once at session start. Re-enrollment is
+available through conversation ("JARVIS, re-register my voice").
+
+### Animated avatar
+`jarvis_face/lib/face/` — a hand-built vector avatar (not a canned GIF/video):
+real audio-amplitude-driven lip sync, 11 emotions inferred from live
+conversation state and transcript content, natural blinking/gaze/breathing,
+subtle head movement, and state-reactive effects (thinking particles,
+speaking waveform, listening mic-ring). Dark and light themes, toggleable
+from the top bar.
+
+### Gesture control
+Webcam-based hand tracking (MediaPipe): cursor movement, left/right click,
+drag-and-drop, two-finger scroll, and an open-palm swipe to switch windows.
+Auto-releases the camera after a period of no hand detected, to avoid
+running continuous CPU/GPU-intensive tracking for no reason.
+
+### Multi-agent task orchestration
+Tools are organized into named, specialized agents (Research, Browser,
+Terminal, Coding, File Management, Automation, Memory, Vision, Voice,
+Communication, System, Calendar & Finance — see `list_available_agents`).
+`execute_agent_tasks` dispatches multi-step plans with genuine parallel
+execution for independent subtasks. Named, reusable **workflows** can be
+saved once and re-run by name, or scheduled to run automatically.
+
+### RAG / knowledge base
+Local ChromaDB vector store for personal documents, PDFs, notes, and whole
+folders (incremental — unchanged files are skipped on re-index). A
+separate codebase index for semantic code search. Conversation history is
+also incrementally indexed in the background, so you can ask "what did we
+discuss about X" and get a real answer.
+
+### Ubuntu system integration
+Package search/install/remove, system updates, systemd service
+monitoring/control, journal log reading, Docker container control, file
+permissions, and startup-app management. Anything requiring root goes
+through `pkexec` — you authenticate via the OS's own dialog; JARVIS never
+handles a password.
+
+### Automatic system optimization
+Background monitor for RAM/CPU/storage/thermal that clears known-safe,
+fully-regenerable caches automatically when usage gets high. Heavy
+processes are only ever *suggested*, never auto-closed — killing an app
+risks losing unsaved work, so that step always waits for you to say yes.
+
+### File management
+Natural-language file search across common folders ("find my resume",
+"show screenshots from last week"), folder auto-organization, duplicate
+detection, and bulk renaming — all reversible, all with a confirm step
+before anything destructive happens.
 
 ---
 
 ## AI Stack
 
-| Layer | Engine |
-|---|---|
-| **LLM** | Local Server (e.g. LM Studio / vLLM) on `http://localhost:1234/v1` |
-| **STT** | NVIDIA NIM `parakeet-1.1b` (Streaming via LiveKit) or Local |
-| **TTS** | **Piper TTS** (Fully Local) |
-| **Image Generation** | **Local ComfyUI** (SDXL Models) |
-
----
-
-## Core Integrations
-
-### WhatsApp Webhook (WAHA)
-JARVIS actively listens to WhatsApp messages via a WAHA (WhatsApp HTTP API) Webhook running on port `5006`.
-- **Owner Mode**: If you (the owner) text JARVIS, you have full remote control over your PC. You can trigger PC commands, open apps, etc.
-- **Guest Mode**: If a friend or stranger texts JARVIS, it will auto-reply politely on your behalf. PC control tools are strictly disabled for security, but guests are allowed to use the AI Image Generation tool!
-- **Voice Notes**: JARVIS automatically intercepts and transcribes incoming WhatsApp voice notes using Groq STT APIs.
-
-### Telegram Bot
-JARVIS also spins up a Telegram bot on boot, allowing you to interface with it on the go.
-
-### ComfyUI Image Generation
-JARVIS generates images natively on your GPU using ComfyUI. 
-- It analyzes your prompt and decides the best model to use (e.g. `novaRealityXL_ilV90` or `epicrealismXL_pureFix`).
-- It automatically expands short prompts into highly detailed comma-separated tags to ensure the model produces exactly what you want.
-- It dynamically injects counter-bias tags into the negative prompt to ensure gender and attributes match your exact request.
-- Generated images are seamlessly pushed back to the user via the WAHA `/api/sendFile` webhook.
+| Layer | Primary | Fallback |
+|---|---|---|
+| **LLM** | Local server (LM Studio, e.g. Gemma) via `LOCAL_LLM_URL` | Groq → NVIDIA NIM |
+| **STT** | Groq Whisper | NVIDIA NIM |
+| **TTS** | Piper (fully local) | Groq / Cartesia |
+| **Voice ID** | resemblyzer (local, 128-dim embeddings) | — |
+| **Vision** | Local vision model via LM Studio | Groq vision → Gemini |
 
 ---
 
@@ -63,61 +145,108 @@ JARVIS generates images natively on your GPU using ComfyUI.
 
 ### 1. Install dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt --break-system-packages
+playwright install chromium   # for browser automation tools
 ```
 
-> **Windows extras required:**
-> - [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) — for `click_on_text` tool
-> - `pycaw` needs Windows audio stack for volume control
-> - **ComfyUI** running locally (for image generation)
-> - **WAHA Server** running locally (for WhatsApp integration)
-> - **LM Studio** running locally on port 1234 (for the LLM)
+Some tools need system packages beyond pip:
+- **Tesseract OCR** — `sudo apt install tesseract-ocr` (for `click_on_text`)
+- **xdotool, wmctrl** — `sudo apt install xdotool wmctrl` (window management, gesture window-switching)
+- **PolicyKit** — ships by default on Ubuntu Desktop; needed for package/service management (`sudo apt install policykit-1` if missing)
+- **`/dev/uinput` access (required for gesture cursor movement on Wayland)** — a fresh Ubuntu install typically restricts `/dev/uinput` to root, which silently breaks gesture *cursor movement* specifically (gesture *detection* — static poses like palm/fist — still works fine, since that doesn't touch the mouse at all). Run:
+  ```bash
+  bash setup_uinput_permissions.sh
+  ```
+  then log out and back in. Ask JARVIS to "run webcam diagnostics" afterward to confirm it's working.
+- **LM Studio** (or any OpenAI-compatible local server) — optional, for local LLM/vision
 
 ### 2. Configure credentials
 ```bash
 cp .env.example .env
-# Fill in LIVEKIT_*, WAHA_URL, COMFYUI_URL, etc.
+# Fill in LIVEKIT_*, GROQ_API_KEY, and any optional integrations you want.
 ```
 
-### 3. Setup Pre-commit Hooks (Contributors)
-If you plan to contribute, initialize the secrets baseline to pass the CI hooks:
-```bash
-detect-secrets scan > .secrets.baseline
-```
-
-### 4. Run JARVIS
+### 3. First run — voice enrollment
 ```bash
 python jarvis_launcher.py
 ```
-*(This sets up the isolated LiveKit room, Webhook servers, and the HUD).*
+On first launch (no master voice enrolled yet), JARVIS will ask you to
+read a short sentence aloud and register your voice. After that, it
+verifies your voice each session before unlocking.
+
+### 4. Run the Flutter frontend (optional but recommended)
+```bash
+cd jarvis_face
+flutter pub get
+flutter run -d linux   # or your target device
+```
 
 ---
 
 ## Project Structure
 ```
 jarvis/
-├── jarvis_launcher.py    # Main entry point — starts servers and LiveKit
-├── agent.py              # LiveKit Agent config, TTS, STT, and LLM routing
-├── whatsapp_webhook.py   # WAHA integration, intent classification, security routing
-├── telegram_bot.py       # Telegram bot polling and tools interface
-├── requirements.txt      # All dependencies
-├── .env.example          # Configuration template
+├── jarvis_launcher.py     # Entry point — spawns agent.py + voice_client.py, watchdog
+├── agent.py               # LiveKit Agent: STT/LLM/TTS pipeline, personality, voice-auth gate
+├── voice_client.py        # Headless mic capture + speech playback + state mirror
+├── jarvis_bridge.py       # WebSocket bridge to the Flutter frontend
+├── config.py              # Environment validation, local-LLM health check
+├── requirements.txt
+├── .env.example
+├── JARVIS_VNEXT_ROADMAP.md  # Design notes / gap analysis from the vNext pass
+├── jarvis_face/           # Flutter frontend (animated avatar + dashboard)
+│   └── lib/face/          # The avatar rig: painter, params, animation driver
 └── Tools/
-    ├── __init__.py       # Tool registry — exports get_all_tools()
-    ├── ai_image.py       # Local ComfyUI integration
-    ├── system_control.py # Power, volume, brightness, clipboard, antivirus
-    ├── window_manager.py # Window manage/list/snap
-    ├── open_app.py       # Launch apps via Start Menu
-    ├── media.py          # YouTube playback
-    ├── desktop_control.py # Scroll, desktop, keyboard, OCR click
-    ├── iot_control.py    # ESP32 AC bulb control
-    └── ...               # And many more PC control tools!
+    ├── __init__.py        # Tool registry — get_all_tools(), AGENT_ROSTER, categories
+    ├── system_control.py  # Windows power, volume, brightness, clipboard, antivirus
+    ├── windows_system.py  # Windows Winget packages, updates, services, logs, Docker, registry startup apps
+    ├── hand_gesture_control.py # Real-time OpenCV & MediaPipe hand gesture tracking & mouse control
+    ├── system_optimizer.py # Automatic RAM/CPU/storage/thermal monitoring
+    ├── resource_optimizer.py # JARVIS's own resource footprint + on-demand release
+    ├── window_manager.py   # Windows Window manage/list/snap (win32gui, pygetwindow)
+    ├── desktop_control.py  # Windows desktop toggle (win+d), key press, typing, OCR click
+    ├── notepad.py          # Formatted document writer for Windows Notepad
+    ├── open_app.py         # Windows App Launcher (Notepad, Chrome, Edge, VS Code, Calc, etc.)
+    ├── voice_verification.py # Voice enrollment, live re-auth, re-enrollment
+    ├── file_manager.py     # Smart search, organize, duplicates, bulk rename
+    ├── knowledge_rag.py    # Personal document / folder RAG (ChromaDB)
+    ├── codebase_rag.py     # Codebase semantic search (incremental)
+    ├── conversation_memory.py # Incremental conversation-history indexing
+    ├── multi_task.py       # execute_agent_tasks — parallel/sequential orchestrator
+    ├── workflow_automation.py # Named, reusable, schedulable task workflows
+    ├── report_generator.py # Generates Word/text reports
+    ├── web_automation.py   # Interactive browser: tabs, forms, downloads, page-watching
+    ├── scraper_agent.py    # Static scraping/summarization
+    ├── terminal.py         # Hardened sandboxed shell (no shell=True, tight allowlist)
+    └── ...                 # Email, calendar, finance, mobile/ADB, SIP calling, and more
 ```
+
+---
+
+## Security model (read this before exposing anything to the network)
+
+- **No `shell=True` and no `os.system()` anywhere in this codebase** —
+  every subprocess call is an explicit argv list.
+- **Terminal tool is a tight allowlist**, deliberately excluding
+  general-purpose interpreters (python/pip/node/npm) since letting an
+  "allowlisted" command run arbitrary code defeats the point of a sandbox.
+- **Root-requiring actions use `pkexec`**, never a password typed/spoken to
+  JARVIS. JARVIS should never be asked to accept a password by voice.
+- **Destructive actions require `confirm=True`**, and the highest-risk ones
+  (shutdown, killing processes, deleting files) additionally re-check your
+  live voice right before executing.
+- **Nothing is ever permanently deleted** by JARVIS's own tools — file
+  deletion goes through the recycle bin (`send2trash`).
 
 ---
 
 ## Adding New Tools
 
-1. Create `Tools/your_tool.py` with `@function_tool` decorated functions.
-2. Import and add to `get_all_tools()` in `Tools/__init__.py`.
-3. If the tool is destructive or exposes private system data, ensure it is restricted from the `active_tools` list for non-owners in `whatsapp_webhook.py`.
+1. Create `Tools/your_tool.py` with `@function_tool`-decorated functions.
+2. Import it in `Tools/__init__.py` and add it to `CORE_TOOLS` (always
+   available) or a category in `TOOL_CATEGORIES` (loaded only when the
+   conversation's intent matches, to keep the per-call tool schema small).
+3. If it performs a destructive or privileged action, follow the existing
+   pattern: a `confirm: bool = False` parameter, and consider
+   `@requires_live_master_voice()` from `Tools.voice_verification` for
+   anything genuinely high-risk.

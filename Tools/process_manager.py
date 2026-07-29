@@ -6,6 +6,7 @@ import psutil
 from typing import Literal, Optional
 
 from livekit.agents import function_tool
+from Tools.voice_verification import requires_live_master_voice
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ async def find_process(name: str) -> str:
 
 
 @function_tool
+@requires_live_master_voice()
 async def kill_process(
     target: str,
     method: Literal["graceful", "force"] = "graceful",
@@ -258,7 +260,6 @@ async def get_top_resource_hogs(
         return "Could not retrieve process data."
 
     unit    = "%" if resource == "cpu" else "MB"
-    col_lbl = "CPU%" if resource == "cpu" else "RAM MB"
     lines   = [f"Top {len(rows)} {resource.upper()} consumers:"]
 
     for i, r in enumerate(rows, 1):
@@ -279,21 +280,31 @@ async def get_top_resource_hogs(
 @function_tool
 async def restart_process(name: str) -> str:
     """
-    Attempts to restart a process by killing it and re-launching via the Start Menu.
-    Useful for frozen apps like explorer.exe, chrome, etc.
+    Attempts to restart a process by killing it and re-launching the same binary.
+    Useful for frozen apps like nautilus, firefox, etc.
 
     Args:
-        name: Process name or app name to restart (e.g. "chrome", "explorer").
+        name: Process name or app name to restart (e.g. "firefox", "nautilus").
     """
     logger.info(f"Restart request: {name}")
 
+    import re
+    import shutil
+    import shlex
+    import subprocess
+
+    # Only allow a bare app/binary name (optionally with simple flags) — this
+    # blocks shell metacharacters and argument injection outright, and we
+    # never pass shell=True to a subprocess again.
+    if not re.fullmatch(r"[A-Za-z0-9._\-\s]+", name):
+        return f"'{name}' contains characters that aren't allowed in a process name."
+
     # Special case: nautilus restart on Ubuntu
     if "nautilus" in name.lower():
-        import subprocess
         try:
             subprocess.run(["pkill", "-f", "nautilus"], check=False, capture_output=True)
             await asyncio.sleep(1)
-            subprocess.Popen("nautilus")
+            subprocess.Popen(["nautilus"])
             return "Nautilus restarted successfully."
         except Exception as e:
             return f"Nautilus restart failed: {e}"
@@ -305,10 +316,13 @@ async def restart_process(name: str) -> str:
 
     await asyncio.sleep(1)
 
-    # Re-launch via subprocess directly
+    # Re-launch via subprocess directly (no shell — argv list only)
     try:
-        import subprocess
-        subprocess.Popen(name, shell=True)
+        argv = shlex.split(name)
+        binary = shutil.which(argv[0]) if argv else None
+        if not binary:
+            return f"'{name}' killed, but '{argv[0] if argv else name}' was not found on PATH to relaunch. Launch it manually."
+        subprocess.Popen([binary] + argv[1:])
         return f"'{name}' killed and relaunched."
     except Exception as e:
         return f"'{name}' killed but relaunch failed: {e}. Launch it manually."

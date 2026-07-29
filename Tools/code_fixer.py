@@ -8,8 +8,6 @@ The Code Fixer is for interactive "I have an error" debugging sessions.
 import asyncio
 import logging
 import os
-import time
-from datetime import datetime
 
 import aiohttp
 from livekit.agents import function_tool

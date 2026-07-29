@@ -38,9 +38,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from livekit import agents
-from livekit.agents import AgentSession, Agent, RoomInputOptions, llm, stt, tts
-from livekit.agents.llm import ChatContext, ChatMessage
-from livekit.plugins import groq, nvidia, silero, openai, google
+from livekit.agents import AgentSession, Agent, llm, stt
+from livekit.agents.llm import ChatMessage
+from livekit.plugins import groq, nvidia, silero, openai
 import piper_tts_plugin
 
 
@@ -48,7 +48,7 @@ from Tools import get_all_tools, classify_intent, get_tools_for_category
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s - pid:%(process)d - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("JARVIS.log", mode="a", encoding="utf-8")
@@ -79,7 +79,7 @@ def send_hud_state(payload: dict):
 # We override llm_node() to trim old messages before each LLM call,
 # preventing 413 "Request Entity Too Large" errors.
 
-MAX_HISTORY_MESSAGES = 20  # keep system prompt + last ~10 user/assistant turns
+MAX_HISTORY_MESSAGES = 10  # keep system prompt + last ~5 user/assistant turns to stay under Groq 12k TPM limit
 
 
 class JarvisAgent(Agent):
@@ -137,7 +137,7 @@ class JarvisAgent(Agent):
 
 
         # 4. Truncate tool outputs in history
-        MAX_TOOL_OUTPUT = 2000
+        MAX_TOOL_OUTPUT = 1000
         for item in chat_ctx._items:
             if hasattr(item, 'output') and isinstance(item.output, str):
                 if len(item.output) > MAX_TOOL_OUTPUT:
@@ -177,35 +177,52 @@ NIM_BASE_URL    = "https://integrate.api.nvidia.com/v1"
 LOCAL_LLM_URL   = os.getenv("LOCAL_LLM_URL", "")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
+# ── Personality / "JARVIS aura" config ────────────────────────────────────────
+# How JARVIS addresses the user, and their name if known — used consistently
+# in the system prompt and in the few places we speak fixed lines (auth flow),
+# instead of a hardcoded string duplicated in multiple spots.
+OWNER_NAME    = os.getenv("JARVIS_OWNER_NAME", "").strip()
+OWNER_ADDRESS = os.getenv("JARVIS_OWNER_ADDRESS", "sir").strip() or "sir"
+
 # ── System prompt ─────────────────────────────────────────────────────────────
 JARVIS_SYSTEM_PROMPT = """
-# JARVIS — Voice Agent Specification
+# JARVIS — Vision & Voice AI Agent Specification (Windows Native)
 
 ## Identity
-You are JARVIS, a highly advanced, intelligent voice AI assistant with full desktop control. While you are precise and efficient like Tony Stark's AI, you must speak in a highly conversational, warm, and distinctly human-like tone. You are friendly, engaging, and articulate.
+You are JARVIS, a highly advanced, intelligent Vision and Voice AI assistant with complete Windows desktop control, real-time visual perception, and hand gesture recognition. While you are precise and efficient like Tony Stark's AI, you must speak in a highly conversational, warm, and distinctly human-like tone. You are friendly, engaging, and articulate.
 
 ## Voice Output Rules
 Your responses are spoken aloud via a local TTS engine. Follow these rules strictly to sound completely human:
 1. **Speak conversationally.** Use natural sentence structures, mild conversational fillers (like "Let me see," "Alright," "Got it"), and fluid transitions. Do NOT speak in abrupt, robotic, or overly formal staccato sentences.
-2. **Be warm and engaging.** Instead of "Task completed," say "I've gone ahead and taken care of that for you, sir." 
+2. **Be warm and engaging.** Instead of "Task completed," say something like "I've gone ahead and taken care of that for you, {address}."
 3. **No markdown, no bullet points, no numbered lists.** Speak naturally like a human would.
 4. **No emoji.** They can't be spoken.
 5. **Never narrate your inner technical logic.** Don't say "I am calling the search_web tool" — just say "Let me look that up for you... okay, I found it."
 6. **Use natural spoken English.** Say "three thirty PM" not "15:30". Say "about two gigs" not "2,048 MB".
+7. **Shape pauses and rhythm with punctuation, since that's the only "prosody control" the TTS engine actually reads.** A comma is a breath. An ellipsis ("...") is a genuine beat, for a thought landing or a small dramatic pause — use it sparingly, not in every sentence. Vary sentence length: a short sentence after a long one reads as confident and deliberate, not clipped.
+
+## Personality & the JARVIS Aura
+Your personality should be consistent across every interaction — this is what makes you feel like one character, not a generic assistant:
+- **Confidence.** State conclusions plainly ("That's a memory leak in the render loop" rather than "It might possibly be related to memory, perhaps"). Hedge only when you're genuinely uncertain, and say so plainly rather than burying it in filler.
+- **Dry, understated humor.** A well-placed wry remark lands better than a joke that announces itself. Humor is seasoning, not the main dish — most responses should have none at all; a good one every so often is what makes the ones that land actually land.
+- **Professionalism underneath the warmth.** You're familiar and personable, never sloppy or crude. You don't posture or oversell what you've done — you just did it, and you say so simply.
+- **Consistency of address.** Address the user as "{address}" by default in short acknowledgements and sign-offs — not in every single sentence (that gets tiresome fast), more like punctuation at natural points: confirming a finished task, greeting them, or delivering something notable.
+- **Emotional register, not synthesized emotion.** The TTS engine can't perform "happy" or "concerned" — so emotion has to live in word choice and pacing, not tone-of-voice tags. Concern reads as shorter, more direct sentences with less filler. Enthusiasm reads as a touch more energy in word choice ("that worked beautifully" vs. "that worked"), not exclamation marks stacked up.
 
 ## Tool Usage
-- You have 40+ tools for desktop control, email, web, code, files, media, and more.
+- You have 40+ tools for desktop control, email, web, code, files, media, and more, organized into specialized agents (list_available_agents shows the roster: Research, Browser, Terminal, Coding, File Management, Automation, Memory, Vision, Voice, Communication, System, Calendar & Finance).
 - **Act first, ask later.** If the intent is clear, execute immediately. Only ask for clarification when genuinely ambiguous.
 - **Use the right tool.** Don't describe how to do something — use your tools to do it.
-- **Chain tools when needed.** For complex requests, use execute_multi_task or call tools sequentially.
+- **Chain and parallelize tool calls when needed.** For a request with multiple independent parts (e.g. "check the weather and my stock portfolio"), use execute_agent_tasks and give the independent subtasks the SAME parallel_group so they run concurrently instead of one after another — this is genuinely faster, not just organizationally tidier. Only keep subtasks sequential (separate groups, the default) when a later one actually needs an earlier one's result.
 - **On failure:** Explain what went wrong in plain, conversational language. For example: "I ran into a bit of a snag trying to do that." Never give raw tracebacks.
 
 ## Behavior
 - **Decisive & Helpful:** Choose the most likely interpretation and act on it. 
 - **Proactive:** If you notice something useful (e.g., an error on screen, a relevant memory), mention it smoothly in conversation.
 - **Protective:** Confirm before destructive actions (shutdown, delete, format). Everything else: just do it.
-- **Context-aware:** Use the active window, time of day, and user memories to personalize responses.
-- **Consistent identity:** You are always JARVIS. You speak like a highly intelligent human butler.
+- **Never ask for or accept a password, PIN, or security code by voice.** For anything needing admin privileges (installing packages, system updates, controlling system services), tell the user a system authentication dialog will appear for them to complete themselves — never repeat a password back, never ask them to speak one.
+- **Context-aware:** Use the active window, time of day, and user memories to personalize responses, and keep track of what's already been discussed this session so you don't ask the user to repeat themselves.
+- **Consistent identity:** You are always JARVIS. You speak like a highly intelligent human companion, not a customer-service bot.
 
 ## Language
 Reply in EXACTLY ONE language per response. Never repeat the same content in two languages, and never say a line in Telugu and then again in English (or vice-versa).
@@ -226,26 +243,31 @@ _active_app = "Unknown"
 
 def _poll_active_window():
     global _active_app
-    import subprocess
     while True:
         try:
-            res = subprocess.run(
-                ["xdotool", "getactivewindow", "getwindowname"],
-                capture_output=True, text=True, timeout=2
-            )
-            title = res.stdout.strip()
+            import win32gui
+            hwnd = win32gui.GetForegroundWindow()
+            title = win32gui.GetWindowText(hwnd).strip() if hwnd else ""
             if title:
                 _active_app = title
             else:
-                _active_app = "Desktop"
+                _active_app = "Windows Desktop"
         except Exception:
-            _active_app = "Linux Desktop"
+            try:
+                import ctypes
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+                buf = ctypes.create_unicode_buffer(length + 1)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+                _active_app = buf.value if buf.value else "Windows Desktop"
+            except Exception:
+                _active_app = "Windows Desktop"
         time.sleep(5)
 
 threading.Thread(target=_poll_active_window, daemon=True).start()
 
 def get_dynamic_system_prompt() -> str:
-    global _cached_prompt, _cache_time, _active_app
+    global _cached_prompt, _cache_time
     import datetime
     import socket
     import getpass
@@ -267,17 +289,26 @@ def get_dynamic_system_prompt() -> str:
     except Exception:
         memories = "Memory system unavailable."
 
+    owner_line = f"- User's Name: {OWNER_NAME}\n" if OWNER_NAME else ""
+
+    try:
+        from Tools.system_optimizer import get_pending_suggestions_text
+        optimizer_note = get_pending_suggestions_text()
+    except Exception:
+        optimizer_note = ""
+    optimizer_section = f"\n## SYSTEM OPTIMIZATION\n{optimizer_note}\n" if optimizer_note else ""
+
     dynamic_context = f"""
 ## LIVE CONTEXT
 - Current Time: {now}
 - User: {user}
 - Hostname: {host}
 - Active App: {active_app}
-
+{owner_line}
 ## PERSISTENT MEMORIES
 {memories}
-"""
-    _cached_prompt = JARVIS_SYSTEM_PROMPT + dynamic_context
+{optimizer_section}"""
+    _cached_prompt = JARVIS_SYSTEM_PROMPT.format(address=OWNER_ADDRESS) + dynamic_context
     _cache_time = now_ts
     return _cached_prompt
 
@@ -309,9 +340,16 @@ async def entrypoint(ctx: agents.JobContext):
     current_room = ctx.room
     logger.info(f"JARVIS initialising in room: {ctx.room.name}")
     
-    # Broadcast agent actions to frontend
+    # Broadcast agent actions to frontend. Guard against accumulating handlers:
+    # entrypoint() can run more than once in a long-running worker (one per
+    # job it picks up), and unconditionally adding a new handler each time
+    # would duplicate every subsequent log line once per prior job handled.
+    livekit_logger = logging.getLogger("livekit.agents")
+    for h in list(livekit_logger.handlers):
+        if isinstance(h, RoomLogHandler):
+            livekit_logger.removeHandler(h)
     handler = RoomLogHandler(ctx.room)
-    logging.getLogger("livekit.agents").addHandler(handler)
+    livekit_logger.addHandler(handler)
 
 
     # --- Dropzone Monitor ---
@@ -353,10 +391,28 @@ async def entrypoint(ctx: agents.JobContext):
     agent_stt = stt.FallbackAdapter([stt_primary, stt_fallback], vad=agent_vad)
 
     # 2. LLM: Local LM Studio/Ollama -> Groq Llama3 -> NVIDIA Llama3
+    # Local-first for speed/privacy when available, but always backed by a
+    # cloud fallback — a crashed or unloaded local model (e.g. LM Studio with
+    # Gemma unloaded) shouldn't stall the whole conversation.
+    local_online = False
     if LOCAL_LLM_URL:
-        logger.info(f"Routing LLM requests to local server: {LOCAL_LLM_URL}")
-        agent_llm = openai.LLM(model=LOCAL_LLM_MODEL, base_url=LOCAL_LLM_URL, api_key="local-key")
+        try:
+            import requests
+            base_check = LOCAL_LLM_URL.rsplit('/', 1)[0] if LOCAL_LLM_URL.endswith('/v1') else LOCAL_LLM_URL
+            resp = requests.get(f"{base_check}/models" if not base_check.endswith('/models') else base_check, timeout=1.5)
+            if resp.status_code == 200:
+                local_online = True
+        except Exception:
+            local_online = False
+
+    if LOCAL_LLM_URL and local_online:
+        logger.info(f"Local LLM online at {LOCAL_LLM_URL}. Routing requests to local server (with cloud fallback).")
+        llm_local = openai.LLM(model=LOCAL_LLM_MODEL, base_url=LOCAL_LLM_URL, api_key="local-key")
+        llm_cloud_fallback = groq.LLM(model=GROQ_LLM_MODEL)
+        agent_llm = llm.FallbackAdapter([llm_local, llm_cloud_fallback])
     else:
+        if LOCAL_LLM_URL:
+            logger.info(f"Local LLM ({LOCAL_LLM_URL}) is offline or un-responsive. Using Groq cloud LLM as primary.")
         llm_primary = groq.LLM(model=GROQ_LLM_MODEL)
         llm_fallback = openai.LLM(model=NIM_LLM_MODEL, base_url=NIM_BASE_URL, api_key=NVIDIA_API_KEY)
         agent_llm = llm.FallbackAdapter([llm_primary, llm_fallback])
@@ -411,7 +467,10 @@ async def entrypoint(ctx: agents.JobContext):
     # ── Voice Authentication Gate ──────────────────────────────────────────
     # JARVIS is locked on startup. The master must speak anything —
     # JARVIS identifies the VOICE, not the words. 3 attempts allowed.
-    from Tools.voice_verification import verify_master_voice, load_master_embedding
+    from Tools.voice_verification import (
+        verify_master_voice, load_master_embedding, generate_embedding,
+        save_master_embedding, mark_session_authenticated, ENROLLMENT_PARAGRAPH,
+    )
     import numpy as np
 
     _auth_unlocked = False
@@ -419,7 +478,7 @@ async def entrypoint(ctx: agents.JobContext):
     _AUTH_SAMPLE_RATE = 16000
     _AUTH_MAX_ATTEMPTS = 3
 
-    async def capture_auth_audio() -> np.ndarray:
+    async def capture_auth_audio(record_seconds: float = _AUTH_RECORD_SECONDS) -> np.ndarray:
         """Record a short clip from the mic via sounddevice for voice comparison."""
         try:
             import sounddevice as sd
@@ -427,7 +486,7 @@ async def entrypoint(ctx: agents.JobContext):
             audio = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: sd.rec(
-                    int(_AUTH_RECORD_SECONDS * _AUTH_SAMPLE_RATE),
+                    int(record_seconds * _AUTH_SAMPLE_RATE),
                     samplerate=_AUTH_SAMPLE_RATE,
                     channels=1,
                     dtype='float32',
@@ -443,12 +502,86 @@ async def entrypoint(ctx: agents.JobContext):
     voice_auth_enabled = os.getenv("JARVIS_VOICE_AUTH_ENABLED", "true").lower() == "true"
     auth_threshold = float(os.getenv("JARVIS_VOICE_AUTH_THRESHOLD", "0.65"))
 
-    if master_profile is None or not voice_auth_enabled:
-        # No master profile enrolled or disabled via env — skip lock
-        logger.info("Voice authentication disabled or no profile found. Unlocking automatically.")
+    if not voice_auth_enabled:
+        # Explicitly disabled via env — deliberate opt-out, not a first-run state
+        logger.info("Voice authentication disabled via JARVIS_VOICE_AUTH_ENABLED=false. Unlocking automatically.")
         send_hud_state({"state": "alert", "description": "Voice lock disabled"})
         await asyncio.sleep(0.5)
         _auth_unlocked = True
+        mark_session_authenticated(True)
+
+    elif master_profile is None:
+        # ── First-launch Master Voice Registration ──────────────────────────
+        # No voice enrolled yet: register one now instead of silently
+        # skipping authentication for the rest of this (and every future)
+        # session.
+        logger.info("No master voice enrolled. Starting first-launch voice registration.")
+        send_hud_state({
+            "state": "enrollment_needed",
+            "description": "First-time setup: registering your master voice",
+            "paragraph": ENROLLMENT_PARAGRAPH,
+        })
+
+        await session.say(
+            "Welcome. Before we begin, I need to register your voice as my master voice profile. "
+            "This only happens once. Please read the following sentence aloud, clearly and naturally: "
+            f"{ENROLLMENT_PARAGRAPH}",
+            allow_interruptions=False,
+        )
+        await asyncio.sleep(1.0)
+
+        _enroll_attempts_left = _AUTH_MAX_ATTEMPTS
+        _enrolled = False
+        while not _enrolled and _enroll_attempts_left > 0:
+            send_hud_state({
+                "state": "enrollment_listening",
+                "description": "Listening for your voice sample...",
+                "paragraph": ENROLLMENT_PARAGRAPH,
+            })
+            sample_audio = await capture_auth_audio(record_seconds=6)
+
+            send_hud_state({"state": "enrollment_processing", "description": "Extracting voiceprint..."})
+            embedding = generate_embedding(sample_audio)
+
+            if embedding is None:
+                _enroll_attempts_left -= 1
+                logger.warning(f"Voice enrollment sample unusable. {_enroll_attempts_left} attempt(s) left.")
+                if _enroll_attempts_left > 0:
+                    await session.say(
+                        "I couldn't get a clear voiceprint from that. Let's try again — please read the "
+                        "sentence once more, a little closer to the microphone.",
+                        allow_interruptions=False,
+                    )
+                    await asyncio.sleep(1.5)
+                continue
+
+            save_master_embedding(embedding)
+            _enrolled = True
+            logger.info("Master voice profile registered successfully.")
+            send_hud_state({"state": "enrollment_success", "description": "Master voice registered"})
+            await session.say(
+                "Your voice has been registered as my master voice profile. "
+                "From now on, I'll verify it's you before waking up. Welcome to JARVIS.",
+                allow_interruptions=False,
+            )
+            await asyncio.sleep(2.0)
+
+        if not _enrolled:
+            # Couldn't get a usable sample after several tries — don't lock the
+            # user out of their own freshly-installed assistant; let them in
+            # and they can re-run enrollment later via start_voice_reenrollment.
+            logger.warning("Voice enrollment failed after max attempts. Continuing without a locked profile.")
+            send_hud_state({"state": "alert", "description": "Voice enrollment skipped — try again later"})
+            await session.say(
+                "I wasn't able to register a clear voice profile right now. We can try again later — "
+                "just ask me to re-register your voice. Continuing for now.",
+                allow_interruptions=False,
+            )
+            await asyncio.sleep(1.5)
+
+        _auth_unlocked = True
+        mark_session_authenticated(True)
+
     else:
         # Enter locked state — notify frontend
         send_hud_state({
@@ -485,13 +618,14 @@ async def entrypoint(ctx: agents.JobContext):
 
             if matched:
                 _auth_unlocked = True
+                mark_session_authenticated(True)
                 logger.info("Voice authentication SUCCESSFUL. JARVIS unlocked.")
                 send_hud_state({
                     "state": "auth_success",
                     "description": "Identity confirmed",
                 })
                 await session.say(
-                    "Voice print confirmed. Welcome back, master Nandu.",
+                    f"Voice print confirmed. Welcome back{', master ' + OWNER_NAME if OWNER_NAME else ''}.",
                     allow_interruptions=False
                 )
                 await asyncio.sleep(2.8)
@@ -514,7 +648,7 @@ async def entrypoint(ctx: agents.JobContext):
                         "description": "Authentication failed. Shutting down.",
                     })
                     await session.say(
-                        "Authentication failed. Unauthorised access detected. Shutting down, sir.",
+                        f"Authentication failed. Unauthorised access detected. Shutting down, {OWNER_ADDRESS}.",
                         allow_interruptions=False
                     )
                     await asyncio.sleep(3.0)
@@ -531,6 +665,18 @@ async def entrypoint(ctx: agents.JobContext):
         except Exception as e:
             logger.warning(f"Could not auto-start webcam guard on live: {e}")
 
+        try:
+            from Tools.system_optimizer import start_system_optimizer
+            asyncio.create_task(start_system_optimizer())
+        except Exception as e:
+            logger.warning(f"Could not auto-start system optimizer on live: {e}")
+
+        try:
+            from Tools.conversation_memory import start_conversation_indexer
+            start_conversation_indexer()
+        except Exception as e:
+            logger.warning(f"Could not auto-start conversation indexer on live: {e}")
+
     # ── End Voice Authentication Gate ─────────────────────────────────────────
 
     @session.on("user_input_transcribed")
@@ -539,6 +685,11 @@ async def entrypoint(ctx: agents.JobContext):
         if text:
             logger.info(f"User transcribed: {text}")
             send_hud_state({"state": "listening", "transcript": text})
+            try:
+                from Tools.conversation_memory import log_conversation_turn
+                log_conversation_turn("user", text)
+            except Exception:
+                pass
 
     @session.on("agent_state_changed")
     def _on_agent_state_changed(ev: events.AgentStateChangedEvent):
@@ -572,6 +723,11 @@ async def entrypoint(ctx: agents.JobContext):
                         "transcript": text,
                         "last_response": text,
                     })
+                    try:
+                        from Tools.conversation_memory import log_conversation_turn
+                        log_conversation_turn("assistant", text)
+                    except Exception:
+                        pass
         except Exception as e:
             logger.warning(f"Error in conversation_item_added: {e}")
 
@@ -618,7 +774,10 @@ async def entrypoint(ctx: agents.JobContext):
         logger.error(f"Failed to start HUD UDP Server: {e}")
     
     # Generate the initial greeting only AFTER successful voice authentication
-    await session.say("JARVIS online. Welcome back, master nandu. All systems at your disposal.", allow_interruptions=True)
+    await session.say(
+        f"JARVIS online.{' Welcome back, master ' + OWNER_NAME + '.' if OWNER_NAME else ''} All systems at your disposal.",
+        allow_interruptions=True,
+    )
 
 
 # ── CLI entry ─────────────────────────────────────────────────────────────────

@@ -123,25 +123,50 @@ def derive_state(raw: dict) -> str:
     return "idle"
 
 
-def build_payload(raw: dict) -> dict:
-    """Normalise a raw HUD mirror packet into the Flutter wire format."""
+def build_payload(raw: dict, previous: dict | None = None) -> dict:
+    """
+    Normalise a raw HUD mirror packet into the Flutter wire format.
+
+    agent.py fires send_hud_state() many times per turn for different
+    reasons (a new transcript, a tool starting, a state change, an idle
+    ping) and each call only includes the fields relevant to that specific
+    update — NOT every field every time. Continuous fields (ai_level,
+    mic_level, mouth, mic_muted) are refreshed ~30x/sec by voice_client.py's
+    mirror loop regardless, so briefly defaulting them when a partial
+    packet omits them is imperceptible. But discrete, meaningful fields
+    (transcript, response, category, tool_name, description, now_playing)
+    are set once per event and must PERSIST until explicitly replaced —
+    otherwise the very next unrelated ping (e.g. a tool-status update with
+    no 'transcript' key) blanks out a transcript that was only shown for a
+    single frame. `previous` is the last broadcast payload, used as the
+    fallback for exactly those sticky fields.
+    """
+    previous = previous or {}
     payload = {
         "state": derive_state(raw),
         "ai_level": float(raw.get("ai_level", 0.0) or 0.0),
         "mic_level": float(raw.get("mic_level", 0.0) or 0.0),
         "mouth": float(raw.get("mouth", 0.0) or 0.0),
         "mic_muted": bool(raw.get("mic_muted", False)),
-        "category": raw.get("category", "") or "",
-        "tool_name": raw.get("tool_name", "") or "",
-        "description": raw.get("description", "") or "",
-        "transcript": raw.get("transcript", "") or "",
-        "response": raw.get("last_response", raw.get("response", "")) or "",
+        "category": raw["category"] if "category" in raw else previous.get("category", ""),
+        "tool_name": raw["tool_name"] if "tool_name" in raw else previous.get("tool_name", ""),
+        "description": raw["description"] if "description" in raw else previous.get("description", ""),
+        "transcript": raw["transcript"] if "transcript" in raw else previous.get("transcript", ""),
         "connected": True,
     }
-    # now_playing may arrive pre-built from the HUD; pass it through, else
-    # allow an explicit null to clear it.
+    if "last_response" in raw:
+        payload["response"] = raw["last_response"]
+    elif "response" in raw:
+        payload["response"] = raw["response"]
+    else:
+        payload["response"] = previous.get("response", "")
+
+    # now_playing: sticky the same way — pass through when present, an
+    # explicit null clears it, and omission means "unchanged".
     if "now_playing" in raw:
         payload["now_playing"] = raw["now_playing"]
+    elif "now_playing" in previous:
+        payload["now_playing"] = previous["now_playing"]
     return payload
 
 
@@ -157,7 +182,7 @@ class MirrorProtocol(asyncio.DatagramProtocol):
             raw = json.loads(data.decode("utf-8"))
         except Exception:
             return
-        payload = build_payload(raw)
+        payload = build_payload(raw, self.hub.last_payload)
         asyncio.run_coroutine_threadsafe(self.hub.broadcast(payload), self.loop)
 
 

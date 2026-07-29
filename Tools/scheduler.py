@@ -42,7 +42,7 @@ def _ensure_db():
     conn.close()
 
 def _load_tasks_from_db():
-    global _scheduled_tasks, _task_counter
+    global _task_counter
     _ensure_db()
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -207,7 +207,7 @@ async def schedule_task(
     valid_tools = {t.__name__ for t in get_all_tools()}
     if tool_name not in valid_tools:
         # Instead of failing silently, return a helpful error.
-        # But wait, execute_multi_task is also valid. It's in get_all_tools().
+        # Note: execute_agent_tasks is also a valid tool_name — it's in get_all_tools().
         # So we just list some common ones or tell them it's invalid.
         return f"Error: '{tool_name}' is not a valid tool. Please check the tool name."
 

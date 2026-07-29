@@ -1,15 +1,11 @@
 import asyncio
-import queue
-import threading
-import time
-from typing import AsyncIterable
 
 from livekit.agents import tts
-from livekit import rtc
 from piper import PiperVoice
 from livekit.agents.tts.tts import DEFAULT_API_CONNECT_OPTIONS, shortuuid
 import logging
 
+logger = logging.getLogger(__name__)
 
 # Suppress the spammy phoneme debug logs from piper
 logging.getLogger("piper.voice").setLevel(logging.INFO)

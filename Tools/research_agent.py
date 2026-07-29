@@ -22,7 +22,7 @@ async def deep_research(topic: str, num_sources: int = 3) -> str:
     num_sources = max(1, min(num_sources, 5))
     
     try:
-        # We would ideally use execute_multi_task here internally or orchestrate directly
+        # We would ideally use execute_agent_tasks here internally or orchestrate directly
         # For simplicity, we'll use duckduckgo search directly to get URLs
         from langchain_community.tools import DuckDuckGoSearchResults
         import re

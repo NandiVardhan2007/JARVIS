@@ -7,7 +7,6 @@ Tracks a mock portfolio in SQLite.
 import logging
 import os
 import sqlite3
-from typing import Optional
 from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)

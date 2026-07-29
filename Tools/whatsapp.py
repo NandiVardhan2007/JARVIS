@@ -114,7 +114,7 @@ async def send_whatsapp_message(contact_number: str, message: str) -> str:
         
         # 1. Open WhatsApp via subprocess
         import subprocess
-        subprocess.Popen(["whatsapp-for-linux"], shell=True) # Assumes whatsapp-for-linux or similar is installed
+        subprocess.Popen(["whatsapp-for-linux"], shell=False) # Assumes whatsapp-for-linux or similar is installed
         
         # Wait for WhatsApp to open
         time.sleep(5)
@@ -186,7 +186,7 @@ async def send_whatsapp_media(contact_name: str) -> str:
 
         # Step 2: Open WhatsApp via subprocess
         import subprocess
-        subprocess.Popen(["whatsapp-for-linux"], shell=True)
+        subprocess.Popen(["whatsapp-for-linux"], shell=False)
         time.sleep(5)  # Wait for WhatsApp to open
 
         # Step 3: Search for the contact

@@ -4,7 +4,6 @@ import asyncio
 import logging
 import pyperclip
 from datetime import datetime
-from typing import Optional
 from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,7 @@ async def _clipboard_monitor():
                 conn.commit()
                 conn.close()
         except Exception as e:
-            pass
+            logger.debug(f"Clipboard monitor tick failed: {e}")
         await asyncio.sleep(2)
 
 def start_clipboard_monitor():

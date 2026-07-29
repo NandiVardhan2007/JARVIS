@@ -185,6 +185,13 @@ class FaceParams {
   /// Live mouth openness from voice amplitude (viseme drive).
   double mouth;
 
+  /// Subtle head yaw (left/right turn) and roll (tilt), radians. Applied
+  /// only to the face features (brows/eyes/mouth/blush), not the
+  /// surrounding holographic HUD chrome, so the "head" reads as turning
+  /// inside a stable frame rather than the whole widget wobbling.
+  double headTurn;
+  double headTilt;
+
   double breath;
   double t;
 
@@ -225,6 +232,8 @@ class FaceParams {
     this.micLevel = 0,
     this.aiLevel = 0,
     this.mouth = 0,
+    this.headTurn = 0,
+    this.headTilt = 0,
     this.breath = 0,
     this.t = 0,
     this.floatY = 0,

@@ -8,7 +8,6 @@ import datetime
 import logging
 import os
 import pickle
-from typing import Optional
 from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)

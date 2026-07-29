@@ -12,6 +12,7 @@ livekit-plugins-cartesia==1.5.0      # TTS primary (sonic-2)
 
 # ── Desktop automation ────────────────────────────────────────────────────────
 pyautogui>=0.9.54
+pynput>=1.7.6
 pygetwindow>=0.0.9
 pyperclip>=1.8.2
 mss>=9.0.1
@@ -36,6 +37,9 @@ send2trash>=1.8.2
 # ── Vision & Gesture Control (new) ─────────────────────────────────────────────
 opencv-python>=4.9.0
 mediapipe>=0.10.0
+pywin32>=306
+numpy>=1.24.0
+aiohttp>=3.9.0
 playwright>=1.42.0
 
 
@@ -52,7 +56,7 @@ chardet>=5.0.0
 # ── Process manager (new) ─────────────────────────────────────────────────────
 # psutil already listed above
 
-# ── Messaging — Telegram + Discord (new) ─────────────────────────────────────
+# ── Messaging — Discord ────────────────────────────────────────────────────────
 # Uses requests (already listed) — no extra SDK needed
 
 # ── Upgrades ──────────────────────────────────────────────────────────────────

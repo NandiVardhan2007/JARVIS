@@ -404,7 +404,6 @@ async def read_selected_region(
     logger.info(f"Region capture: ({x},{y}) {width}x{height}")
     try:
         import pyautogui
-        from PIL import Image
 
         screenshot = pyautogui.screenshot(region=(x, y, width, height))
         save_dir = SCREENSHOTS_DIR

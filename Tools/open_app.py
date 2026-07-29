@@ -1,3 +1,9 @@
+"""
+Intelligent Windows Application Launcher for JARVIS.
+Searches Windows alias mappings, Start Menu shortcuts, PATH binaries, App Execution Aliases,
+and UWP URI protocol schemes.
+"""
+
 import logging
 import os
 import shutil
@@ -6,111 +12,105 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-# Basic fallback mapping for aliases
+# Windows App Mapping & Fallback Executables / Protocols
 APP_MAP = {
-    "text editor": ["gedit", "gnome-text-editor", "mousepad", "kate"],
-    "notepad": ["gedit", "gnome-text-editor", "mousepad", "kate"],
-    "browser": ["google-chrome", "firefox", "chromium"],
-    "chrome": ["google-chrome"],
-    "terminal": ["gnome-terminal", "alacritty", "konsole", "xterm"],
-    "command prompt": ["gnome-terminal", "alacritty", "konsole", "xterm"],
-    "files": ["nautilus", "thunar", "dolphin"],
-    "file manager": ["nautilus", "thunar", "dolphin"],
-    "calculator": ["gnome-calculator", "kcalc", "galculator"],
-    "settings": ["gnome-control-center"],
-    "vscode": ["code"],
-    "vs code": ["code"],
-    "whatsapp": ["whatsapp-for-linux", "whatsapp-desktop", "whatsapp"],
-    "spotify": ["spotify"],
-    "discord": ["discord"]
+    "notepad": ["notepad.exe"],
+    "text editor": ["notepad.exe"],
+    "browser": ["msedge.exe", "chrome.exe", "firefox.exe"],
+    "chrome": ["chrome.exe"],
+    "edge": ["msedge.exe"],
+    "terminal": ["wt.exe", "cmd.exe", "powershell.exe"],
+    "command prompt": ["cmd.exe"],
+    "cmd": ["cmd.exe"],
+    "powershell": ["powershell.exe"],
+    "files": ["explorer.exe"],
+    "file manager": ["explorer.exe"],
+    "explorer": ["explorer.exe"],
+    "calculator": ["calc.exe", "ms-calculator:"],
+    "paint": ["mspaint.exe"],
+    "vscode": ["code.cmd", "code.exe"],
+    "vs code": ["code.cmd", "code.exe"],
+    "code": ["code.cmd", "code.exe"],
+    "whatsapp": ["whatsapp.exe", "whatsapp:"],
+    "spotify": ["spotify.exe"],
+    "discord": ["discord.exe"],
+    "task manager": ["taskmgr.exe"],
+    "word": ["winword.exe"],
+    "excel": ["excel.exe"],
+    "powerpoint": ["powerpnt.exe"],
+    "settings": ["ms-settings:"],
+    "control panel": ["control.exe"],
+    "snipping tool": ["snippingtool.exe"],
 }
 
-def _find_desktop_file_exec(app_name: str) -> str | None:
-    """Search through standard .desktop locations to find the executable for an app."""
+def _search_start_menu_shortcuts(app_name: str) -> str | None:
+    """Searches Windows Start Menu directories for .lnk shortcuts matching app_name."""
     search_dirs = [
-        "/usr/share/applications/",
-        "/usr/local/share/applications/",
-        os.path.expanduser("~/.local/share/applications/"),
-        "/var/lib/flatpak/exports/share/applications/"
+        r"C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
+        os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Start Menu\Programs")
     ]
 
-    clean_name = app_name.lower().replace(" ", "")
+    clean_query = app_name.lower().replace(" ", "")
 
-    for d in search_dirs:
-        if not os.path.exists(d): continue
-        for root, dirs, files in os.walk(d):
+    for sdir in search_dirs:
+        if not os.path.exists(sdir):
+            continue
+        for root, _, files in os.walk(sdir):
             for file in files:
-                if not file.endswith(".desktop"): continue
-
-                # Check filename match
-                filename_clean = file.lower().replace(".desktop", "").replace(" ", "")
-                if clean_name in filename_clean or filename_clean in clean_name:
-                    return _extract_exec_from_desktop(os.path.join(root, file))
-
-                # Dig into file contents for Name= match
-                try:
-                    with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                        for line in lines:
-                            if line.startswith("Name="):
-                                name_val = line[5:].strip().lower()
-                                if clean_name in name_val.replace(" ", "") or name_val.replace(" ", "") in clean_name:
-                                    return _extract_exec_from_desktop(os.path.join(root, file))
-                except Exception:
-                    pass
-    return None
-
-def _extract_exec_from_desktop(filepath: str) -> str | None:
-    """Extracts the Exec= line from a .desktop file, stripping %U, %f etc."""
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.startswith("Exec="):
-                    exec_val = line[5:].strip()
-                    # Strip out %U, %f, etc
-                    import re
-                    exec_val = re.sub(r'\%[a-zA-Z]', '', exec_val).strip()
-                    return exec_val
-    except Exception:
-        pass
+                if file.lower().endswith(".lnk"):
+                    clean_file = file.lower().replace(".lnk", "").replace(" ", "")
+                    if clean_query in clean_file or clean_file in clean_query:
+                        return os.path.join(root, file)
     return None
 
 @function_tool
 async def open_app(app_name: str) -> str:
     """
-    Intelligently launches a desktop application on Linux.
-    Searches aliases, PATH binaries, and .desktop files.
+    Intelligently launches a desktop application on Windows.
+    Searches Windows app maps, Start Menu shortcuts, PATH binaries, and UWP schemes.
 
     Args:
-        app_name: Name of the application to open (e.g., "text editor", "whatsapp", "terminal", "spotify").
+        app_name: Name of the application to open (e.g., "notepad", "chrome", "vscode", "calculator", "whatsapp", "cmd").
     """
-    logger.info(f"Intelligently launching app: {app_name}")
+    logger.info(f"Launching Windows app: {app_name}")
     try:
         query = app_name.lower().strip()
 
-        # 1. Alias map check
+        # 1. Check direct protocol URI scheme (e.g., ms-settings:, whatsapp:)
+        if query in ("settings", "ms-settings"):
+            os.system("start ms-settings:")
+            return "Windows Settings opened, sir."
+
+        # 2. Alias map check
         candidates = APP_MAP.get(query, [])
         for cand in candidates:
+            if cand.startswith("ms-") or cand.endswith(":"):
+                os.system(f"start {cand}")
+                return f"'{app_name}' launched via Windows protocol, sir."
+            
             binary = shutil.which(cand)
             if binary:
-                subprocess.Popen(binary, shell=True, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return f"'{cand}' has been launched, sir."
+                subprocess.Popen([binary], shell=False, creationflags=subprocess.DETACHED_PROCESS)
+                return f"'{cand.replace('.exe', '')}' has been launched, sir."
 
-        # 2. Direct binary check
-        dashed_name = query.replace(" ", "-")
-        under_name = query.replace(" ", "_")
-        for cand in [query, dashed_name, under_name]:
-            binary = shutil.which(cand)
+        # 3. Direct binary check on PATH
+        for test_name in [query, f"{query}.exe", query.replace(" ", "")]:
+            binary = shutil.which(test_name)
             if binary:
-                subprocess.Popen(binary, shell=True, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return f"'{cand}' has been launched."
+                subprocess.Popen([binary], shell=False, creationflags=subprocess.DETACHED_PROCESS)
+                return f"'{query}' has been launched, sir."
 
-        # 3. .desktop file deep search
-        exec_cmd = _find_desktop_file_exec(query)
-        if exec_cmd:
-            subprocess.Popen(exec_cmd, shell=True, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return f"Found and launched '{app_name}' via system shortcuts."
+        # 4. Windows Start Menu shortcut (.lnk) search
+        shortcut_path = _search_start_menu_shortcuts(query)
+        if shortcut_path:
+            os.startfile(shortcut_path)
+            return f"Launched '{app_name}' via Windows Start Menu shortcut, sir."
 
-        return f"I couldn't find an application matching '{app_name}' installed on your system."
+        # 5. Fallback: OS start command
+        res = os.system(f'start "" "{query}"')
+        if res == 0:
+            return f"'{app_name}' launched successfully, sir."
+
+        return f"I couldn't find an application matching '{app_name}' installed on your Windows system."
     except Exception as e:
         return f"Failed to open '{app_name}': {e}"

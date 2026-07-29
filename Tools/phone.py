@@ -58,7 +58,7 @@ async def make_phone_call(phone_number: str, greeting: str = "") -> str:
             play_ringtone=True,
         )
 
-        participant = await lk_api.sip.create_sip_participant(req)
+        await lk_api.sip.create_sip_participant(req)
         await lk_api.aclose()
 
         logger.info(f"SIP call initiated to {clean_number}, participant: {participant_identity}")

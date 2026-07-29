@@ -7,8 +7,7 @@ import asyncio
 import logging
 import os
 import subprocess
-import time
-from typing import Literal, Optional
+from typing import Optional
 
 from livekit.agents import function_tool
 
@@ -406,14 +405,8 @@ async def send_phone_notification(title: str, body: str) -> str:
         title: Notification title.
         body: Notification body text.
     """
-    # Uses the service call approach — works without Termux
-    cmd = (
-        f'shell service call notification 1 i32 1 s16 "android" s16 '
-        f'"{title}" s16 "{body}"'
-    )
-    # Simpler and more reliable: use am broadcast with a notification intent
-    # The cleanest no-root approach is a companion app or Termux
-    # Fallback: use adb to start the settings notification as a workaround
+    # Uses am broadcast, then falls back to the more reliable Termux:API path
+    # below (send_phone_notification -> _notify_via_termux).
     stdout, stderr, code = await _adb_async(
         "shell", "am", "broadcast",
         "-a", "android.intent.action.MAIN",

@@ -8,13 +8,11 @@ import sys
 import os
 import sqlite3
 import numpy as np
-import time
 
 try:
     import sounddevice as sd
-    import scipy.io.wavfile as wav
 except ImportError:
-    print("Dependencies 'sounddevice' and 'scipy' are required.")
+    print("Dependency 'sounddevice' is required.")
     sys.exit(1)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "jarvis_memory", "user_memory.db")

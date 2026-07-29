@@ -49,6 +49,10 @@ class _JarvisFaceState extends State<JarvisFace>
   double _pupilX = 0, _pupilY = 0, _pupilTX = 0, _pupilTY = 0;
   double _nextSaccade = 1.5, _saccadeClock = 0;
 
+  // Head movement (turn/tilt) — follows gaze loosely, plus a slow idle sway,
+  // so the head reads as accompanying the eyes rather than the dominant motion.
+  double _headTurn = 0, _headTilt = 0;
+
   // Expression pose (damped toward the active emotion's targets).
   double _browRaise = 0.15,
       _browTilt = 0,
@@ -165,6 +169,7 @@ class _JarvisFaceState extends State<JarvisFace>
     _updateBlink(dt);
     _updateWink(dt, s.state);
     _updateGaze(dt, s.state);
+    _updateHead(dt, s.state);
     _updateFloat(dt, s.state);
     _updateParticles(dt, s.state);
     _updateRipple(dt, s.state);
@@ -232,6 +237,22 @@ class _JarvisFaceState extends State<JarvisFace>
     }
     _pupilX = _damp(_pupilX, _pupilTX, 9, dt);
     _pupilY = _damp(_pupilY, _pupilTY, 9, dt);
+  }
+
+  void _updateHead(double dt, AssistantState state) {
+    // Turn follows gaze loosely (a head turning to look somewhere reads more
+    // alive than eyes darting alone), plus a slow independent idle sway.
+    final idleSway = math.sin(_breath * 0.31) * 0.05;
+    final gazeFollow = _pupilX * 0.10;
+    double turnTarget = idleSway + gazeFollow;
+
+    double tiltTarget = _pupilY * 0.05;
+    if (state == AssistantState.thinking) {
+      tiltTarget += 0.06; // a slight curious/pondering tilt
+    }
+
+    _headTurn = _damp(_headTurn, turnTarget, 3.5, dt);
+    _headTilt = _damp(_headTilt, tiltTarget, 3.5, dt);
   }
 
   void _updateFloat(double dt, AssistantState state) {
@@ -315,6 +336,8 @@ class _JarvisFaceState extends State<JarvisFace>
       micLevel: _micLevel,
       aiLevel: _aiLevel,
       mouth: _mouth,
+      headTurn: _headTurn,
+      headTilt: _headTilt,
       breath: _breath,
       t: _t,
       floatY: _floatY,

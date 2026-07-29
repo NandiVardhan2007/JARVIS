@@ -6,7 +6,6 @@ extract clean text, pull tables, and list links.
 
 import logging
 import re
-from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 from livekit.agents import function_tool
@@ -206,7 +205,7 @@ async def get_page_links(url: str, filter: str = "") -> str:
             links.append(f"• {text[:80]}\n  {full_url}")
 
         if not links:
-            return f"No links found" + (f" matching '{filter}'" if filter else "") + f" at {url}."
+            return "No links found" + (f" matching '{filter}'" if filter else "") + f" at {url}."
 
         # Cap at 30 links
         output = links[:30]

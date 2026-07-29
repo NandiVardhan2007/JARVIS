@@ -24,11 +24,16 @@ class JarvisApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'JARVIS',
-      debugShowCheckedModeBanner: false,
-      theme: JarvisTheme.build(),
-      home: const JarvisBootWrapper(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: jarvisThemeMode,
+      builder: (context, mode, _) => MaterialApp(
+        title: 'JARVIS',
+        debugShowCheckedModeBanner: false,
+        theme: JarvisTheme.buildLight(),
+        darkTheme: JarvisTheme.build(),
+        themeMode: mode,
+        home: const JarvisBootWrapper(),
+      ),
     );
   }
 }
@@ -355,6 +360,19 @@ class _JarvisHomeState extends State<JarvisHome> {
             tooltip: snap.micMuted ? 'Unmute mic' : 'Mute mic',
             active: !snap.micMuted,
             onTap: _conn.toggleMute,
+          ),
+          const SizedBox(width: 8),
+          ValueListenableBuilder<ThemeMode>(
+            valueListenable: jarvisThemeMode,
+            builder: (context, mode, _) => _iconButton(
+              icon: mode == ThemeMode.dark
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              tooltip: mode == ThemeMode.dark
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode',
+              onTap: toggleJarvisTheme,
+            ),
           ),
         ],
       ),

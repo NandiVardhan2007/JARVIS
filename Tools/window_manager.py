@@ -1,7 +1,12 @@
-"""Window management tools for Linux (Ubuntu)."""
+"""
+Window Management Tools for Windows Native.
+Uses pygetwindow, win32gui, win32con, and pyautogui to manage active and named application windows,
+enumerate open windows, and snap windows to sides of the screen.
+"""
 
 import logging
 import os
+import shutil
 import subprocess
 import time
 from typing import Literal, Optional
@@ -9,51 +14,68 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-
-def _get_active_window_id() -> Optional[str]:
+def _get_active_window():
+    """Returns active window object via pygetwindow or None."""
     try:
-        res = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
-        return res
+        import pygetwindow as gw
+        return gw.getActiveWindow()
     except Exception:
         return None
 
-
-def _get_window_id_by_title(title: str) -> Optional[str]:
+def _get_window_by_title(title: str):
+    """Searches for open window matching title."""
     try:
-        lines = subprocess.check_output(["wmctrl", "-l"]).decode().splitlines()
-        for line in lines:
-            if title.lower() in line.lower():
-                return line.split()[0]
+        import pygetwindow as gw
+        wins = gw.getWindowsWithTitle(title)
+        if wins:
+            return wins[0]
+        # Partial match
+        for w in gw.getAllWindows():
+            if w.title and title.lower() in w.title.lower():
+                return w
         return None
     except Exception:
         return None
-
 
 @function_tool
 async def manage_window(action: Literal["close", "minimize", "maximize", "restore"]) -> str:
     """
-    Manages the currently active application window.
+    Manages the currently active application window on Windows.
 
     Args:
         action: "close", "minimize", "maximize", or "restore".
     """
-    wid = _get_active_window_id()
-    if not wid:
-        return "No active window found (requires xdotool)."
-    
+    win = _get_active_window()
+    if not win:
+        # Fallback to win32gui
+        try:
+            import win32gui, win32con
+            hwnd = win32gui.GetForegroundWindow()
+            if hwnd:
+                cmd_map = {
+                    "close": lambda: win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0),
+                    "minimize": lambda: win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE),
+                    "maximize": lambda: win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE),
+                    "restore": lambda: win32gui.ShowWindow(hwnd, win32con.SW_RESTORE),
+                }
+                cmd_map[action]()
+                return f"Active window has been {action}d."
+        except Exception as e:
+            return f"Window management failed: {e}"
+        return "No active window found."
+
     try:
         if action == "close":
-            os.system(f"xdotool windowclose {wid}")
+            win.close()
         elif action == "minimize":
-            os.system(f"xdotool windowminimize {wid}")
+            win.minimize()
         elif action == "maximize":
-            os.system(f"wmctrl -i -r {wid} -b add,maximized_vert,maximized_horz")
+            win.maximize()
         elif action == "restore":
-            os.system(f"wmctrl -i -r {wid} -b remove,maximized_vert,maximized_horz")
-        return f"Active window has been {action}d."
+            win.restore()
+        return f"Active window '{win.title}' has been {action}d."
     except Exception as e:
         return f"Window management failed: {e}"
-
 
 @function_tool
 async def manage_window_state(
@@ -61,55 +83,65 @@ async def manage_window_state(
     window_title: Optional[str] = None,
 ) -> str:
     """
-    Manages the state of a specific or the currently active window.
+    Manages the state of a specific or the currently active window on Windows.
 
     Args:
         action: Action to perform (maximize, minimize, restore, close).
         window_title: Title of the target window. Uses active window if not specified.
     """
     if window_title and window_title.lower() != "active window":
-        wid = _get_window_id_by_title(window_title)
-        if not wid:
-            return f"No window with title '{window_title}' found."
+        win = _get_window_by_title(window_title)
+        if not win:
+            return f"No open window found with title matching '{window_title}'."
     else:
-        wid = _get_active_window_id()
-        if not wid:
+        win = _get_active_window()
+        if not win:
             return "No active window found."
-            
+
     try:
         if action == "close":
-            os.system(f"wmctrl -i -c {wid}")
+            win.close()
         elif action == "minimize":
-            os.system(f"xdotool windowminimize {wid}")
+            win.minimize()
         elif action == "maximize":
-            os.system(f"wmctrl -i -r {wid} -b add,maximized_vert,maximized_horz")
+            win.maximize()
         elif action == "restore":
-            os.system(f"wmctrl -i -r {wid} -b remove,maximized_vert,maximized_horz")
-        return f"Window has been {action}d."
+            win.restore()
+        return f"Window '{win.title}' has been {action}d."
     except Exception as e:
         return f"Window state change failed: {e}"
-
 
 @function_tool
 async def list_active_windows() -> str:
     """
-    Lists all visible application windows and their current states.
+    Lists all visible application windows currently open on the Windows desktop.
     """
     try:
-        output = subprocess.check_output(["wmctrl", "-l"]).decode().splitlines()
-        if not output:
-            return "No open windows found."
+        import pygetwindow as gw
+        windows = gw.getAllWindows()
+        visible_titles = [w.title.strip() for w in windows if w.title and w.title.strip() and w.visible]
         
-        lines = ["Open Windows:\n"]
-        for line in output[:20]:
-            parts = line.split(maxsplit=3)
-            if len(parts) >= 4:
-                title = parts[3]
-                lines.append(f"• {title}")
-        return "\n".join(lines)
-    except Exception as e:
-        return f"Window detection failed (requires wmctrl): {e}"
+        if not visible_titles:
+            return "No visible open windows found."
 
+        unique_titles = list(dict.fromkeys(visible_titles))[:25]
+        formatted = "\n".join([f"• {title}" for title in unique_titles])
+        return f"Open Windows on Desktop:\n{formatted}"
+    except Exception as e:
+        # Fallback to win32gui enum
+        try:
+            import win32gui
+            titles = []
+            def _enum_cb(hwnd, _):
+                if win32gui.IsWindowVisible(hwnd):
+                    t = win32gui.GetWindowText(hwnd).strip()
+                    if t:
+                        titles.append(t)
+            win32gui.EnumWindows(_enum_cb, None)
+            unique = list(dict.fromkeys(titles))[:25]
+            return "Open Windows:\n" + "\n".join([f"• {t}" for t in unique])
+        except Exception:
+            return f"Failed to retrieve open windows list: {e}"
 
 @function_tool
 async def open_app_on_screen(
@@ -117,42 +149,39 @@ async def open_app_on_screen(
     screen_side: Literal["left", "right", "full"] = "full",
 ) -> str:
     """
-    Opens an application and snaps it to a specific side of the screen.
+    Opens an application and snaps it to a specific side of the screen on Windows.
 
     Args:
         app_name: Name of the application to open.
         screen_side: "left", "right", or "full" (default: full).
     """
     try:
-        # Launching the app
-        subprocess.Popen(app_name, shell=True)
-        time.sleep(2)
-        
-        wid = _get_active_window_id()
-        if not wid:
-            return f"{app_name} launched. (Could not reposition — window not found.)"
-            
-        # Get screen size via xdpyinfo
+        from Tools.open_app import open_app
+        launch_msg = await open_app(app_name)
+        time.sleep(1.8)
+
+        import pyautogui
+        import pygetwindow as gw
+        screen_w, screen_h = pyautogui.size()
+
+        win = gw.getActiveWindow()
+        if not win or not win.title:
+            return f"{launch_msg} (Window snapping skipped — target window not focused.)"
+
         try:
-            dpy_info = subprocess.check_output(["xdpyinfo"]).decode()
-            import re
-            m = re.search(r'dimensions:\s+(\d+)x(\d+) pixels', dpy_info)
-            if m:
-                screen_w, screen_h = int(m.group(1)), int(m.group(2))
-            else:
-                screen_w, screen_h = 1920, 1080
-        except:
-            screen_w, screen_h = 1920, 1080
-            
+            win.restore()
+        except Exception:
+            pass
+
         if screen_side == "left":
-            os.system(f"wmctrl -i -r {wid} -b remove,maximized_vert,maximized_horz")
-            os.system(f"wmctrl -i -r {wid} -e 0,0,0,{screen_w//2},{screen_h}")
+            win.moveTo(0, 0)
+            win.resizeTo(screen_w // 2, screen_h)
         elif screen_side == "right":
-            os.system(f"wmctrl -i -r {wid} -b remove,maximized_vert,maximized_horz")
-            os.system(f"wmctrl -i -r {wid} -e 0,{screen_w//2},0,{screen_w//2},{screen_h}")
+            win.moveTo(screen_w // 2, 0)
+            win.resizeTo(screen_w // 2, screen_h)
         else:
-            os.system(f"wmctrl -i -r {wid} -b add,maximized_vert,maximized_horz")
-            
-        return f"{app_name} opened on the {screen_side} side of the screen."
+            win.maximize()
+
+        return f"{app_name} opened and snapped to {screen_side} screen."
     except Exception as e:
-        return f"Failed to open {app_name}: {e}"
+        return f"Failed to snap {app_name}: {e}"

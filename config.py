@@ -48,31 +48,38 @@ def validate_environment():
         if "FORCE_PIPER_TTS" in os.environ:
             del os.environ["FORCE_PIPER_TTS"]
         
-    # 4. Check Local LLM Health (LM Studio)
+    # 4. Check Local LLM Health (LM Studio) — informational only. This used to
+    # block startup for up to 3s waiting on a network call; the agent's own
+    # FallbackAdapter already handles a genuinely-down local LLM at call time,
+    # so there's no need to hold up boot for a health check that's just a log
+    # line. Runs in the background and logs whenever it resolves.
     local_llm_url = os.getenv("LOCAL_LLM_URL", "").strip()
     if local_llm_url:
-        logger.info(f"Checking Local LLM health at {local_llm_url}...")
-        try:
-            # Determine the base URL (strip /chat/completions if present)
-            base_url = local_llm_url
-            if base_url.endswith("/chat/completions"):
-                base_url = base_url.replace("/chat/completions", "")
-            if base_url.endswith("/v1"):
-                health_url = base_url + "/models"
-            else:
-                health_url = base_url + "/v1/models"
-                
-            resp = requests.get(health_url, timeout=3)
-            if resp.status_code == 200:
-                models = resp.json().get("data", [])
-                if models:
-                    logger.info(f"Local LLM is online. Model loaded: {models[0].get('id')}")
+        import threading
+
+        def _check_local_llm():
+            try:
+                base_url = local_llm_url
+                if base_url.endswith("/chat/completions"):
+                    base_url = base_url.replace("/chat/completions", "")
+                if base_url.endswith("/v1"):
+                    health_url = base_url + "/models"
                 else:
-                    logger.warning("Local LLM is online, but NO MODELS ARE LOADED in LM Studio! Code generation tools will fail.")
-            else:
-                logger.warning(f"Local LLM returned unexpected status code: {resp.status_code}")
-        except Exception as e:
-            logger.warning(f"Local LLM offline at {local_llm_url}. Defaulting to Cloud LLM models (Groq / NVIDIA NIM).")
+                    health_url = base_url + "/v1/models"
+
+                resp = requests.get(health_url, timeout=3)
+                if resp.status_code == 200:
+                    models = resp.json().get("data", [])
+                    if models:
+                        logger.info(f"Local LLM is online. Model loaded: {models[0].get('id')}")
+                    else:
+                        logger.warning("Local LLM is online, but NO MODELS ARE LOADED in LM Studio! Code generation tools will fail.")
+                else:
+                    logger.warning(f"Local LLM returned unexpected status code: {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Local LLM offline at {local_llm_url} ({e}). Will fall back to Cloud LLM models (Groq / NVIDIA NIM) automatically if needed.")
+
+        threading.Thread(target=_check_local_llm, daemon=True).start()
 
     logger.info("Pre-flight checks complete. Booting JARVIS...\n")
 

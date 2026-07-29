@@ -49,7 +49,7 @@ def log_tool_error(
 ) -> None:
     """
     Record a tool failure in the telemetry database.
-    Call this from the tool execution loop (telegram_bot, agent, etc.).
+    Call this from the tool execution loop (agent.py, scheduled tasks, etc.).
     """
     try:
         args_summary = str(args)[:500] if args else ""

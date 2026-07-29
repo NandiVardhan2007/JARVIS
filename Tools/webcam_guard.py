@@ -6,6 +6,7 @@ packages never crash the main app at startup.
 
 import os
 import time
+import asyncio
 import logging
 import threading
 import base64
@@ -20,6 +21,23 @@ _camera_thread = None
 _latest_frame = None  # Holds raw numpy array of last frame
 _latest_encoded_frame = None  # Holds JPEG encoded bytes for live HTTP stream
 _http_server = None
+
+# Signalled by _camera_loop once the camera has actually been opened (or has
+# definitively failed to open), so start_webcam_guard can report the TRUE
+# outcome instead of claiming success the instant the background thread is
+# launched, before it's had any chance to actually open a device.
+_camera_ready_event = threading.Event()
+_camera_open_failed = False
+_uinput_available = False
+_mouse_backend_status = ""
+
+# Last time the frontend actually pulled a frame (snapshot/video_feed hit).
+# The idle-timeout in _camera_loop only releases the camera when BOTH no
+# hand has been seen AND nobody's actively viewing the feed — otherwise a
+# user just watching their camera preview (not gesturing) would see the
+# feed silently die after 5 minutes, which looks like a broken video feed
+# rather than the intentional CPU/GPU-saving pause it actually is.
+_last_frame_requested = 0.0
 
 # UDP client to send commands back to JARVIS session
 import socket
@@ -38,10 +56,8 @@ def _send_action_command(action_text: str):
 
 def _get_screen_size():
     try:
-        from Xlib import display
-        d = display.Display()
-        s = d.screen()
-        return s.width_in_pixels, s.height_in_pixels
+        import pyautogui
+        return pyautogui.size()
     except Exception:
         return 1920, 1080
 
@@ -79,7 +95,9 @@ def _start_mjpeg_stream_server():
 
     class CamHandler(BaseHTTPRequestHandler):
         def do_GET(self):
+            global _last_frame_requested
             if self.path.startswith('/snapshot') or self.path.startswith('/frame'):
+                _last_frame_requested = time.time()
                 try:
                     if _camera_active and _latest_encoded_frame is not None:
                         frame_bytes = _latest_encoded_frame
@@ -104,6 +122,7 @@ def _start_mjpeg_stream_server():
                 self.end_headers()
                 while True:
                     try:
+                        _last_frame_requested = time.time()
                         if _camera_active and _latest_encoded_frame is not None:
                             frame_bytes = _latest_encoded_frame
                         else:
@@ -130,7 +149,11 @@ def _start_mjpeg_stream_server():
         logger.info("Live MJPEG video stream server running at http://127.0.0.1:5005/video_feed")
     except Exception as e:
         _http_server = True
-        logger.debug(f"MJPEG server port 5005 status: {e}")
+        logger.error(
+            f"Could not bind the video feed HTTP server on port 5005 ({e}). "
+            f"The frontend video widget will show a standby image instead of the live feed. "
+            f"Check if another process is already using port 5005: lsof -i :5005"
+        )
 
 
 
@@ -170,7 +193,9 @@ def _get_hand_tracker():
         return (None, None, None)
 
 def _find_webcam_capture(cv2):
-    """Probes multiple video device indices and FOURCC formats to open an available camera."""
+    """Probes multiple video device indices, backends, and FOURCC formats to open an available camera."""
+    attempts_log = []
+
     for idx in [0, 1, 2, 3]:
         # 1. Try V4L2 with MJPG pixel format (required by Sonix and laptop webcams)
         try:
@@ -183,9 +208,12 @@ def _find_webcam_capture(cv2):
                 if ret and frame is not None:
                     logger.info(f"Webcam opened successfully on index {idx} (V4L2 MJPG)")
                     return cap
+                attempts_log.append(f"idx={idx} V4L2/MJPG: opened but read() returned no frame")
                 cap.release()
-        except Exception:
-            pass
+            else:
+                attempts_log.append(f"idx={idx} V4L2/MJPG: could not open (no such device or in use)")
+        except Exception as e:
+            attempts_log.append(f"idx={idx} V4L2/MJPG: exception — {e}")
 
         # 2. Fallback to default backend with MJPG
         try:
@@ -196,9 +224,12 @@ def _find_webcam_capture(cv2):
                 if ret and frame is not None:
                     logger.info(f"Webcam opened successfully on index {idx} (MJPG)")
                     return cap
+                attempts_log.append(f"idx={idx} default/MJPG: opened but read() returned no frame")
                 cap.release()
-        except Exception:
-            pass
+            else:
+                attempts_log.append(f"idx={idx} default/MJPG: could not open")
+        except Exception as e:
+            attempts_log.append(f"idx={idx} default/MJPG: exception — {e}")
 
         # 3. Fallback to default backend standard
         try:
@@ -208,14 +239,44 @@ def _find_webcam_capture(cv2):
                 if ret and frame is not None:
                     logger.info(f"Webcam opened successfully on index {idx}")
                     return cap
+                attempts_log.append(f"idx={idx} default: opened but read() returned no frame")
                 cap.release()
-        except Exception:
-            pass
+            else:
+                attempts_log.append(f"idx={idx} default: could not open")
+        except Exception as e:
+            attempts_log.append(f"idx={idx} default: exception — {e}")
+
+    # 4. GStreamer/libcamerasrc — tried once, not per-index. Some newer laptop
+    # cameras (MIPI/IPU6, common on recent Wayland-first hardware) only
+    # expose themselves via libcamera/PipeWire and don't work through
+    # classic V4L2 at all. libcamerasrc auto-selects the first camera rather
+    # than taking a numeric index the way V4L2 does.
+    try:
+        pipeline = "libcamerasrc ! video/x-raw,width=640,height=480 ! videoconvert ! appsink"
+        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                logger.info("Webcam opened successfully via GStreamer/libcamerasrc")
+                return cap
+            attempts_log.append("gstreamer/libcamerasrc: opened but read() returned no frame")
+            cap.release()
+        else:
+            attempts_log.append("gstreamer/libcamerasrc: could not open (GStreamer/libcamera may not be installed)")
+    except Exception as e:
+        attempts_log.append(f"gstreamer/libcamerasrc: exception — {e}")
+
+    logger.error(
+        "Could not open any webcam after trying indices 0-3 across V4L2/default backends, "
+        "plus a GStreamer/libcamerasrc fallback:\n"
+        + "\n".join(f"  - {a}" for a in attempts_log)
+    )
     return None
 
 
 def _camera_loop():
-    global _camera_active, _latest_frame, _latest_encoded_frame
+    global _camera_active, _latest_frame, _latest_encoded_frame, _camera_open_failed
+    global _uinput_available, _mouse_backend_status
 
     try:
         import cv2
@@ -226,8 +287,8 @@ def _camera_loop():
 
     screen_w, screen_h = _get_screen_size()
     uinput_mouse = None
+    uinput_error = ""
     try:
-        import evdev
         from evdev import UInput, ecodes as e
         # Use EV_REL (relative movement) — GNOME Wayland treats EV_ABS as a touchscreen,
         # only EV_REL is recognised as a real pointer and actually moves the cursor.
@@ -236,27 +297,65 @@ def _camera_loop():
             e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE],
         }
         uinput_mouse = UInput(cap_events, name='jarvis-air-mouse')
+        # Opening the device node can succeed even when writes will fail (some
+        # permission/SELinux/AppArmor configurations allow open() but not
+        # write()) — a zero-delta test write catches that case now, rather
+        # than silently doing nothing on every real gesture later.
+        uinput_mouse.write(e.EV_REL, e.REL_X, 0)
+        uinput_mouse.syn()
         logger.info("Kernel /dev/uinput virtual relative mouse initialized for GNOME Wayland!")
     except Exception as _ue:
+        uinput_error = str(_ue)
         logger.warning(f"uinput mouse unavailable: {_ue}")
+        if uinput_mouse:
+            try: uinput_mouse.close()
+            except Exception: pass
+        uinput_mouse = None
 
     mouse = None
+    pynput_error = ""
     try:
         from pynput.mouse import Controller, Button
         mouse = Controller()
     except Exception as e:
+        pynput_error = str(e)
         logger.warning(f"pynput mouse controller unavailable ({e}). Cursor control disabled.")
+
+    if not uinput_mouse and mouse:
+        logger.warning(
+            "Only pynput is available for cursor control, no uinput. On native Wayland "
+            "(GNOME), pynput's absolute positioning frequently does not move the real "
+            "system cursor at all, even though it initializes without error — gestures "
+            "will still be DETECTED (static poses like palm/fist will still fire), but "
+            "the cursor itself likely won't move. Fix uinput permissions for reliable "
+            "Wayland cursor control — see get_webcam_diagnostics for details."
+        )
+
+    _uinput_available = uinput_mouse is not None
+    if uinput_mouse:
+        _mouse_backend_status = "uinput (reliable on Wayland)"
+    elif mouse:
+        _mouse_backend_status = (
+            f"pynput only (uinput failed: {uinput_error or 'unknown error'}) — "
+            f"cursor movement will likely NOT work on native Wayland"
+        )
+    else:
+        _mouse_backend_status = f"NONE available (uinput: {uinput_error or 'failed'}; pynput: {pynput_error or 'failed'})"
 
     logger.info("Starting webcam monitoring loop with hand mouse control...")
     cap = _find_webcam_capture(cv2)
     if cap is None or not cap.isOpened():
         logger.error("Could not open any webcam device.")
+        _camera_open_failed = True
         _camera_active = False
+        _camera_ready_event.set()
         if uinput_mouse:
             try: uinput_mouse.close()
             except Exception: pass
         return
 
+    _camera_open_failed = False
+    _camera_ready_event.set()
 
     _start_mjpeg_stream_server()
 
@@ -270,6 +369,23 @@ def _camera_loop():
     is_dragging = False
     pinch_start_time = 0.0
     last_click_time = 0.0
+    last_right_click_time = 0.0
+    was_right_pinched = False
+
+    # Two-finger (index+middle) scroll tracking
+    scroll_ref_y = None
+    did_scroll_this_hold = False
+    SCROLL_MOVE_THRESHOLD = 0.018   # normalized y-delta per frame to register as a scroll tick
+    SCROLL_TICKS_PER_UNIT = 3       # scroll wheel "clicks" per gesture tick
+
+    # Open-palm swipe (window switching) tracking
+    swipe_ref_x = None
+    swipe_start_time = 0.0
+    did_swipe_this_hold = False
+    last_swipe_time = 0.0
+    SWIPE_MIN_DISTANCE = 0.16       # normalized x-distance to count as a swipe
+    SWIPE_MAX_DURATION = 0.5        # must happen within this many seconds
+    SWIPE_COOLDOWN = 1.0
 
     last_action_gesture = ""
     last_action_time = 0.0
@@ -285,7 +401,33 @@ def _camera_loop():
     except Exception:
         pass
 
+    # Auto-release: continuous camera capture + per-frame hand tracking is a
+    # real CPU/GPU cost. If no hand gesture has been seen AND nobody's
+    # actively viewing the video feed for this long, stop the loop and
+    # release the camera rather than running it forever on the off-chance a
+    # hand appears. Re-enable any time with start_webcam_guard. Checking
+    # BOTH signals (not just hand detection) matters: someone watching their
+    # camera preview without gesturing shouldn't see it silently die.
+    idle_timeout = float(os.getenv("JARVIS_GESTURE_IDLE_TIMEOUT_SEC", "300"))
+    last_hand_seen = time.time()
+    global _last_frame_requested
+    _last_frame_requested = time.time()
+
     while _camera_active:
+        idle_for = time.time() - max(last_hand_seen, _last_frame_requested)
+        if idle_for > idle_timeout:
+            logger.info(f"No hand gesture or feed activity for {idle_timeout:.0f}s — releasing webcam to save CPU/GPU.")
+            try:
+                from agent import send_hud_state
+                send_hud_state({
+                    "state": "notify",
+                    "description": "Gesture control paused (idle) — camera released.",
+                })
+            except Exception:
+                pass
+            _camera_active = False
+            break
+
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.01)
@@ -330,6 +472,7 @@ def _camera_loop():
                     landmarks = results.multi_hand_landmarks[0].landmark
 
             if landmarks:
+                last_hand_seen = time.time()
                 # Landmark 8: Index Tip, Landmark 4: Thumb Tip, Landmark 0: Wrist, Landmark 9: Middle MCP
                 index_x, index_y = landmarks[8].x, landmarks[8].y
                 thumb_x, thumb_y = landmarks[4].x, landmarks[4].y
@@ -398,7 +541,6 @@ def _camera_loop():
                             except Exception: pass
                         if mouse:
                             try:
-                                from pynput.mouse import Button
                                 mouse.press(Button.left)
                             except Exception: pass
 
@@ -418,7 +560,6 @@ def _camera_loop():
                             except Exception: pass
                         if mouse:
                             try:
-                                from pynput.mouse import Button
                                 mouse.release(Button.left)
                             except Exception: pass
 
@@ -428,14 +569,12 @@ def _camera_loop():
                                 logger.info("Double pinch detected -> Double Click")
                                 if mouse:
                                     try:
-                                        from pynput.mouse import Button
                                         mouse.click(Button.left, 2)
                                     except Exception: pass
                             else:
                                 logger.info("Short pinch detected -> Single Click")
                                 if mouse:
                                     try:
-                                        from pynput.mouse import Button
                                         mouse.click(Button.left, 1)
                                     except Exception: pass
 
@@ -445,15 +584,99 @@ def _camera_loop():
                     cv2.circle(frame, (ix_px, iy_px), 8, (0, 255, 0), cv2.FILLED)
                     cv2.putText(frame, f"INDEX CURSOR ({curr_x}, {curr_y})", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
+                    # RIGHT-CLICK: thumb + middle-finger pinch (only when not also
+                    # doing a left-click/drag pinch with the index finger).
+                    middle_x, middle_y = landmarks[12].x, landmarks[12].y
+                    right_pinch_raw = np.hypot(middle_x - thumb_x, middle_y - thumb_y)
+                    is_right_pinched = (right_pinch_raw / hand_scale) < 0.28
+
+                    if is_right_pinched and not was_right_pinched and (now - last_right_click_time) > 0.5:
+                        logger.info("Thumb-middle pinch detected -> Right Click")
+                        if mouse:
+                            try:
+                                mouse.click(Button.right, 1)
+                            except Exception:
+                                pass
+                        last_right_click_time = now
+                        cv2.putText(frame, "RIGHT CLICK", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 140, 255), 2)
+                    was_right_pinched = is_right_pinched
+
                 # Action Gestures (Victory, Fist, Palm, Thumbs Up/Down, Point Up, Rock On)
                 gesture = _analyze_gesture(landmarks)
                 if gesture:
                     cv2.putText(frame, f"GESTURE: {gesture}", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
-                    if (gesture != last_action_gesture or (now - last_action_time) > action_cooldown):
+
+                # SCROLL: hold a two-finger "VICTORY" pose and move the hand up/down
+                # to scroll continuously — direct pynput call, no LLM round-trip,
+                # so it stays low-latency.
+                if gesture == "VICTORY":
+                    scroll_y = (landmarks[8].y + landmarks[12].y) / 2.0
+                    if scroll_ref_y is None:
+                        scroll_ref_y = scroll_y
+                        did_scroll_this_hold = False
+                    else:
+                        dy = scroll_y - scroll_ref_y
+                        if abs(dy) > SCROLL_MOVE_THRESHOLD:
+                            # Screen y grows downward; scroll wheel "up" is positive.
+                            direction = -1 if dy > 0 else 1
+                            if mouse:
+                                try:
+                                    mouse.scroll(0, direction * SCROLL_TICKS_PER_UNIT)
+                                except Exception:
+                                    pass
+                            scroll_ref_y = scroll_y
+                            did_scroll_this_hold = True
+                            cv2.putText(frame, "SCROLLING", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
+                else:
+                    scroll_ref_y = None
+
+                # WINDOW SWITCH: hold an open PALM and swipe the hand horizontally
+                # (fast, short motion) to switch to the next/previous window.
+                if gesture == "PALM":
+                    if swipe_ref_x is None:
+                        swipe_ref_x = wrist_x
+                        swipe_start_time = now
+                    else:
+                        dx_swipe = wrist_x - swipe_ref_x
+                        elapsed = now - swipe_start_time
+                        if elapsed <= SWIPE_MAX_DURATION and abs(dx_swipe) >= SWIPE_MIN_DISTANCE and (now - last_swipe_time) > SWIPE_COOLDOWN:
+                            # Mirrored frame: hand moving screen-right = dx_swipe > 0
+                            forward = dx_swipe > 0
+                            try:
+                                import pyautogui
+                                if forward:
+                                    pyautogui.hotkey("alt", "tab")
+                                else:
+                                    pyautogui.hotkey("alt", "shift", "tab")
+                                logger.info(f"Palm swipe detected -> window switch ({'next' if forward else 'previous'})")
+                                cv2.putText(frame, "WINDOW SWITCH", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 255), 2)
+                            except Exception as _swipe_e:
+                                logger.debug(f"Window-switch swipe failed: {_swipe_e}")
+                            did_swipe_this_hold = True
+                            last_swipe_time = now
+                            swipe_ref_x = wrist_x
+                            swipe_start_time = now
+                        elif elapsed > SWIPE_MAX_DURATION:
+                            # Rolling window: forget stale reference, start a fresh one
+                            swipe_ref_x = wrist_x
+                            swipe_start_time = now
+                else:
+                    swipe_ref_x = None
+
+                if gesture:
+                    # Only fire the discrete one-shot action (e.g. VICTORY -> system
+                    # status, PALM -> screenshot) if this hold wasn't actually used
+                    # for continuous scrolling/swiping.
+                    suppressed = (gesture == "VICTORY" and did_scroll_this_hold) or \
+                                 (gesture == "PALM" and did_swipe_this_hold)
+                    if not suppressed and (gesture != last_action_gesture or (now - last_action_time) > action_cooldown):
                         last_action_time = now
                         last_action_gesture = gesture
                         logger.info(f"Gesture detected: {gesture}")
                         _handle_gesture_action(gesture)
+                else:
+                    did_scroll_this_hold = False
+                    did_swipe_this_hold = False
             else:
                 if (now - last_action_time) > 0.8:
                     last_action_gesture = ""
@@ -480,7 +703,6 @@ def _camera_loop():
     # Safety release when loop exits
     if mouse and is_dragging:
         try:
-            from pynput.mouse import Button
             mouse.release(Button.left)
         except Exception:
             pass
@@ -566,23 +788,60 @@ async def start_webcam_guard() -> str:
     """
     global _camera_active, _camera_thread
 
-    try:
-        import cv2
-    except ImportError:
+    import importlib.util
+    if importlib.util.find_spec("cv2") is None:
         return ("OpenCV is not installed. Run:\n"
                 "  pip install opencv-python mediapipe --break-system-packages")
 
     if _camera_active:
         return "Webcam monitoring is already active, sir."
 
+    _camera_ready_event.clear()
     _camera_active = True
     _camera_thread = threading.Thread(target=_camera_loop, daemon=True)
     _camera_thread.start()
 
-    return ("Webcam activated. I have visual contact, sir.\n"
+    # Wait briefly for _camera_loop to actually confirm the camera opened (or
+    # failed) before claiming success — previously this returned "I have
+    # visual contact" immediately, regardless of whether the background
+    # thread went on to fail silently a moment later.
+    loop = asyncio.get_event_loop()
+    opened_in_time = await loop.run_in_executor(None, lambda: _camera_ready_event.wait(timeout=6.0))
+
+    if not opened_in_time:
+        return (
+            "Still trying to open the webcam — it's taking longer than expected. "
+            "It may still connect in the background; ask me to check again in a moment, "
+            "or ask for webcam diagnostics if this keeps happening."
+        )
+
+    if _camera_open_failed:
+        return (
+            "I couldn't open any webcam device, sir. Run `ls /dev/video*` to check if a camera "
+            "device exists, and make sure you're in the 'video' group (sudo usermod -aG video $USER, "
+            "then re-log in). Ask for webcam diagnostics for more detail on what was tried."
+        )
+
+    cursor_note = ""
+    if not _uinput_available:
+        cursor_note = (
+            "\n\nHeads up: cursor movement may not actually work — "
+            f"{_mouse_backend_status}. Static gestures (palm, fist, etc.) will still work fine "
+            "regardless, since those don't need mouse control. Ask for webcam diagnostics for details."
+        )
+
+    return ("Webcam activated. I have visual contact, sir." + cursor_note + "\n"
+            "Cursor & clicks:\n"
+            "  ☝️ Index finger → move cursor\n"
+            "  🤏 Thumb+Index pinch (tap) → left click / double-click\n"
+            "  🤏 Thumb+Index pinch (hold+move) → drag and drop\n"
+            "  🤏 Thumb+Middle pinch (tap) → right click\n"
+            "  ✌️ Victory pose, move up/down → scroll\n"
+            "  ✋ Open palm, quick swipe left/right → switch window\n"
+            "Static shortcuts (hold pose still):\n"
             "  ✊ FIST → pause playback\n"
-            "  ✋ PALM → take screenshot\n"
-            "  ✌️ VICTORY → system status\n"
+            "  ✋ PALM (held still) → take screenshot\n"
+            "  ✌️ VICTORY (held still) → system status\n"
             "  👍 THUMBS UP → resume playback\n"
             "  👎 THUMBS DOWN → mute volume\n"
             "  👆 POINT UP → volume up\n"
@@ -600,6 +859,98 @@ async def stop_webcam_guard() -> str:
 
 
 @function_tool
+async def get_webcam_diagnostics() -> str:
+    """
+    Runs a full diagnostic check on the webcam/gesture-control pipeline and
+    reports exactly what's working and what isn't — session type (X11 vs
+    Wayland), video devices found, a live camera-open test across all
+    backends, mouse-input backend availability (uinput vs pynput), and the
+    video feed HTTP server status. Use this when video feed or gesture
+    control isn't working and you need to know WHY, not just that it isn't.
+    """
+    lines = ["Webcam/gesture-control diagnostics:"]
+
+    # Session type — matters because pynput's default backend doesn't work
+    # under native Wayland (no X11 to talk to), while uinput works regardless.
+    session_type = os.environ.get("XDG_SESSION_TYPE", "unknown")
+    wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
+    x_display = os.environ.get("DISPLAY", "")
+    lines.append(f"• Session: XDG_SESSION_TYPE={session_type}, WAYLAND_DISPLAY={wayland_display or '(unset)'}, DISPLAY={x_display or '(unset)'}")
+
+    # Video devices actually present at the OS level.
+    try:
+        video_devices = sorted(f for f in os.listdir("/dev") if f.startswith("video"))
+    except OSError:
+        video_devices = []
+    lines.append(f"• Video devices in /dev: {', '.join(video_devices) if video_devices else '(none found)'}")
+
+    # Is the current user in the 'video' group? (common permission gate for /dev/video*)
+    try:
+        import grp
+        video_group_members = grp.getgrnam("video").gr_mem
+        current_user = os.environ.get("USER", "")
+        in_video_group = current_user in video_group_members
+        lines.append(f"• User '{current_user}' in 'video' group: {in_video_group}")
+    except Exception:
+        pass
+
+    # Live camera-open test — reuses the same probing logic start_webcam_guard uses.
+    try:
+        import cv2
+        was_active = _camera_active
+        if not was_active:
+            cap = _find_webcam_capture(cv2)
+            if cap is not None:
+                lines.append("• Camera open test: SUCCESS (a backend was able to open and read a frame)")
+                cap.release()
+            else:
+                lines.append("• Camera open test: FAILED — see JARVIS's logs for the detailed per-attempt error list just logged")
+        else:
+            lines.append("• Camera open test: skipped (webcam guard is already running — stop it first to test cleanly)")
+    except ImportError:
+        lines.append("• Camera open test: opencv-python is not installed")
+
+    # Input backends for gesture cursor control.
+    uinput_ok, uinput_err = False, ""
+    try:
+        from evdev import UInput, ecodes as e
+        test_device = UInput({e.EV_REL: [e.REL_X, e.REL_Y]}, name='jarvis-diagnostic-test')
+        test_device.close()
+        uinput_ok = True
+    except Exception as ue:
+        uinput_err = str(ue)
+    lines.append(f"• uinput virtual mouse (works on Wayland): {'OK' if uinput_ok else f'FAILED — {uinput_err}'}")
+    if not uinput_ok:
+        lines.append("  → run: bash setup_uinput_permissions.sh (in the JARVIS project directory), then log out and back in")
+
+    pynput_ok, pynput_err = False, ""
+    try:
+        from pynput.mouse import Controller
+        Controller()
+        pynput_ok = True
+    except Exception as pe:
+        pynput_err = str(pe)
+    lines.append(f"• pynput mouse controller (X11/XWayland only): {'OK' if pynput_ok else f'unavailable — {pynput_err}'}")
+
+    if not uinput_ok and not pynput_ok:
+        lines.append("  ⚠ NEITHER mouse backend works — gesture cursor control cannot function until at least one is fixed.")
+    elif session_type == "wayland" and not uinput_ok:
+        lines.append("  ⚠ On Wayland, pynput alone usually can't move the cursor — fixing uinput access is the real fix here.")
+
+    # Video feed HTTP server status.
+    lines.append(f"• Video feed HTTP server bound: {_http_server is not None and _http_server is not True}")
+    lines.append(f"• Gesture guard currently active: {_camera_active}")
+    if _camera_active:
+        lines.append(f"• Live cursor-control backend in use right now: {_mouse_backend_status or '(not yet determined)'}")
+    if _camera_active:
+        idle_for = time.time() - _last_frame_requested if _last_frame_requested else None
+        if idle_for is not None:
+            lines.append(f"• Seconds since video feed was last requested by a client: {idle_for:.0f}")
+
+    return "\n".join(lines)
+
+
+@function_tool
 async def analyze_webcam_frame_vlm(user_question: str) -> str:
     """
     Looks through the active webcam and answers the user's question about the image
@@ -608,10 +959,7 @@ async def analyze_webcam_frame_vlm(user_question: str) -> str:
     Args:
         user_question: What you want JARVIS to look for or describe (e.g. 'Read the text on the object I am holding').
     """
-    global _latest_frame
-
     # If camera is not active, boot it temporarily, capture, and stop it
-    temp_camera = False
     try:
         import cv2
     except ImportError:
@@ -671,7 +1019,7 @@ async def analyze_webcam_frame_vlm(user_question: str) -> str:
             return f"The local vision server returned an error: Code {resp.status_code}. Make sure LM Studio is running a Vision-enabled model."
     except Exception as e:
         logger.error(f"Local VLM connection failed: {e}")
-        return f"I couldn't contact my visual sub-agent at port 1234. Make sure LM Studio is active."
+        return f"I couldn't contact my visual sub-agent at {base_url}. Make sure LM Studio (or your configured LOCAL_LLM_URL) is active."
 
 
 @function_tool
