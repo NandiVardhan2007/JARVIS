@@ -25,8 +25,14 @@ class _CameraCardState extends State<CameraCard> {
   @override
   void initState() {
     super.initState();
-    // Poll snapshot frames at ~25fps (40ms interval) for smooth live video
-    _frameTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _frameTimer?.cancel();
+    // Use 50ms interval when online for live stream, 2.5s interval when offline to prevent socket exception floods
+    final duration = _isOnline ? const Duration(milliseconds: 50) : const Duration(milliseconds: 2500);
+    _frameTimer = Timer.periodic(duration, (_) {
       if (mounted) {
         setState(() {
           _seq++;
@@ -102,7 +108,10 @@ class _CameraCardState extends State<CameraCard> {
                 errorBuilder: (context, error, stackTrace) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (_isOnline && mounted) {
-                      setState(() => _isOnline = false);
+                      setState(() {
+                        _isOnline = false;
+                        _startTimer();
+                      });
                     }
                   });
                   return const Center(
@@ -143,7 +152,10 @@ class _CameraCardState extends State<CameraCard> {
                   if (loadingProgress == null) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (!_isOnline && mounted) {
-                        setState(() => _isOnline = true);
+                        setState(() {
+                          _isOnline = true;
+                          _startTimer();
+                        });
                       }
                     });
                     return child;

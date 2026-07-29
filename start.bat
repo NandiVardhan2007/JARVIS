@@ -19,23 +19,23 @@ if not exist "venv\Scripts\python.exe" (
 
 :: Clear log file
 if exist "VISION.log" del "VISION.log"
-echo [start] Reset VISION.log — recording clean logs for this session...
+echo [start] Reset VISION.log - recording clean logs for this session...
 
 :: 1. Start WebSocket Bridge in Background
-echo [start] (1/3) Starting bridge on ws://127.0.0.1:8765 ...
+echo [start] 1 of 3: Starting bridge on ws://127.0.0.1:8765 ...
 start /B venv\Scripts\python.exe vision_bridge.py > vision_bridge.log 2>&1
 
 :: 2. Launch Flutter Frontend in Background
 where flutter >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [start] (2/3) Launching Flutter face frontend...
+    echo [start] 2 of 3: Launching Flutter face frontend...
     start /B cmd /c "cd /d vision_face && flutter run -d windows"
 ) else (
-    echo [start] (2/3) Flutter CLI not found on PATH. Skipping Flutter GUI launch.
+    echo [start] 2 of 3: Flutter CLI not found on PATH. Skipping Flutter GUI launch.
 )
 
 :: 3. Launch VISION Backend
-echo [start] (3/3) Booting VISION backend...
+echo [start] 3 of 3: Booting VISION backend...
 echo ==============================================================
 set "VISION_HUD_HIDDEN=1"
 venv\Scripts\python.exe vision_launcher.py

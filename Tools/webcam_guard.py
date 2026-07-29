@@ -664,12 +664,12 @@ def _camera_loop():
                     swipe_ref_x = None
 
                 if gesture:
-                    # Only fire the discrete one-shot action (e.g. VICTORY -> system
-                    # status, PALM -> screenshot) if this hold wasn't actually used
+                    # Only fire discrete one-shot action if this hold wasn't actually used
                     # for continuous scrolling/swiping.
                     suppressed = (gesture == "VICTORY" and did_scroll_this_hold) or \
                                  (gesture == "PALM" and did_swipe_this_hold)
-                    if not suppressed and (gesture != last_action_gesture or (now - last_action_time) > action_cooldown):
+                    action_cooldown = 5.0  # Require 5s minimum between discrete static gesture actions
+                    if not suppressed and gesture != last_action_gesture and (now - last_action_time) > action_cooldown:
                         last_action_time = now
                         last_action_gesture = gesture
                         logger.info(f"Gesture detected: {gesture}")
@@ -677,9 +677,8 @@ def _camera_loop():
                 else:
                     did_scroll_this_hold = False
                     did_swipe_this_hold = False
-            else:
-                if (now - last_action_time) > 0.8:
-                    last_action_gesture = ""
+                    if (now - last_action_time) > 2.0:
+                        last_action_gesture = ""
 
 
 
