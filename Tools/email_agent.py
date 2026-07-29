@@ -1,7 +1,7 @@
 """Email Agent — full Gmail IMAP read + SMTP send.
 
-Extends JARVIS from send-only to a complete email assistant.
-Uses imaplib + email (stdlib, zero new deps). Reuses JARVIS_EMAIL / JARVIS_EMAIL_PASSWORD.
+Extends VISION from send-only to a complete email assistant.
+Uses imaplib + email (stdlib, zero new deps). Reuses VISION_EMAIL / VISION_EMAIL_PASSWORD.
 """
 
 import email
@@ -19,8 +19,8 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-SENDER_EMAIL = os.getenv("JARVIS_EMAIL", "")
-SENDER_PASSWORD = os.getenv("JARVIS_EMAIL_PASSWORD", "")
+SENDER_EMAIL = os.getenv("VISION_EMAIL", "")
+SENDER_PASSWORD = os.getenv("VISION_EMAIL_PASSWORD", "")
 
 IMAP_SERVER = "imap.gmail.com"
 IMAP_PORT = 993
@@ -35,7 +35,7 @@ def _get_imap():
     if not SENDER_EMAIL or not SENDER_PASSWORD:
         raise RuntimeError(
             "Email credentials not configured. "
-            "Set JARVIS_EMAIL and JARVIS_EMAIL_PASSWORD in .env."
+            "Set VISION_EMAIL and VISION_EMAIL_PASSWORD in .env."
         )
     conn = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     conn.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -478,7 +478,7 @@ async def summarize_email(email_id: str, folder: str = "INBOX") -> str:
         body = _extract_text(msg)[:5000]
 
         system = (
-            "You are JARVIS, an email analyst. Provide a structured summary of this email.\n"
+            "You are VISION, an email analyst. Provide a structured summary of this email.\n"
             "Extract and format as follows:\n"
             "**From:** sender name/org\n"
             "**Summary:** 1-2 sentence overview of the email's purpose\n"

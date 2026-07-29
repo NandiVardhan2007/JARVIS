@@ -1,6 +1,6 @@
 """Web Scraper Agent — httpx + BeautifulSoup for content extraction.
 
-Fixes the shallow-search problem: JARVIS can now fetch and parse any URL,
+Fixes the shallow-search problem: VISION can now fetch and parse any URL,
 extract clean text, pull tables, and list links.
 """
 
@@ -231,7 +231,7 @@ async def take_web_screenshot(url: str) -> str:
         import os
         import urllib.parse
 
-        output_dir = "/run/media/nandu/Data/JARVIS/JARVIS_Screenshots"
+        output_dir = "/run/media/nandu/Data/VISION/VISION_Screenshots"
         os.makedirs(output_dir, exist_ok=True)
         hti = Html2Image(output_path=output_dir)
 
@@ -332,7 +332,7 @@ async def ai_summarize_page(url: str) -> str:
         title = soup.title.string.strip() if soup.title and soup.title.string else urlparse(url).netloc
         
         system = (
-            "You are JARVIS, a web research assistant. Analyze the webpage content and provide "
+            "You are VISION, a web research assistant. Analyze the webpage content and provide "
             "a structured, actionable summary.\n\n"
             "Format:\n"
             "## Summary\n"

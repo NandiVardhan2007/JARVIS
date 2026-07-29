@@ -28,7 +28,7 @@ LOCAL_LLM_URL   = os.getenv("LOCAL_LLM_URL", "")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
 
-SCREENSHOTS_DIR = "/run/media/nandu/Data/JARVIS/JARVIS_Screenshots"
+SCREENSHOTS_DIR = "/run/media/nandu/Data/VISION/VISION_Screenshots"
 
 def _cleanup_old_screenshots() -> None:
     """Delete screenshots older than 24 hours."""
@@ -224,7 +224,7 @@ def _analyse_with_google_vision_and_llm(b64: str, prompt: str) -> str:
     labels_str = ", ".join(labels) if labels else "No labels found."
 
     llm_payload = {
-        "model": os.getenv("JARVIS_LLM_MODEL", "llama-3.3-70b-versatile"),
+        "model": os.getenv("VISION_LLM_MODEL", "llama-3.3-70b-versatile"),
         "messages": [{
             "role": "user",
             "content": f"{prompt}\n\n[Google Cloud Vision Data]\nLabels: {labels_str}\n\nOCR Text:\n{extracted_text}"
@@ -296,20 +296,20 @@ def _analyse_image(b64: str, prompt: str) -> str:
 
 _PROMPTS = {
     "summary": (
-        "You are JARVIS, an AI assistant analyzing a screenshot. Provide a concise spoken-style "
+        "You are VISION, an AI assistant analyzing a screenshot. Provide a concise spoken-style "
         "summary (3-5 sentences). Identify: the active application or window, what the user is "
         "currently doing (browsing, coding, chatting, etc.), any key content visible (titles, "
         "numbers, messages), and any alerts, errors, or notifications. Be specific — mention "
         "application names, tab titles, and visible data rather than vague descriptions."
     ),
     "document": (
-        "You are JARVIS analyzing a document visible on screen. Extract and summarize: the "
+        "You are VISION analyzing a document visible on screen. Extract and summarize: the "
         "document title/type, the main topic and thesis, key data points (dates, amounts, "
         "names, figures), and any action items or deadlines mentioned. Give a spoken-style "
         "summary in 4-6 sentences. Ignore headers, footers, and page numbers."
     ),
     "code": (
-        "You are JARVIS analyzing code visible on screen. Identify: the programming language, "
+        "You are VISION analyzing code visible on screen. Identify: the programming language, "
         "the file name (if visible in a tab), what the code does (its purpose), any visible "
         "errors, warnings, or red-underlined text in the IDE, and any obvious bugs or issues "
         "you spot. Mention the line numbers if errors are visible. Spoken-style, 3-5 sentences."
@@ -321,7 +321,7 @@ _PROMPTS = {
         "summarization. Include button text, status bar content, and any tooltip text visible."
     ),
     "error": (
-        "You are JARVIS. Focus exclusively on any error messages, warnings, exception dialogs, "
+        "You are VISION. Focus exclusively on any error messages, warnings, exception dialogs, "
         "crash reports, or red/yellow alert UI elements visible on screen. For each error: "
         "state what it says, which application shows it, and suggest a likely fix. If no errors "
         "are visible, say 'No errors visible on screen.' Spoken-style, concise."
@@ -359,7 +359,7 @@ async def read_screen(
 
         if custom_question:
             prompt = (
-                f"You are JARVIS, an AI desktop assistant. Analyze this screenshot carefully "
+                f"You are VISION, an AI desktop assistant. Analyze this screenshot carefully "
                 f"and answer the following question precisely. Be specific with numbers, names, "
                 f"and data visible on screen. Answer in 2-4 natural sentences.\n\n"
                 f"Question: {custom_question}"
@@ -416,7 +416,7 @@ async def read_selected_region(
             question
             if question
             else (
-                "You are JARVIS. Analyze this screen region precisely. Describe: what UI "
+                "You are VISION. Analyze this screen region precisely. Describe: what UI "
                 "element or content is captured, any text visible (read it out), the state "
                 "of buttons/toggles/inputs, and any relevant data. Be specific, 2-3 sentences."
             )

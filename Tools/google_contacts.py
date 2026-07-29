@@ -118,7 +118,7 @@ async def search_google_contact(name: str) -> str:
             
     except Exception as e:
         logger.error(f"search_google_contact error: {e}")
-        return f"Failed to search Google Contacts: {e}. If it is a permission error, please delete token.pickle and restart JARVIS."
+        return f"Failed to search Google Contacts: {e}. If it is a permission error, please delete token.pickle and restart VISION."
 
 
 __all__ = ["search_google_contact"]

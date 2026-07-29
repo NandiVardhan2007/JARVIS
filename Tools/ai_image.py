@@ -33,16 +33,16 @@ async def generate_ai_video(
 
     Args:
         prompt: English description of the video to generate.
-        output_path: Where to save the video (defaults to JARVIS/Output/Media).
+        output_path: Where to save the video (defaults to VISION/Output/Media).
         duration: Length in seconds (default: 3).
         fps: Frames per second (default: 24).
         model: AI model to use (default: "runway").
         timeout: Maximum wait time in seconds (default: 120).
     """
     if output_path is None:
-        save_dir = "/run/media/nandu/Data/JARVIS/Output/Media"
+        save_dir = "/run/media/nandu/Data/VISION/Output/Media"
         os.makedirs(save_dir, exist_ok=True)
-        output_path = os.path.join(save_dir, f"jarvis_{datetime.now().strftime('%H%M%S')}.mp4")
+        output_path = os.path.join(save_dir, f"vision_{datetime.now().strftime('%H%M%S')}.mp4")
 
     url = (f"{VIDEO_BASE}/prompt/{urllib.parse.quote(prompt)}"
            f"?duration={duration}&model={model}")
@@ -119,7 +119,7 @@ async def generate_local_image_comfyui(prompt: str, model_name: str = "novaReali
           "6": {"inputs": {"text": prompt, "clip": ["4", 1]}, "class_type": "CLIPTextEncode"},
           "7": {"inputs": {"text": f"{negative_prompt}, text, watermark, ugly, deformed, poorly drawn", "clip": ["4", 1]}, "class_type": "CLIPTextEncode"},
           "8": {"inputs": {"samples": ["3", 0], "vae": ["4", 2]}, "class_type": "VAEDecode"},
-          "9": {"inputs": {"filename_prefix": "jarvis_wa", "images": ["8", 0]}, "class_type": "SaveImage"}
+          "9": {"inputs": {"filename_prefix": "vision_wa", "images": ["8", 0]}, "class_type": "SaveImage"}
         }
 
     try:

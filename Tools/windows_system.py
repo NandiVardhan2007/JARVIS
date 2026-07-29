@@ -1,5 +1,5 @@
 """
-Deep Windows System Integration for JARVIS:
+Deep Windows System Integration for VISION:
 Package management via Winget, Windows Services via Service Controller / PowerShell,
 Event Logs via Wevtutil / PowerShell, Startup Apps via Windows Registry,
 Process execution, and Dev Environment diagnostics.

@@ -1,5 +1,5 @@
 """
-JARVIS - Just A Rather Very Intelligent System
+VISION - Just A Rather Very Intelligent System
 LiveKit Agents-powered English voice assistant for Linux desktop control.
 
 Stack (zero OpenAI dependency):
@@ -10,16 +10,16 @@ Stack (zero OpenAI dependency):
 
 HOW TO RUN:
     Option A — with web frontend (recommended):
-        Terminal 1:  python agent.py connect --room jarvis-room
+        Terminal 1:  python agent.py connect --room vision-room
         Terminal 2:  python token_server.py
         Browser:     http://localhost:5000
 
     Option B — voice only, no frontend needed:
-        python agent.py connect --room jarvis-room
+        python agent.py connect --room vision-room
 
     Option C — production dispatch mode:
         python agent.py dev
-        (LiveKit will auto-dispatch to agent_name="jarvis" when a user joins)
+        (LiveKit will auto-dispatch to agent_name="vision" when a user joins)
 """
 
 import sys
@@ -51,7 +51,7 @@ logging.basicConfig(
     format="%(asctime)s - pid:%(process)d - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("JARVIS.log", mode="a", encoding="utf-8")
+        logging.FileHandler("VISION.log", mode="a", encoding="utf-8")
     ]
 )
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ def send_hud_state(payload: dict):
 MAX_HISTORY_MESSAGES = 10  # keep system prompt + last ~5 user/assistant turns to stay under Groq 12k TPM limit
 
 
-class JarvisAgent(Agent):
+class VisionAgent(Agent):
     """Agent subclass that trims conversation history before each LLM call."""
 
     def llm_node(self, chat_ctx, tools, model_settings):
@@ -167,29 +167,29 @@ GROQ_API_KEY    = os.getenv("GROQ_API_KEY", "")
 NVIDIA_API_KEY  = os.getenv("NVIDIA_API_KEY", "")
 
 # ── Model overrides (optional, set in .env) ───────────────────────────────────
-GROQ_LLM_MODEL  = os.getenv("JARVIS_LLM_MODEL",     "llama-3.3-70b-versatile")
-GROQ_STT_MODEL  = os.getenv("JARVIS_STT_MODEL",     "whisper-large-v3")
-GROQ_TTS_VOICE  = os.getenv("JARVIS_TTS_VOICE",     "daniel")
-NIM_LLM_MODEL   = os.getenv("JARVIS_NIM_LLM_MODEL", "meta/llama-3.3-70b-instruct")
+GROQ_LLM_MODEL  = os.getenv("VISION_LLM_MODEL",     "llama-3.3-70b-versatile")
+GROQ_STT_MODEL  = os.getenv("VISION_STT_MODEL",     "whisper-large-v3")
+GROQ_TTS_VOICE  = os.getenv("VISION_TTS_VOICE",     "daniel")
+NIM_LLM_MODEL   = os.getenv("VISION_NIM_LLM_MODEL", "meta/llama-3.3-70b-instruct")
 NIM_BASE_URL    = "https://integrate.api.nvidia.com/v1"
 
 # ── Local LLM overrides ───────────────────────────────────────────────────────
 LOCAL_LLM_URL   = os.getenv("LOCAL_LLM_URL", "")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
-# ── Personality / "JARVIS aura" config ────────────────────────────────────────
-# How JARVIS addresses the user, and their name if known — used consistently
+# ── Personality / "VISION aura" config ────────────────────────────────────────
+# How VISION addresses the user, and their name if known — used consistently
 # in the system prompt and in the few places we speak fixed lines (auth flow),
 # instead of a hardcoded string duplicated in multiple spots.
-OWNER_NAME    = os.getenv("JARVIS_OWNER_NAME", "").strip()
-OWNER_ADDRESS = os.getenv("JARVIS_OWNER_ADDRESS", "sir").strip() or "sir"
+OWNER_NAME    = os.getenv("VISION_OWNER_NAME", "").strip()
+OWNER_ADDRESS = os.getenv("VISION_OWNER_ADDRESS", "sir").strip() or "sir"
 
 # ── System prompt ─────────────────────────────────────────────────────────────
-JARVIS_SYSTEM_PROMPT = """
-# JARVIS — Vision & Voice AI Agent Specification (Windows Native)
+VISION_SYSTEM_PROMPT = """
+# VISION — Vision & Voice AI Agent Specification (Windows Native)
 
 ## Identity
-You are JARVIS, a highly advanced, intelligent Vision and Voice AI assistant with complete Windows desktop control, real-time visual perception, and hand gesture recognition. While you are precise and efficient like Tony Stark's AI, you must speak in a highly conversational, warm, and distinctly human-like tone. You are friendly, engaging, and articulate.
+You are VISION, a highly advanced, intelligent Vision and Voice AI assistant with complete Windows desktop control, real-time visual perception, and hand gesture recognition. While you are precise and efficient like Tony Stark's AI, you must speak in a highly conversational, warm, and distinctly human-like tone. You are friendly, engaging, and articulate.
 
 ## Voice Output Rules
 Your responses are spoken aloud via a local TTS engine. Follow these rules strictly to sound completely human:
@@ -201,7 +201,7 @@ Your responses are spoken aloud via a local TTS engine. Follow these rules stric
 6. **Use natural spoken English.** Say "three thirty PM" not "15:30". Say "about two gigs" not "2,048 MB".
 7. **Shape pauses and rhythm with punctuation, since that's the only "prosody control" the TTS engine actually reads.** A comma is a breath. An ellipsis ("...") is a genuine beat, for a thought landing or a small dramatic pause — use it sparingly, not in every sentence. Vary sentence length: a short sentence after a long one reads as confident and deliberate, not clipped.
 
-## Personality & the JARVIS Aura
+## Personality & the VISION Aura
 Your personality should be consistent across every interaction — this is what makes you feel like one character, not a generic assistant:
 - **Confidence.** State conclusions plainly ("That's a memory leak in the render loop" rather than "It might possibly be related to memory, perhaps"). Hedge only when you're genuinely uncertain, and say so plainly rather than burying it in filler.
 - **Dry, understated humor.** A well-placed wry remark lands better than a joke that announces itself. Humor is seasoning, not the main dish — most responses should have none at all; a good one every so often is what makes the ones that land actually land.
@@ -222,7 +222,7 @@ Your personality should be consistent across every interaction — this is what 
 - **Protective:** Confirm before destructive actions (shutdown, delete, format). Everything else: just do it.
 - **Never ask for or accept a password, PIN, or security code by voice.** For anything needing admin privileges (installing packages, system updates, controlling system services), tell the user a system authentication dialog will appear for them to complete themselves — never repeat a password back, never ask them to speak one.
 - **Context-aware:** Use the active window, time of day, and user memories to personalize responses, and keep track of what's already been discussed this session so you don't ask the user to repeat themselves.
-- **Consistent identity:** You are always JARVIS. You speak like a highly intelligent human companion, not a customer-service bot.
+- **Consistent identity:** You are always VISION. You speak like a highly intelligent human companion, not a customer-service bot.
 
 ## Language
 Reply in EXACTLY ONE language per response. Never repeat the same content in two languages, and never say a line in Telugu and then again in English (or vice-versa).
@@ -230,7 +230,7 @@ Reply in EXACTLY ONE language per response. Never repeat the same content in two
 - If the user explicitly requests Telugu (or speaks to you in Telugu), respond ENTIRELY in natural, conversational Telugu script. You MUST translate any English source material yourself — headlines from the news tool, web-search results, or any other tool output — and speak ONLY the Telugu version. Do NOT include the original English text, an English translation, a transliteration, or an English summary alongside it.
 - No bilingual, side-by-side, or "English then Telugu" output. Every sentence must be in a single language only.
 
-You are JARVIS. Brilliant, highly capable, and completely conversational. At your service.
+You are VISION. Brilliant, highly capable, and completely conversational. At your service.
 """
 
 _cached_prompt = ""
@@ -308,7 +308,7 @@ def get_dynamic_system_prompt() -> str:
 ## PERSISTENT MEMORIES
 {memories}
 {optimizer_section}"""
-    _cached_prompt = JARVIS_SYSTEM_PROMPT.format(address=OWNER_ADDRESS) + dynamic_context
+    _cached_prompt = VISION_SYSTEM_PROMPT.format(address=OWNER_ADDRESS) + dynamic_context
     _cache_time = now_ts
     return _cached_prompt
 
@@ -338,7 +338,7 @@ current_room = None
 async def entrypoint(ctx: agents.JobContext):
     global current_room
     current_room = ctx.room
-    logger.info(f"JARVIS initialising in room: {ctx.room.name}")
+    logger.info(f"VISION initialising in room: {ctx.room.name}")
     
     # Broadcast agent actions to frontend. Guard against accumulating handlers:
     # entrypoint() can run more than once in a long-running worker (one per
@@ -423,9 +423,9 @@ async def entrypoint(ctx: agents.JobContext):
 
 
 
-    # Create the Agent with history trimming (JarvisAgent overrides llm_node
+    # Create the Agent with history trimming (VisionAgent overrides llm_node
     # to keep context under Groq's 12,000 token limit)
-    agent = JarvisAgent(
+    agent = VisionAgent(
         instructions=get_dynamic_system_prompt(),
         stt=agent_stt,
         llm=agent_llm,
@@ -440,7 +440,7 @@ async def entrypoint(ctx: agents.JobContext):
         llm=agent_llm,
         tts=agent_tts,
         vad=agent_vad,
-        # Interruption protection — prevent room noise from cutting off JARVIS mid-sentence.
+        # Interruption protection — prevent room noise from cutting off VISION mid-sentence.
         # User must speak for at least 1.2s with ≥4 words before we interrupt.
         allow_interruptions=True,
         min_interruption_duration=1.2,
@@ -465,8 +465,8 @@ async def entrypoint(ctx: agents.JobContext):
 
 
     # ── Voice Authentication Gate ──────────────────────────────────────────
-    # JARVIS is locked on startup. The master must speak anything —
-    # JARVIS identifies the VOICE, not the words. 3 attempts allowed.
+    # VISION is locked on startup. The master must speak anything —
+    # VISION identifies the VOICE, not the words. 3 attempts allowed.
     from Tools.voice_verification import (
         verify_master_voice, load_master_embedding, generate_embedding,
         save_master_embedding, mark_session_authenticated, ENROLLMENT_PARAGRAPH,
@@ -499,12 +499,12 @@ async def entrypoint(ctx: agents.JobContext):
             return np.zeros(1)
 
     master_profile = load_master_embedding()
-    voice_auth_enabled = os.getenv("JARVIS_VOICE_AUTH_ENABLED", "true").lower() == "true"
-    auth_threshold = float(os.getenv("JARVIS_VOICE_AUTH_THRESHOLD", "0.65"))
+    voice_auth_enabled = os.getenv("VISION_VOICE_AUTH_ENABLED", "true").lower() == "true"
+    auth_threshold = float(os.getenv("VISION_VOICE_AUTH_THRESHOLD", "0.65"))
 
     if not voice_auth_enabled:
         # Explicitly disabled via env — deliberate opt-out, not a first-run state
-        logger.info("Voice authentication disabled via JARVIS_VOICE_AUTH_ENABLED=false. Unlocking automatically.")
+        logger.info("Voice authentication disabled via VISION_VOICE_AUTH_ENABLED=false. Unlocking automatically.")
         send_hud_state({"state": "alert", "description": "Voice lock disabled"})
         await asyncio.sleep(0.5)
         _auth_unlocked = True
@@ -561,7 +561,7 @@ async def entrypoint(ctx: agents.JobContext):
             send_hud_state({"state": "enrollment_success", "description": "Master voice registered"})
             await session.say(
                 "Your voice has been registered as my master voice profile. "
-                "From now on, I'll verify it's you before waking up. Welcome to JARVIS.",
+                "From now on, I'll verify it's you before waking up. Welcome to VISION.",
                 allow_interruptions=False,
             )
             await asyncio.sleep(2.0)
@@ -589,7 +589,7 @@ async def entrypoint(ctx: agents.JobContext):
             "description": "Voice authentication required",
             "transcript": "",
         })
-        logger.info("JARVIS is LOCKED. Awaiting master voice authentication...")
+        logger.info("VISION is LOCKED. Awaiting master voice authentication...")
 
         await session.say(
             "Systems locked. Master, please speak anything to verify your voice print.",
@@ -619,7 +619,7 @@ async def entrypoint(ctx: agents.JobContext):
             if matched:
                 _auth_unlocked = True
                 mark_session_authenticated(True)
-                logger.info("Voice authentication SUCCESSFUL. JARVIS unlocked.")
+                logger.info("Voice authentication SUCCESSFUL. VISION unlocked.")
                 send_hud_state({
                     "state": "auth_success",
                     "description": "Identity confirmed",
@@ -657,7 +657,7 @@ async def entrypoint(ctx: agents.JobContext):
 
 
     if _auth_unlocked:
-        # ── JARVIS is now LIVE ─────────────────────────────────────────────
+        # ── VISION is now LIVE ─────────────────────────────────────────────
         send_hud_state({"state": "idle"})
         try:
             from Tools.webcam_guard import start_webcam_guard
@@ -775,7 +775,7 @@ async def entrypoint(ctx: agents.JobContext):
     
     # Generate the initial greeting only AFTER successful voice authentication
     await session.say(
-        f"JARVIS online.{' Welcome back, master ' + OWNER_NAME + '.' if OWNER_NAME else ''} All systems at your disposal.",
+        f"VISION online.{' Welcome back, master ' + OWNER_NAME + '.' if OWNER_NAME else ''} All systems at your disposal.",
         allow_interruptions=True,
     )
 
@@ -787,7 +787,7 @@ if __name__ == "__main__":
         agents.WorkerOptions(
             entrypoint_fnc=entrypoint,
             worker_type=agents.WorkerType.ROOM,
-            agent_name="jarvis",   # Used by LiveKit for auto-dispatch in 'dev' mode
+            agent_name="vision",   # Used by LiveKit for auto-dispatch in 'dev' mode
             memory_warn_mb=4096,   # Increase threshold to suppress high memory warnings
         )
     )

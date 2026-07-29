@@ -1,5 +1,5 @@
 """
-Voice Verification Utilities for JARVIS.
+Voice Verification Utilities for VISION.
 Handles speaker embedding storage, comparison, and real-time verification.
 """
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 for _numba_logger in ["numba", "numba.core", "numba.core.ssa", "numba.core.byteflow", "numba.core.interpreter", "numba.core.typeinfer"]:
     logging.getLogger(_numba_logger).setLevel(logging.WARNING)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "jarvis_memory", "user_memory.db")
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vision_memory", "user_memory.db")
 EMBEDDING_DIM = 256  # resemblyzer default embedding dimension
 
 def init_voice_db():
@@ -234,7 +234,7 @@ async def reenroll_master_voice(sample_paragraph_audio: np.ndarray) -> str:
 
 
 ENROLLMENT_PARAGRAPH = (
-    "I am JARVIS, and this is my voice. I am speaking clearly and naturally "
+    "I am VISION, and this is my voice. I am speaking clearly and naturally "
     "so my assistant can learn to recognise me anywhere in the room."
 )
 
@@ -253,7 +253,7 @@ async def start_voice_reenrollment() -> str:
 
     Before calling this tool, say the following sentence aloud to the user
     and ask them to read it back, then call this tool while they speak:
-    "I am JARVIS, and this is my voice. I am speaking clearly and naturally
+    "I am VISION, and this is my voice. I am speaking clearly and naturally
     so my assistant can learn to recognise me anywhere in the room."
 
     Records a fresh sample while they read it and replaces the stored

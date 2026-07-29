@@ -59,7 +59,7 @@ async def deep_research(topic: str, num_sources: int = 3) -> str:
         combined_text = "\n\n---\n\n".join(scraped_texts)
         
         system = (
-            "You are JARVIS, an expert research analyst. Synthesize information from multiple "
+            "You are VISION, an expert research analyst. Synthesize information from multiple "
             "sources into a comprehensive, well-structured research report.\n\n"
             "Format:\n"
             "# Research Report: [Topic]\n\n"
@@ -136,7 +136,7 @@ async def compare_sources(urls: List[str]) -> str:
         combined_text = "\n\n---\n\n".join(scraped_texts)
         
         system = (
-            "You are JARVIS, an expert analyst performing a source comparison.\n\n"
+            "You are VISION, an expert analyst performing a source comparison.\n\n"
             "Format:\n"
             "## Overview\n"
             "What these sources cover and their respective perspectives.\n\n"

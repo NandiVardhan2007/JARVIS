@@ -1,7 +1,7 @@
 """
 AI Web Automation Sub-Agent using Playwright.
 
-Provides tools for JARVIS to autonomously navigate browsers, manage multiple
+Provides tools for VISION to autonomously navigate browsers, manage multiple
 tabs, fill forms, download/upload files, monitor pages for changes, and read
 web content aloud.
 
@@ -26,7 +26,7 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-DOWNLOAD_DIR = os.path.expanduser("~/Downloads/jarvis")
+DOWNLOAD_DIR = os.path.expanduser("~/Downloads/vision")
 
 # ── Session state ────────────────────────────────────────────────────────────
 _browser = None
@@ -38,7 +38,7 @@ _next_tab_id = 1
 # Auto-release: a visible Chromium instance is a real, ongoing RAM/GPU cost.
 # Rather than leaving it running indefinitely after a single task, an idle
 # watchdog closes it automatically after a period of no browser tool calls.
-BROWSER_IDLE_TIMEOUT_SEC = float(os.getenv("JARVIS_BROWSER_IDLE_TIMEOUT_SEC", "600"))
+BROWSER_IDLE_TIMEOUT_SEC = float(os.getenv("VISION_BROWSER_IDLE_TIMEOUT_SEC", "600"))
 _last_activity_ts = 0.0
 _idle_watchdog_task = None
 

@@ -1,7 +1,7 @@
 """
 Multi-agent task orchestrator.
 
-JARVIS's tools are already organized into specialized groups (see
+VISION's tools are already organized into specialized groups (see
 TOOL_CATEGORIES / AGENT_ROSTER in Tools/__init__.py) — Research, Browser,
 Terminal/Coding, File Management, Communication, System, Scheduling, and so
 on. This module is the orchestrator: given a plan of subtasks (each one a
@@ -104,7 +104,7 @@ async def run_task_list(tasks: list) -> str:
 @function_tool
 async def execute_agent_tasks(tasks_json: str) -> str:
     """
-    Dispatches multiple JARVIS tool calls as an orchestrated plan, running
+    Dispatches multiple VISION tool calls as an orchestrated plan, running
     independent subtasks IN PARALLEL for speed and only serializing ones
     that depend on each other's results.
 

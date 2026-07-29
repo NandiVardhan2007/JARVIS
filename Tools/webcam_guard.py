@@ -1,5 +1,5 @@
 """
-Webcam Gesture Control & Live Visual Context Analyzer for JARVIS.
+Webcam Gesture Control & Live Visual Context Analyzer for VISION.
 Uses OpenCV + MediaPipe (optional) — uses lazy imports so missing
 packages never crash the main app at startup.
 """
@@ -39,12 +39,12 @@ _mouse_backend_status = ""
 # rather than the intentional CPU/GPU-saving pause it actually is.
 _last_frame_requested = 0.0
 
-# UDP client to send commands back to JARVIS session
+# UDP client to send commands back to VISION session
 import socket
 _sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def _send_action_command(action_text: str):
-    """Sends a text command back to JARVIS via internal UDP port."""
+    """Sends a text command back to VISION via internal UDP port."""
     try:
         import json
         payload = json.dumps({'type': 'text_input', 'text': action_text}).encode("utf-8")
@@ -72,7 +72,7 @@ def _get_standby_frame_bytes():
         import numpy as np
         img = np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.rectangle(img, (15, 15), (625, 465), (50, 40, 20), 2)
-        cv2.putText(img, "JARVIS VISUAL CORE - STANDBY", (100, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 212, 0), 2)
+        cv2.putText(img, "VISION VISUAL CORE - STANDBY", (100, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 212, 0), 2)
         cv2.putText(img, "Say 'start webcam' or tap 'Start Cam' to activate", (75, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
         _, buf = cv2.imencode('.jpg', img)
         _cached_standby_frame = buf.tobytes()
@@ -296,7 +296,7 @@ def _camera_loop():
             e.EV_REL: [e.REL_X, e.REL_Y, e.REL_WHEEL],
             e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE],
         }
-        uinput_mouse = UInput(cap_events, name='jarvis-air-mouse')
+        uinput_mouse = UInput(cap_events, name='vision-air-mouse')
         # Opening the device node can succeed even when writes will fail (some
         # permission/SELinux/AppArmor configurations allow open() but not
         # write()) — a zero-delta test write catches that case now, rather
@@ -408,7 +408,7 @@ def _camera_loop():
     # hand appears. Re-enable any time with start_webcam_guard. Checking
     # BOTH signals (not just hand detection) matters: someone watching their
     # camera preview without gesturing shouldn't see it silently die.
-    idle_timeout = float(os.getenv("JARVIS_GESTURE_IDLE_TIMEOUT_SEC", "300"))
+    idle_timeout = float(os.getenv("VISION_GESTURE_IDLE_TIMEOUT_SEC", "300"))
     last_hand_seen = time.time()
     global _last_frame_requested
     _last_frame_requested = time.time()
@@ -693,7 +693,7 @@ def _camera_loop():
 
         # Show live feedback desktop window
         try:
-            cv2.imshow("JARVIS Visual Core — Press 'q' to exit", frame)
+            cv2.imshow("VISION Visual Core — Press 'q' to exit", frame)
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
@@ -784,7 +784,7 @@ def _handle_gesture_action(gesture: str):
 async def start_webcam_guard() -> str:
     """
     Activates your webcam to monitor hand gestures and live visual context.
-    Also required before asking JARVIS to analyze what is in front of the camera.
+    Also required before asking VISION to analyze what is in front of the camera.
     """
     global _camera_active, _camera_thread
 
@@ -904,7 +904,7 @@ async def get_webcam_diagnostics() -> str:
                 lines.append("• Camera open test: SUCCESS (a backend was able to open and read a frame)")
                 cap.release()
             else:
-                lines.append("• Camera open test: FAILED — see JARVIS's logs for the detailed per-attempt error list just logged")
+                lines.append("• Camera open test: FAILED — see VISION's logs for the detailed per-attempt error list just logged")
         else:
             lines.append("• Camera open test: skipped (webcam guard is already running — stop it first to test cleanly)")
     except ImportError:
@@ -914,14 +914,14 @@ async def get_webcam_diagnostics() -> str:
     uinput_ok, uinput_err = False, ""
     try:
         from evdev import UInput, ecodes as e
-        test_device = UInput({e.EV_REL: [e.REL_X, e.REL_Y]}, name='jarvis-diagnostic-test')
+        test_device = UInput({e.EV_REL: [e.REL_X, e.REL_Y]}, name='vision-diagnostic-test')
         test_device.close()
         uinput_ok = True
     except Exception as ue:
         uinput_err = str(ue)
     lines.append(f"• uinput virtual mouse (works on Wayland): {'OK' if uinput_ok else f'FAILED — {uinput_err}'}")
     if not uinput_ok:
-        lines.append("  → run: bash setup_uinput_permissions.sh (in the JARVIS project directory), then log out and back in")
+        lines.append("  → run: bash setup_uinput_permissions.sh (in the VISION project directory), then log out and back in")
 
     pynput_ok, pynput_err = False, ""
     try:
@@ -957,7 +957,7 @@ async def analyze_webcam_frame_vlm(user_question: str) -> str:
     (e.g., 'What book am I holding?', 'What am I doing right now?').
 
     Args:
-        user_question: What you want JARVIS to look for or describe (e.g. 'Read the text on the object I am holding').
+        user_question: What you want VISION to look for or describe (e.g. 'Read the text on the object I am holding').
     """
     # If camera is not active, boot it temporarily, capture, and stop it
     try:
@@ -1000,7 +1000,7 @@ async def analyze_webcam_frame_vlm(user_question: str) -> str:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": f"You are JARVIS's visual cortex. Answer this user request directly, wittily, and in a human way: {user_question}"},
+                    {"type": "text", "text": f"You are VISION's visual cortex. Answer this user request directly, wittily, and in a human way: {user_question}"},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                 ]
             }
@@ -1029,7 +1029,7 @@ async def analyze_what_master_is_doing() -> str:
     Use this when the user asks something like 'what am I doing', 'what do you see'.
     """
     return await analyze_webcam_frame_vlm(
-        "Look at this image and describe in 1-2 sentences what the person in front of the camera is doing right now. Be playful and precise, like JARVIS would be."
+        "Look at this image and describe in 1-2 sentences what the person in front of the camera is doing right now. Be playful and precise, like VISION would be."
     )
 
 # Auto-start HTTP MJPEG stream server on port 5005

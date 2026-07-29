@@ -1,5 +1,5 @@
 """
-Intelligent Windows Application Launcher for JARVIS.
+Intelligent Windows Application Launcher for VISION.
 Searches Windows alias mappings, Start Menu shortcuts, PATH binaries, App Execution Aliases,
 and UWP URI protocol schemes.
 """

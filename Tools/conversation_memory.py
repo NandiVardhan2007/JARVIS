@@ -4,12 +4,12 @@ missing: past conversation transcripts weren't indexed anywhere.
 
 Design:
   - Every turn (user + assistant) is appended to a daily JSONL log
-    (~/Documents/JARVIS/conversations/YYYY-MM-DD.jsonl) the moment it
+    (~/Documents/VISION/conversations/YYYY-MM-DD.jsonl) the moment it
     happens — cheap, synchronous-safe, no embedding calls in that hot path
     (embedding on every utterance would add latency to live conversation).
   - A separate, periodic background pass (every few minutes, not every
     turn) incrementally embeds only the NEW lines since last time into a
-    "jarvis_conversations" ChromaDB collection — same db file as
+    "vision_conversations" ChromaDB collection — same db file as
     Tools/knowledge_rag.py, different collection, so document search
     results aren't flooded with one-word utterances by default.
   - search_past_conversations() is the retrieval side.
@@ -31,12 +31,12 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-CONV_DIR = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", "conversations")
+CONV_DIR = os.path.join(os.path.expanduser("~"), "Documents", "VISION", "conversations")
 _INDEX_STATE_PATH = os.path.join(CONV_DIR, ".index_state.json")
-_COLLECTION_NAME = "jarvis_conversations"
-_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", "chromadb")
+_COLLECTION_NAME = "vision_conversations"
+_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "VISION", "chromadb")
 
-INDEX_INTERVAL_SEC = float(os.getenv("JARVIS_CONVERSATION_INDEX_INTERVAL_SEC", "300"))
+INDEX_INTERVAL_SEC = float(os.getenv("VISION_CONVERSATION_INDEX_INTERVAL_SEC", "300"))
 
 _indexer_task = None
 _indexer_active = False

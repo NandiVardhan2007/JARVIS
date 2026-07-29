@@ -1,10 +1,10 @@
 """
-Note-saving tool for JARVIS.
+Note-saving tool for VISION.
 
 IMPORTANT: this used to maintain its OWN separate ChromaDB collection
-("jarvis_notes" at jarvis_memory/knowledge_base), while the actually-exposed
+("vision_notes" at vision_memory/knowledge_base), while the actually-exposed
 search_knowledge_base tool queried a completely different collection
-("jarvis_knowledge" at ~/Documents/JARVIS/chromadb, see Tools/knowledge_rag.py).
+("vision_knowledge" at ~/Documents/VISION/chromadb, see Tools/knowledge_rag.py).
 That meant anything saved via save_note was permanently unsearchable — two
 disconnected silos with only one side wired up as a queryable tool.
 

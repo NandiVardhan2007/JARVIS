@@ -10,7 +10,7 @@ from livekit.agents import function_tool
 logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "jarvis_memory", "error_log.db"
+    os.path.dirname(os.path.dirname(__file__)), "vision_memory", "error_log.db"
 )
 
 

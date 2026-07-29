@@ -11,8 +11,8 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-SENDER_EMAIL = os.getenv("JARVIS_EMAIL", "")
-SENDER_PASSWORD = os.getenv("JARVIS_EMAIL_PASSWORD", "")
+SENDER_EMAIL = os.getenv("VISION_EMAIL", "")
+SENDER_PASSWORD = os.getenv("VISION_EMAIL_PASSWORD", "")
 
 
 def _is_valid_email(addr: str) -> bool:
@@ -56,7 +56,7 @@ async def send_email(
         return f"Invalid CC email: {cc_email}"
     if not SENDER_EMAIL or not SENDER_PASSWORD:
         return ("Email credentials not configured. "
-                "Please set JARVIS_EMAIL and JARVIS_EMAIL_PASSWORD in your .env file.")
+                "Please set VISION_EMAIL and VISION_EMAIL_PASSWORD in your .env file.")
 
     try:
         msg = MIMEMultipart()

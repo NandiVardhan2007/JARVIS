@@ -6,7 +6,7 @@ but nothing in this codebase could WRITE one — "generate reports" had no
 home. This fills that gap with a straightforward Word/text report writer.
 
 This is deliberately simple (title + heading/body sections, optional
-bullet lists) rather than a full templating engine — JARVIS assembles the
+bullet lists) rather than a full templating engine — VISION assembles the
 content (from research, system reports, summaries, etc.) and this tool lays
 it out and saves it.
 """
@@ -21,7 +21,7 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-REPORTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", "reports")
+REPORTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "VISION", "reports")
 
 
 @function_tool
@@ -45,7 +45,7 @@ async def generate_report(
                        {"heading": "Key Risks", "bullets": ["Supply delays", "FX exposure"]}]'
         output_format: "docx" (Word document, default) or "txt" (plain text).
         output_path: Optional absolute path to save to. Defaults to
-            ~/Documents/JARVIS/reports/<title>.<ext>.
+            ~/Documents/VISION/reports/<title>.<ext>.
     """
     try:
         sections = json.loads(sections_json)

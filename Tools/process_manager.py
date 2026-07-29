@@ -187,7 +187,7 @@ async def kill_process(
         except psutil.NoSuchProcess:
             return f"No process with PID {pid} found."
         except psutil.AccessDenied:
-            return f"Access denied for PID {pid}. Try running JARVIS as administrator."
+            return f"Access denied for PID {pid}. Try running VISION as administrator."
 
     # Name mode — kill all matching instances
     for proc in psutil.process_iter(["pid", "name"]):

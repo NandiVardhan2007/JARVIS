@@ -4,9 +4,9 @@ Automatic System Optimization.
 Background monitor for RAM, CPU, storage, and thermal conditions. When RAM
 or storage usage gets excessively high, it automatically:
   - Clears known-safe, fully-regenerable caches and temp files
-  - Releases JARVIS's own idle resources (browser, gesture camera — see
+  - Releases VISION's own idle resources (browser, gesture camera — see
     Tools/resource_optimizer.py)
-  - Notifies the user (HUD + a queued suggestion JARVIS can mention next
+  - Notifies the user (HUD + a queued suggestion VISION can mention next
     time it speaks, since there's no proactive-interruption mechanism in
     this codebase — see the "honest gap" note in start_system_optimizer's
     docstring)
@@ -34,10 +34,10 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-RAM_THRESHOLD_PCT     = float(os.getenv("JARVIS_RAM_OPTIMIZE_THRESHOLD", "85"))
-DISK_THRESHOLD_PCT    = float(os.getenv("JARVIS_DISK_OPTIMIZE_THRESHOLD", "90"))
-THERMAL_THRESHOLD_C   = float(os.getenv("JARVIS_THERMAL_THRESHOLD_C", "85"))
-CHECK_INTERVAL_SEC    = float(os.getenv("JARVIS_OPTIMIZER_INTERVAL_SEC", "120"))
+RAM_THRESHOLD_PCT     = float(os.getenv("VISION_RAM_OPTIMIZE_THRESHOLD", "85"))
+DISK_THRESHOLD_PCT    = float(os.getenv("VISION_DISK_OPTIMIZE_THRESHOLD", "90"))
+THERMAL_THRESHOLD_C   = float(os.getenv("VISION_THERMAL_THRESHOLD_C", "85"))
+CHECK_INTERVAL_SEC    = float(os.getenv("VISION_OPTIMIZER_INTERVAL_SEC", "120"))
 OPTIMIZATION_COOLDOWN_SEC = 600  # don't re-run cache clearing more than once per 10 min
 
 _optimizer_task = None
@@ -200,13 +200,13 @@ async def _run_optimization_pass(trigger: str) -> str:
 
     freed_bytes, actions = await _clear_safe_caches()
 
-    # Also release JARVIS's own idle resources (browser/gesture camera + gc)
+    # Also release VISION's own idle resources (browser/gesture camera + gc)
     try:
         from Tools.resource_optimizer import release_idle_resources
-        jarvis_summary = await release_idle_resources()
-        actions.append(f"JARVIS self-cleanup: {jarvis_summary}")
+        vision_summary = await release_idle_resources()
+        actions.append(f"VISION self-cleanup: {vision_summary}")
     except Exception as e:
-        logger.warning(f"Could not run JARVIS self-cleanup during optimization: {e}")
+        logger.warning(f"Could not run VISION self-cleanup during optimization: {e}")
 
     if not actions:
         actions.append("no safe caches or idle resources needed clearing")
@@ -302,7 +302,7 @@ async def get_system_health_report() -> str:
 @function_tool
 async def optimize_system_now() -> str:
     """
-    Immediately clears safe caches/temp files and releases JARVIS's own idle
+    Immediately clears safe caches/temp files and releases VISION's own idle
     resources, regardless of current usage thresholds. Use when the user
     explicitly asks to "clean up" or "optimize" the system right now. Never
     closes applications — see get_system_health_report for suggestions on that.

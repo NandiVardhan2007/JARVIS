@@ -1,6 +1,6 @@
 """
 Phone call tool — LiveKit SIP outbound calls via Telnyx.
-JARVIS can call any phone number and speak with the person.
+VISION can call any phone number and speak with the person.
 """
 
 import asyncio
@@ -11,19 +11,19 @@ from livekit.agents import function_tool
 logger = logging.getLogger(__name__)
 
 SIP_TRUNK_ID  = os.getenv("LIVEKIT_SIP_TRUNK_ID", "")
-LIVEKIT_ROOM  = os.getenv("LIVEKIT_ROOM_NAME", "jarvis-room")
+LIVEKIT_ROOM  = os.getenv("LIVEKIT_ROOM_NAME", "vision-room")
 
 
 @function_tool
 async def make_phone_call(phone_number: str, greeting: str = "") -> str:
     """
-    Calls a real phone number. JARVIS will speak with the person
-    using its voice pipeline. The call joins the active JARVIS room.
+    Calls a real phone number. VISION will speak with the person
+    using its voice pipeline. The call joins the active VISION room.
 
     Args:
         phone_number: Number with country code, e.g. +919876543210
-        greeting: Optional opening line JARVIS says when they pick up.
-                  If empty, JARVIS will greet naturally.
+        greeting: Optional opening line VISION says when they pick up.
+                  If empty, VISION will greet naturally.
     """
     if not SIP_TRUNK_ID:
         return (
@@ -133,7 +133,7 @@ async def end_phone_call(phone_number: str = "") -> str:
 @function_tool
 async def list_active_calls() -> str:
     """
-    Lists all currently active phone calls in the JARVIS room.
+    Lists all currently active phone calls in the VISION room.
     """
     try:
         from livekit import api

@@ -12,7 +12,7 @@ def _get_chroma_collection():
         import chromadb
         
         # Store the DB in the user's documents folder
-        db_path = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", "chromadb")
+        db_path = os.path.join(os.path.expanduser("~"), "Documents", "VISION", "chromadb")
         os.makedirs(db_path, exist_ok=True)
         
         client = chromadb.PersistentClient(path=db_path)
@@ -28,7 +28,7 @@ async def index_project_codebase(project_path: str) -> str:
     vector database, incrementally — unchanged files are skipped (by content
     hash) so re-running this after a small edit is fast, and stale chunks
     from since-shrunk or deleted files are cleaned up automatically.
-    This allows JARVIS to search across the entire project for context later.
+    This allows VISION to search across the entire project for context later.
 
     Args:
         project_path: Absolute path to the root of the project directory.

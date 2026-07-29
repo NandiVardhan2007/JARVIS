@@ -90,7 +90,7 @@ def _strip_fences(code: str) -> str:
 @function_tool
 async def generate_and_type_code(
     prompt: str,
-    filename: str = "jarvis_code",
+    filename: str = "vision_code",
     language: str = "python",
     open_notepad: bool = False,
 ) -> str:
@@ -102,12 +102,12 @@ async def generate_and_type_code(
         prompt: Description of what the code should do.
         filename: Output filename without extension (used if auto-type fails).
         language: Programming language — python, javascript, java, cpp, go, rust, etc.
-        open_notepad: Whether to open Notepad first and save the code into Documents/JARVIS notes.
+        open_notepad: Whether to open Notepad first and save the code into Documents/VISION notes.
     """
     logger.info(f"Generating {language} code...")
 
     system_msg = (
-        f"You are JARVIS, an expert {language} developer. Generate complete, production-ready "
+        f"You are VISION, an expert {language} developer. Generate complete, production-ready "
         f"code based on the user's description.\n\n"
         "Rules:\n"
         "1. Output ONLY raw code — no markdown fences, no explanations, no preamble.\n"
@@ -154,7 +154,7 @@ async def generate_and_type_code(
                 time.sleep(1.0)
                 
                 # Output folder path
-                code_dir = "/run/media/nandu/Data/JARVIS/Output/Code"
+                code_dir = "/run/media/nandu/Data/VISION/Output/Code"
                 os.makedirs(code_dir, exist_ok=True)
                 
                 ext_map = {
@@ -183,7 +183,7 @@ async def generate_and_type_code(
             }
             ext = ext_map.get(language.lower(), language.lower())
             
-            code_dir = "/run/media/nandu/Data/JARVIS/Output/Code"
+            code_dir = "/run/media/nandu/Data/VISION/Output/Code"
             os.makedirs(code_dir, exist_ok=True)
             save_path = os.path.join(code_dir, f"{filename}.{ext}")
             with open(save_path, "w", encoding="utf-8") as f:

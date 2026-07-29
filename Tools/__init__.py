@@ -1,5 +1,5 @@
 """
-JARVIS Tools Package
+VISION Tools Package
 All tool functions registered as livekit.agents function_tools.
 """
 
@@ -26,7 +26,7 @@ from .hand_gesture_control import (
 from .open_app import open_app
 from .media import play_media, stop_media
 from .voice_verification import start_voice_reenrollment
-from .resource_optimizer import get_jarvis_resource_usage, release_idle_resources
+from .resource_optimizer import get_vision_resource_usage, release_idle_resources
 from .system_optimizer import (
     get_system_health_report, optimize_system_now,
     get_pending_optimization_suggestions, start_system_optimizer, stop_system_optimizer,
@@ -177,7 +177,7 @@ TOOL_CATEGORIES = {
 }
 
 # ── Specialized "agent" roster ────────────────────────────────────────────────
-# JARVIS is a single LLM with a large, categorized toolbox rather than
+# VISION is a single LLM with a large, categorized toolbox rather than
 # separate LLM instances per agent — spinning up N independent model
 # instances per request would multiply latency and cost for a desktop
 # assistant with little benefit. What DOES genuinely help is (1) naming and
@@ -209,13 +209,13 @@ from livekit.agents import function_tool
 @function_tool
 async def list_available_agents() -> str:
     """
-    Lists JARVIS's specialized agents (Research, Browser, Terminal, Coding,
+    Lists VISION's specialized agents (Research, Browser, Terminal, Coding,
     File Management, Automation, Memory, Planning, Vision, Voice,
     Communication, System, Calendar & Finance) and what each one covers.
     Use this if the user asks what you're capable of, or to help decide how
     to split a complex request across agents for execute_agent_tasks.
     """
-    lines = ["JARVIS's specialized agents:"]
+    lines = ["VISION's specialized agents:"]
     for name, info in AGENT_ROSTER.items():
         lines.append(f"• {name}: {info['description']}")
     return "\n".join(lines)
@@ -228,7 +228,7 @@ CORE_TOOLS = [
     add_task, complete_task, list_tasks, prioritize_task,
     save_note, search_knowledge_base, add_document_to_knowledge,
     index_pdf_file, index_folder, list_knowledge_documents, execute_agent_tasks,
-    start_voice_reenrollment, get_jarvis_resource_usage, release_idle_resources,
+    start_voice_reenrollment, get_vision_resource_usage, release_idle_resources,
     get_system_health_report, optimize_system_now, get_pending_optimization_suggestions,
     start_system_optimizer, stop_system_optimizer, list_available_agents,
     search_past_conversations, index_conversation_history_now,
@@ -246,7 +246,7 @@ def _safe_tool_wrapper(func):
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logging.getLogger("JARVIS.Tools").error(f"Tool {func.__name__} crashed: {e}\n{traceback.format_exc()}")
+            logging.getLogger("VISION.Tools").error(f"Tool {func.__name__} crashed: {e}\n{traceback.format_exc()}")
             return f"SYSTEM EXCEPTION: The tool '{func.__name__}' encountered a runtime error: {e}. Please inform the user."
     return wrapper
 
@@ -261,7 +261,7 @@ def _sandbox_tools(tool_list):
 
 def get_all_tools() -> list:
     """
-    Return all JARVIS tool functions for the agent.
+    Return all VISION tool functions for the agent.
     This is used by the voice agent where context window size is less critical,
     and by the execute_agent_tasks orchestrator.
     """

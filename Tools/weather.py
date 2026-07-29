@@ -41,7 +41,7 @@ async def get_weather(city: str = "") -> str:
                 # Fallback to Nominatim
                 nom = requests.get(
                     f"https://nominatim.openstreetmap.org/search?q={city}&format=json",
-                    headers={"User-Agent": "JARVIS-AI/1.0"},
+                    headers={"User-Agent": "VISION-AI/1.0"},
                     timeout=8,
                 ).json()
                 if not nom:

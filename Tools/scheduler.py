@@ -25,10 +25,10 @@ _scheduled_tasks: Dict[str, Dict[str, Any]] = {}
 _task_counter = 0
 _monitor_task: Optional[asyncio.Task] = None
 
-DB_PATH = "jarvis_memory/scheduler.db"
+DB_PATH = "vision_memory/scheduler.db"
 
 def _ensure_db():
-    os.makedirs("jarvis_memory", exist_ok=True)
+    os.makedirs("vision_memory", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""CREATE TABLE IF NOT EXISTS scheduled_tasks (
         id TEXT PRIMARY KEY,
@@ -197,7 +197,7 @@ async def schedule_task(
         task_description: Human‑readable description (e.g., "Open Chrome").
         schedule_time:    When to execute — e.g., "3:00 PM", "after 30 minutes",
                           "in 2 hours", "tomorrow at 9:00 AM".
-        tool_name:        Exact name of the JARVIS tool function to call
+        tool_name:        Exact name of the VISION tool function to call
                           (e.g., "open_app", "search_web", "get_weather").
         tool_parameters:  A JSON string containing keyword arguments to pass to the tool (optional).
     """

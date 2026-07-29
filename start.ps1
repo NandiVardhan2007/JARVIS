@@ -1,9 +1,9 @@
 # ==============================================================================
-#  JARVIS — One-Command PowerShell Launcher (Backend + Bridge + Flutter UI)
+#  VISION — One-Command PowerShell Launcher (Backend + Bridge + Flutter UI)
 # ==============================================================================
 
 Write-Host "==============================================================" -ForegroundColor Cyan
-Write-Host "                JARVIS - AI Assistant (Windows)" -ForegroundColor Cyan
+Write-Host "                VISION - AI Assistant (Windows)" -ForegroundColor Cyan
 Write-Host "==============================================================" -ForegroundColor Cyan
 
 Set-Location $PSScriptRoot
@@ -18,33 +18,33 @@ if (-not (Test-Path $venvPython)) {
 }
 
 # Reset Log
-if (Test-Path "JARVIS.log") {
-    Remove-Item "JARVIS.log" -Force
+if (Test-Path "VISION.log") {
+    Remove-Item "VISION.log" -Force
 }
-Write-Host "[start] Reset JARVIS.log — recording clean logs for this session..." -ForegroundColor Green
+Write-Host "[start] Reset VISION.log — recording clean logs for this session..." -ForegroundColor Green
 
 # 1. Start WebSocket Bridge
 Write-Host "[start] (1/3) Starting bridge on ws://127.0.0.1:8765 ..." -ForegroundColor Yellow
-$bridgeProcess = Start-Process $venvPython -ArgumentList "jarvis_bridge.py" -PassThru -NoNewWindow
+$bridgeProcess = Start-Process $venvPython -ArgumentList "vision_bridge.py" -PassThru -NoNewWindow
 
 # 2. Launch Flutter UI Frontend
 $flutterProcess = $null
 if (Get-Command flutter -ErrorAction SilentlyContinue) {
     Write-Host "[start] (2/3) Launching Flutter UI Frontend..." -ForegroundColor Yellow
-    $flutterProcess = Start-Process flutter -ArgumentList "run", "-d", "windows" -WorkingDirectory ".\jarvis_face" -PassThru -NoNewWindow
+    $flutterProcess = Start-Process flutter -ArgumentList "run", "-d", "windows" -WorkingDirectory ".\vision_face" -PassThru -NoNewWindow
 } else {
     Write-Host "[start] (2/3) Flutter CLI not found on PATH. Skipping Flutter GUI." -ForegroundColor DarkYellow
 }
 
 # 3. Boot Backend
-Write-Host "[start] (3/3) Booting JARVIS backend..." -ForegroundColor Yellow
+Write-Host "[start] (3/3) Booting VISION backend..." -ForegroundColor Yellow
 Write-Host "==============================================================" -ForegroundColor Cyan
-$env:JARVIS_HUD_HIDDEN = "1"
+$env:VISION_HUD_HIDDEN = "1"
 
 try {
-    & $venvPython jarvis_launcher.py
+    & $venvPython vision_launcher.py
 } finally {
-    Write-Host "`n[start] Shutting down JARVIS services..." -ForegroundColor Red
+    Write-Host "`n[start] Shutting down VISION services..." -ForegroundColor Red
     if ($bridgeProcess -and -not $bridgeProcess.HasExited) {
         Stop-Process -Id $bridgeProcess.Id -Force -ErrorAction SilentlyContinue
     }

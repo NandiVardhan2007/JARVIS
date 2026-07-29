@@ -209,7 +209,7 @@ async def _transcribe_waha_voice(msg_id: str, media_url: str = "") -> str | None
             "file": ("audio.ogg", audio_bytes, "audio/ogg"),
         }
         form_data = {
-            "model": os.getenv("JARVIS_STT_MODEL", "whisper-large-v3"),
+            "model": os.getenv("VISION_STT_MODEL", "whisper-large-v3"),
         }
         auth_headers = {
             "Authorization": f"Bearer {groq_key}"
@@ -265,7 +265,7 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
 """
         except ImportError:
             dynamic_prompt = (
-                "You are JARVIS, a smart AI assistant on WhatsApp with full PC control. "
+                "You are VISION, a smart AI assistant on WhatsApp with full PC control. "
                 "Be concise, use *bold* for emphasis (WhatsApp style). "
                 "Reply in the same language the user uses."
             )
@@ -275,7 +275,7 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
     else:
         # Someone else messaging — Auto-reply on behalf of owner, NO tools for security
         dynamic_prompt = (
-            "You are JARVIS, an AI assistant replying on behalf of your owner on WhatsApp. "
+            "You are VISION, an AI assistant replying on behalf of your owner on WhatsApp. "
             "Be warm, polite, and conversational — you represent your owner, so be helpful and friendly. "
             "You do NOT have access to PC control or personal data tools for this conversation (security restriction). "
             "You CAN generate images if they explicitly ask for one. "
@@ -427,7 +427,7 @@ import sqlite3
 
 class SQLiteDedup:
     """SQLite-based message deduplication for cross-restart replays."""
-    def __init__(self, db_path="jarvis_memory/webhook_dedup.db", ttl=86400):
+    def __init__(self, db_path="vision_memory/webhook_dedup.db", ttl=86400):
         self.db_path = db_path
         self.ttl = ttl
         import os
@@ -462,7 +462,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             # WAHA Webhook Payload structure for message:
             if event in ("message", "message.any"):
                 msg = payload.get("payload", {})
-            # Support direct jarvis-waha custom payload
+            # Support direct vision-waha custom payload
             elif "id" in payload and ("body" in payload or payload.get("hasMedia")):
                 msg = payload
             else:
@@ -491,7 +491,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             has_media = msg.get("hasMedia", False)
             msg_type = msg.get("type", msg.get("_data", {}).get("type", ""))
             
-            # Ignore messages sent by JARVIS to prevent infinite loops when messaging yourself
+            # Ignore messages sent by VISION to prevent infinite loops when messaging yourself
             is_bot_msg = text and (text.startswith("🤖") or text.startswith("⏳") or text.startswith("✅") or text.startswith("❌"))
             
             if has_media:

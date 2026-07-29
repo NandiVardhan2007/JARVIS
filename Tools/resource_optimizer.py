@@ -1,9 +1,9 @@
 """
-Resource optimizer — visibility into and control over JARVIS's OWN resource
+Resource optimizer — visibility into and control over VISION's OWN resource
 footprint (as opposed to Tools/system_control.py's get_system_info, which
 reports the whole machine).
 
-This is deliberately scoped to JARVIS's own process tree: the main agent
+This is deliberately scoped to VISION's own process tree: the main agent
 process plus any child processes it spawns (the Playwright/Chromium browser
 from web_automation.py shows up here automatically, since Playwright launches
 it as a real child process of this one).
@@ -47,9 +47,9 @@ def _collect_process_tree_stats() -> dict:
 
 
 @function_tool
-async def get_jarvis_resource_usage() -> str:
+async def get_vision_resource_usage() -> str:
     """
-    Reports how much RAM and CPU JARVIS itself is currently using — the main
+    Reports how much RAM and CPU VISION itself is currently using — the main
     process plus any child processes it has spawned (e.g. the browser
     automation Chromium instance, if one is open). Use this to answer
     "how much memory are you using" style questions, distinct from
@@ -57,7 +57,7 @@ async def get_jarvis_resource_usage() -> str:
     """
     try:
         stats = _collect_process_tree_stats()
-        lines = [f"JARVIS is currently using {stats['total_rss_mb']} MB of RAM across {len(stats['processes'])} process(es):"]
+        lines = [f"VISION is currently using {stats['total_rss_mb']} MB of RAM across {len(stats['processes'])} process(es):"]
         for e in stats["processes"][:8]:
             lines.append(f"• {e['name']} (pid {e['pid']}): {e['rss_mb']} MB, {e['cpu_pct']}% CPU")
         if len(stats["processes"]) > 8:

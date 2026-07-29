@@ -36,7 +36,7 @@ class _CodeFixerGUI:
         from tkinter import scrolledtext, messagebox
 
         root = tk.Tk()
-        root.title("JARVIS — Code Fixer")
+        root.title("VISION — Code Fixer")
         root.geometry("900x680")
         root.configure(bg="#0f1923")
         root.resizable(True, True)
@@ -64,7 +64,7 @@ class _CodeFixerGUI:
             root.destroy()
 
         # Header
-        tk.Label(root, text="🔧 JARVIS Code Fixer", font=("Segoe UI", 18, "bold"),
+        tk.Label(root, text="🔧 VISION Code Fixer", font=("Segoe UI", 18, "bold"),
                  fg="#60a5fa", bg="#0f1923").pack(pady=(16, 4))
         tk.Label(root, text="Paste your code and error message to get an AI fix",
                  font=("Segoe UI", 11), fg="#94a3b8", bg="#0f1923").pack(pady=(0, 12))
@@ -120,7 +120,7 @@ class _CodeFixerGUI:
         from tkinter import scrolledtext, filedialog, messagebox
 
         root = tk.Tk()
-        root.title(f"JARVIS — Fixed {language.upper()} Code")
+        root.title(f"VISION — Fixed {language.upper()} Code")
         root.geometry("950x720")
         root.configure(bg="#0f1923")
         root.eval("tk::PlaceWindow . center")
@@ -175,7 +175,7 @@ async def _call_groq(language: str, code: str, error: str) -> str:
         return "Error: GROQ_API_KEY is not set."
 
     system_msg = (
-        f"You are JARVIS, an expert {language} debugger. You receive broken code and its "
+        f"You are VISION, an expert {language} debugger. You receive broken code and its "
         f"error message. Your job is to produce a fully corrected, runnable version.\n\n"
         "Rules:\n"
         "1. Return ONLY the corrected code — no explanations before or after.\n"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-voice_client.py — Headless native audio client for JARVIS.
+voice_client.py — Headless native audio client for VISION.
 
 This replaces the old `dynamic_island.py` PyQt "Dynamic Island" HUD, which
 mixed three unrelated responsibilities into one 2,500-line file:
@@ -13,13 +13,13 @@ mixed three unrelated responsibilities into one 2,500-line file:
     3. A hand-painted Qt desktop overlay ("Dynamic Island") that rendered
        that state as a pill-shaped HUD, toasts, and a history drawer.
 
-The Flutter frontend (`jarvis_face/`) is now the one and only visual UI —
+The Flutter frontend (`vision_face/`) is now the one and only visual UI —
 it already renders state, transcripts, tool activity, and now-playing media
-by connecting to `jarvis_bridge.py`. Responsibility (3) above (the Qt
+by connecting to `vision_bridge.py`. Responsibility (3) above (the Qt
 overlay itself) has therefore been removed entirely, together with its
 PyQt5 dependency.
 
-Responsibilities (1) and (2) are still required for JARVIS to actually
+Responsibilities (1) and (2) are still required for VISION to actually
 hear you and speak back, so they live on here in a small headless module
 with no GUI toolkit dependency at all. It:
 
@@ -28,10 +28,10 @@ with no GUI toolkit dependency at all. It:
   - Subscribes to the agent's outgoing audio track and plays it through the
     default output device.
   - Listens on udp://127.0.0.1:5005 for state pings from agent.py and
-    forwards a normalized snapshot to jarvis_bridge.py on
+    forwards a normalized snapshot to vision_bridge.py on
     udp://127.0.0.1:5016, exactly like the old HUD's `_mirror_to_bridge()`.
 
-Run directly, or via `python jarvis_launcher.py ui <room_name>`.
+Run directly, or via `python vision_launcher.py ui <room_name>`.
 """
 
 import asyncio
@@ -54,10 +54,10 @@ logging.basicConfig(
 log = logging.getLogger("voice_client")
 
 STATE_UDP_PORT = 5005    # agent.py -> us (state pings)
-BRIDGE_UDP_PORT = 5016   # us -> jarvis_bridge.py (Flutter mirror)
+BRIDGE_UDP_PORT = 5016   # us -> vision_bridge.py (Flutter mirror)
 MEDIA_PORTS = range(5006, 5011)
 
-# Suppress the mic for a short hangover after JARVIS stops speaking so
+# Suppress the mic for a short hangover after VISION stops speaking so
 # trailing reverb/echo picked up by the mic can't re-trigger a false
 # interruption (same half-duplex guard the old HUD used).
 _MIC_GATE_HANGOVER_SEC = 0.35
@@ -118,10 +118,10 @@ class StateUDPProtocol(asyncio.DatagramProtocol):
 
 
 # ══════════════════════════════════════════════════════════
-#  Bridge mirror (this process -> jarvis_bridge.py -> Flutter)
+#  Bridge mirror (this process -> vision_bridge.py -> Flutter)
 # ══════════════════════════════════════════════════════════
 async def _mirror_loop(state: VoiceClientState):
-    """Forward live state + audio levels to jarvis_bridge.py, ~30 fps."""
+    """Forward live state + audio levels to vision_bridge.py, ~30 fps."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         while True:
@@ -160,7 +160,7 @@ async def _livekit_audio_task(state: VoiceClientState):
     api_key = os.getenv("LIVEKIT_API_KEY")
     api_secret = os.getenv("LIVEKIT_API_SECRET")
     livekit_url = os.getenv("LIVEKIT_URL")
-    room_name = os.getenv("LIVEKIT_ROOM_NAME", "jarvis-room")
+    room_name = os.getenv("LIVEKIT_ROOM_NAME", "vision-room")
 
     if not (api_key and api_secret and livekit_url):
         log.warning("Missing LiveKit config (LIVEKIT_API_KEY/SECRET/URL). Native mic disabled.")
@@ -168,7 +168,7 @@ async def _livekit_audio_task(state: VoiceClientState):
 
     room = rtc.Room()
     token = api.AccessToken(api_key, api_secret)
-    token.with_identity("jarvis-voice-client").with_name("JARVIS Voice Client").with_grants(
+    token.with_identity("vision-voice-client").with_name("VISION Voice Client").with_grants(
         api.VideoGrants(room_join=True, room=room_name)
     )
 
@@ -233,7 +233,7 @@ async def _livekit_audio_task(state: VoiceClientState):
                     raw, _overflow = in_stream.read(frame_samples)
                     data = bytes(raw)
 
-                    # Half-duplex echo guard: mute the mic while JARVIS is
+                    # Half-duplex echo guard: mute the mic while VISION is
                     # speaking (plus a short hangover) so it can't hear itself.
                     ai_active = state.target_ai_level > _AI_LEVEL_ACTIVE_THRESHOLD or state.ai_level > _AI_LEVEL_ACTIVE_THRESHOLD
                     if ai_active:

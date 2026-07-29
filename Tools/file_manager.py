@@ -42,7 +42,7 @@ SEARCH_DIRS = {
 # Directories never worth walking into — hidden/system/dev-tooling clutter
 _SKIP_DIR_NAMES = {
     ".git", ".cache", "__pycache__", "node_modules", ".venv", "venv",
-    ".npm", ".local", "jarvis_memory", ".config",
+    ".npm", ".local", "vision_memory", ".config",
 }
 
 _KIND_EXTENSIONS = {

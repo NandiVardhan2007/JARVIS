@@ -13,16 +13,16 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-PHONE_IP   = os.getenv("JARVIS_PHONE_IP", "")       # e.g. 192.168.1.5
-PHONE_PORT = os.getenv("JARVIS_PHONE_PORT", "5555")
-PHONE_PATTERN = os.getenv("JARVIS_PHONE_PATTERN", "")
+PHONE_IP   = os.getenv("VISION_PHONE_IP", "")       # e.g. 192.168.1.5
+PHONE_PORT = os.getenv("VISION_PHONE_PORT", "5555")
+PHONE_PATTERN = os.getenv("VISION_PHONE_PATTERN", "")
 ADB_PATH   = os.getenv("ADB_PATH", "adb")           # full path if not in PATH
 
 
 def _adb(*args, timeout: int = 10, retry: bool = True) -> tuple[str, str, int]:
     """Run an ADB command against the configured phone. Returns (stdout, stderr, returncode)."""
     if not PHONE_IP:
-        return "", "JARVIS_PHONE_IP not set in .env", 1
+        return "", "VISION_PHONE_IP not set in .env", 1
 
     target = f"{PHONE_IP}:{PHONE_PORT}"
     cmd = [ADB_PATH, "-s", target] + list(args)
@@ -54,13 +54,13 @@ async def _adb_async(*args, timeout: int = 10) -> tuple[str, str, int]:
 @function_tool
 async def connect_phone() -> str:
     """
-    Connect JARVIS to your Android phone over Wi-Fi via ADB.
-    Your phone IP must be set as JARVIS_PHONE_IP in .env.
+    Connect VISION to your Android phone over Wi-Fi via ADB.
+    Your phone IP must be set as VISION_PHONE_IP in .env.
     The phone must have Wireless Debugging enabled in Developer Options.
     """
     if not PHONE_IP:
         return (
-            "JARVIS_PHONE_IP not set. Add it to your .env file.\n"
+            "VISION_PHONE_IP not set. Add it to your .env file.\n"
             "Find your phone IP: Settings → Wi-Fi → tap your network → IP address."
         )
 
@@ -440,7 +440,7 @@ async def _notify_via_termux(title: str, body: str) -> str:
 async def read_phone_screen(question: Optional[str] = None) -> str:
     """
     Takes a screenshot of the phone screen and analyses it using the
-    same vision AI pipeline as JARVIS's desktop read_screen tool.
+    same vision AI pipeline as VISION's desktop read_screen tool.
 
     Args:
         question: Optional specific question about what's on screen.
@@ -449,14 +449,14 @@ async def read_phone_screen(question: Optional[str] = None) -> str:
     import os
 
     # Capture screenshot on device
-    await _adb_async("shell", "screencap", "-p", "/sdcard/jarvis_screen.png")
+    await _adb_async("shell", "screencap", "-p", "/sdcard/vision_screen.png")
     await asyncio.sleep(0.5)
 
     # Pull to PC
     with tempfile.TemporaryDirectory() as tmp:
         local_path = os.path.join(tmp, "phone_screen.png")
         stdout, stderr, code = await _adb_async(
-            "pull", "/sdcard/jarvis_screen.png", local_path
+            "pull", "/sdcard/vision_screen.png", local_path
         )
         if code != 0:
             return f"Failed to pull screenshot: {stderr}"
@@ -490,13 +490,13 @@ async def phone_ocr_tap(target_text: str) -> str:
     import tempfile
     import os
 
-    await _adb_async("shell", "screencap", "-p", "/sdcard/jarvis_screen.png")
+    await _adb_async("shell", "screencap", "-p", "/sdcard/vision_screen.png")
     await asyncio.sleep(0.3)
 
     with tempfile.TemporaryDirectory() as tmp:
         local_path = os.path.join(tmp, "phone_screen.png")
         stdout, stderr, code = await _adb_async(
-            "pull", "/sdcard/jarvis_screen.png", local_path
+            "pull", "/sdcard/vision_screen.png", local_path
         )
         if code != 0:
             return f"Screenshot failed: {stderr}"
@@ -556,11 +556,11 @@ async def pull_file_from_phone(
 
     Args:
         remote_path: Path on the phone, e.g. '/sdcard/DCIM/photo.jpg'.
-        local_path: Where to save on PC (defaults to JARVIS/Output/Mobile).
+        local_path: Where to save on PC (defaults to VISION/Output/Mobile).
     """
     if not local_path:
         filename = remote_path.split("/")[-1]
-        local_dir = "/run/media/nandu/Data/JARVIS/Output/Mobile"
+        local_dir = "/run/media/nandu/Data/VISION/Output/Mobile"
         os.makedirs(local_dir, exist_ok=True)
         local_path = os.path.join(local_dir, filename)
 
@@ -614,11 +614,11 @@ async def android_make_call(phone_number: str) -> str:
         if hasattr(agent, "current_room") and agent.current_room:
             payload = json.dumps({"action": "make_call", "number": clean_number})
             await agent.current_room.local_participant.publish_data(payload.encode('utf-8'))
-            return f"Sent native call intent to JARVIS Mobile App for {clean_number}."
+            return f"Sent native call intent to VISION Mobile App for {clean_number}."
         else:
-            return "Failed to call: JARVIS Mobile is not connected to the LiveKit room."
+            return "Failed to call: VISION Mobile is not connected to the LiveKit room."
     except Exception as e:
-        return f"Failed to dial via JARVIS Mobile: {e}"
+        return f"Failed to dial via VISION Mobile: {e}"
 
 
 @function_tool

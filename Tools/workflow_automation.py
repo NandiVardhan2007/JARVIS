@@ -19,7 +19,7 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-WORKFLOWS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", "workflows")
+WORKFLOWS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "VISION", "workflows")
 
 
 def _safe_name(name: str) -> str:

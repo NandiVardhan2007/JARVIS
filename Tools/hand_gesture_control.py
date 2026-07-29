@@ -1,5 +1,5 @@
 """
-Hand Gesture Control Module for JARVIS (Windows Native).
+Hand Gesture Control Module for VISION (Windows Native).
 Uses OpenCV and MediaPipe Hands to track hand movements and gestures in real time,
 controlling the Windows desktop mouse cursor, clicking, scrolling, and dragging.
 """

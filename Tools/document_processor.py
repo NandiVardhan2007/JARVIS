@@ -22,7 +22,7 @@ from livekit.agents import function_tool
 logger = logging.getLogger(__name__)
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-DB_DIR = Path("jarvis_memory")
+DB_DIR = Path("vision_memory")
 DB_PATH = DB_DIR / "document_chunks.db"
 CHUNK_SIZE = 1500      # characters per chunk
 CHUNK_OVERLAP = 300    # overlap between consecutive chunks
@@ -275,7 +275,7 @@ class DocumentProcessor:
             "model": GROQ_MODEL,
             "messages": [
                 {"role": "system", "content": (
-                    "You are JARVIS, an expert document analyst. Answer the user's question "
+                    "You are VISION, an expert document analyst. Answer the user's question "
                     "using ONLY the provided document context. Rules:\n"
                     "- Cite specific sections, page numbers, or paragraphs when possible.\n"
                     "- Quote exact figures, dates, names, and amounts from the document.\n"

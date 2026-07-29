@@ -1,4 +1,4 @@
-"""Terminal / Shell Tool for JARVIS — hardened sandbox.
+"""Terminal / Shell Tool for VISION — hardened sandbox.
 
 Security model
 --------------

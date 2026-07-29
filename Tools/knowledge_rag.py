@@ -1,5 +1,5 @@
 """
-JARVIS Knowledge Base RAG (Retrieval-Augmented Generation).
+VISION Knowledge Base RAG (Retrieval-Augmented Generation).
 
 Stores and retrieves general documents (PDFs, notes, text files) in a
 ChromaDB vector store. Separate from the codebase RAG collection.
@@ -16,8 +16,8 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-_KB_COLLECTION_NAME = "jarvis_knowledge"
-_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", "chromadb")
+_KB_COLLECTION_NAME = "vision_knowledge"
+_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "VISION", "chromadb")
 
 
 def _get_kb_collection():
@@ -33,7 +33,7 @@ def _get_kb_collection():
 @function_tool
 async def add_document_to_knowledge(title: str, content: str) -> str:
     """
-    Adds a text document or note to JARVIS's personal knowledge base for
+    Adds a text document or note to VISION's personal knowledge base for
     future semantic retrieval.
 
     Args:
@@ -70,7 +70,7 @@ async def add_document_to_knowledge(title: str, content: str) -> str:
 @function_tool
 async def index_pdf_file(file_path: str) -> str:
     """
-    Parses a PDF file and indexes its content into the JARVIS knowledge base.
+    Parses a PDF file and indexes its content into the VISION knowledge base.
 
     Args:
         file_path: Absolute path to the PDF file.
@@ -212,7 +212,7 @@ async def index_folder(folder_path: str, extensions: str = ".pdf,.txt,.md") -> s
 @function_tool
 async def search_knowledge_base(query: str, n_results: int = 4) -> str:
     """
-    Semantically searches JARVIS's personal knowledge base for relevant
+    Semantically searches VISION's personal knowledge base for relevant
     information. Use this when the user asks about something that may be
     in their stored documents, notes, or PDFs.
 
@@ -245,7 +245,7 @@ async def search_knowledge_base(query: str, n_results: int = 4) -> str:
 @function_tool
 async def list_knowledge_documents() -> str:
     """
-    Lists all documents currently stored in JARVIS's knowledge base.
+    Lists all documents currently stored in VISION's knowledge base.
     """
     try:
         collection = _get_kb_collection()

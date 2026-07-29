@@ -1,5 +1,5 @@
 """
-Centralized Configuration Validator for JARVIS.
+Centralized Configuration Validator for VISION.
 Runs at startup to ensure all critical environment variables and APIs are accessible.
 """
 
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # We setup a basic console logger specifically for the startup sequence
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("JARVIS.Config")
+logger = logging.getLogger("VISION.Config")
 
 def validate_environment():
     """
@@ -40,7 +40,7 @@ def validate_environment():
     # 3. Check Cartesia TTS (FALLBACK)
     cartesia_key = os.getenv("CARTESIA_API_KEY", "").strip()
     if not cartesia_key:
-        logger.warning("CARTESIA_API_KEY is missing. JARVIS will safely fall back to local Piper TTS.")
+        logger.warning("CARTESIA_API_KEY is missing. VISION will safely fall back to local Piper TTS.")
         # Set a flag that agent.py can use instead of doing os.getenv again
         os.environ["FORCE_PIPER_TTS"] = "1"
     else:
@@ -81,7 +81,7 @@ def validate_environment():
 
         threading.Thread(target=_check_local_llm, daemon=True).start()
 
-    logger.info("Pre-flight checks complete. Booting JARVIS...\n")
+    logger.info("Pre-flight checks complete. Booting VISION...\n")
 
 if __name__ == "__main__":
     validate_environment()

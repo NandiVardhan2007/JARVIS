@@ -8,7 +8,7 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ESP32_IP = os.getenv("JARVIS_ESP32_IP", "10.216.226.11")
+DEFAULT_ESP32_IP = os.getenv("VISION_ESP32_IP", "10.216.226.11")
 
 
 @function_tool

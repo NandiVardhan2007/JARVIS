@@ -1,4 +1,4 @@
-# JARVIS — Just A Rather Very Intelligent System (Windows Native & Vision Core)
+# VISION — Just A Rather Very Intelligent System (Windows Native & Vision Core)
 
 A LiveKit Agents-powered Vision and Voice assistant for **Windows Desktop Control**,
 featuring real-time visual perception, OpenCV & MediaPipe hand gesture control, live animated
@@ -14,7 +14,7 @@ fallback.
 
 ## 🚀 How to Run on Windows
 
-To start JARVIS on Windows, simply run either the Batch script or the PowerShell script:
+To start VISION on Windows, simply run either the Batch script or the PowerShell script:
 
 ```cmd
 :: Using Command Prompt (Batch)
@@ -24,13 +24,13 @@ start.bat
 .\start.ps1
 ```
 
-To stop all JARVIS services:
+To stop all VISION services:
 ```cmd
 :: Using Command Prompt (Batch)
-stop_jarvis.bat
+stop_vision.bat
 
 :: Or using PowerShell
-.\stop_jarvis.ps1
+.\stop_vision.ps1
 ```
 
 ---
@@ -50,16 +50,16 @@ stop_jarvis.bat
                      └────────┬─────────┘
                               │ UDP mirror
                      ┌────────▼─────────┐
-                     │ jarvis_bridge.py │  WebSocket bridge (localhost:8765)
+                     │ vision_bridge.py │  WebSocket bridge (localhost:8765)
                      └────────┬─────────┘
                               │ WebSocket
                      ┌────────▼─────────┐
-                     │  jarvis_face/    │  Flutter frontend — animated
+                     │  vision_face/    │  Flutter frontend — animated
                      │  (Flutter app)   │  avatar, dashboard, controls
                      └──────────────────┘
 ```
 
-`jarvis_launcher.py` starts `agent.py` and `voice_client.py` as separate
+`vision_launcher.py` starts `agent.py` and `voice_client.py` as separate
 processes with a watchdog that restarts the agent if it crashes. The
 Flutter app is a separate process you run yourself (`flutter run`) and
 connects over WebSocket — it also runs a believable demo-mode animation
@@ -71,16 +71,16 @@ the moment it connects.
 ## Key Features
 
 ### Voice authentication
-On first launch with no master voice enrolled, JARVIS walks you through
+On first launch with no master voice enrolled, VISION walks you through
 registering one: it displays and speaks a short sample paragraph, records
 you reading it, and stores the voiceprint locally (resemblyzer embeddings,
 cosine similarity — nothing leaves your machine). Destructive actions
 (shutdown, deleting files, killing processes) re-check your live voice
 right before executing, not just once at session start. Re-enrollment is
-available through conversation ("JARVIS, re-register my voice").
+available through conversation ("VISION, re-register my voice").
 
 ### Animated avatar
-`jarvis_face/lib/face/` — a hand-built vector avatar (not a canned GIF/video):
+`vision_face/lib/face/` — a hand-built vector avatar (not a canned GIF/video):
 real audio-amplitude-driven lip sync, 11 emotions inferred from live
 conversation state and transcript content, natural blinking/gaze/breathing,
 subtle head movement, and state-reactive effects (thinking particles,
@@ -112,7 +112,7 @@ discuss about X" and get a real answer.
 Package search/install/remove, system updates, systemd service
 monitoring/control, journal log reading, Docker container control, file
 permissions, and startup-app management. Anything requiring root goes
-through `pkexec` — you authenticate via the OS's own dialog; JARVIS never
+through `pkexec` — you authenticate via the OS's own dialog; VISION never
 handles a password.
 
 ### Automatic system optimization
@@ -157,7 +157,7 @@ Some tools need system packages beyond pip:
   ```bash
   bash setup_uinput_permissions.sh
   ```
-  then log out and back in. Ask JARVIS to "run webcam diagnostics" afterward to confirm it's working.
+  then log out and back in. Ask VISION to "run webcam diagnostics" afterward to confirm it's working.
 - **LM Studio** (or any OpenAI-compatible local server) — optional, for local LLM/vision
 
 ### 2. Configure credentials
@@ -168,15 +168,15 @@ cp .env.example .env
 
 ### 3. First run — voice enrollment
 ```bash
-python jarvis_launcher.py
+python vision_launcher.py
 ```
-On first launch (no master voice enrolled yet), JARVIS will ask you to
+On first launch (no master voice enrolled yet), VISION will ask you to
 read a short sentence aloud and register your voice. After that, it
 verifies your voice each session before unlocking.
 
 ### 4. Run the Flutter frontend (optional but recommended)
 ```bash
-cd jarvis_face
+cd vision_face
 flutter pub get
 flutter run -d linux   # or your target device
 ```
@@ -185,16 +185,16 @@ flutter run -d linux   # or your target device
 
 ## Project Structure
 ```
-jarvis/
-├── jarvis_launcher.py     # Entry point — spawns agent.py + voice_client.py, watchdog
+vision/
+├── vision_launcher.py     # Entry point — spawns agent.py + voice_client.py, watchdog
 ├── agent.py               # LiveKit Agent: STT/LLM/TTS pipeline, personality, voice-auth gate
 ├── voice_client.py        # Headless mic capture + speech playback + state mirror
-├── jarvis_bridge.py       # WebSocket bridge to the Flutter frontend
+├── vision_bridge.py       # WebSocket bridge to the Flutter frontend
 ├── config.py              # Environment validation, local-LLM health check
 ├── requirements.txt
 ├── .env.example
-├── JARVIS_VNEXT_ROADMAP.md  # Design notes / gap analysis from the vNext pass
-├── jarvis_face/           # Flutter frontend (animated avatar + dashboard)
+├── VISION_VNEXT_ROADMAP.md  # Design notes / gap analysis from the vNext pass
+├── vision_face/           # Flutter frontend (animated avatar + dashboard)
 │   └── lib/face/          # The avatar rig: painter, params, animation driver
 └── Tools/
     ├── __init__.py        # Tool registry — get_all_tools(), AGENT_ROSTER, categories
@@ -202,7 +202,7 @@ jarvis/
     ├── windows_system.py  # Windows Winget packages, updates, services, logs, Docker, registry startup apps
     ├── hand_gesture_control.py # Real-time OpenCV & MediaPipe hand gesture tracking & mouse control
     ├── system_optimizer.py # Automatic RAM/CPU/storage/thermal monitoring
-    ├── resource_optimizer.py # JARVIS's own resource footprint + on-demand release
+    ├── resource_optimizer.py # VISION's own resource footprint + on-demand release
     ├── window_manager.py   # Windows Window manage/list/snap (win32gui, pygetwindow)
     ├── desktop_control.py  # Windows desktop toggle (win+d), key press, typing, OCR click
     ├── notepad.py          # Formatted document writer for Windows Notepad
@@ -231,11 +231,11 @@ jarvis/
   general-purpose interpreters (python/pip/node/npm) since letting an
   "allowlisted" command run arbitrary code defeats the point of a sandbox.
 - **Root-requiring actions use `pkexec`**, never a password typed/spoken to
-  JARVIS. JARVIS should never be asked to accept a password by voice.
+  VISION. VISION should never be asked to accept a password by voice.
 - **Destructive actions require `confirm=True`**, and the highest-risk ones
   (shutdown, killing processes, deleting files) additionally re-check your
   live voice right before executing.
-- **Nothing is ever permanently deleted** by JARVIS's own tools — file
+- **Nothing is ever permanently deleted** by VISION's own tools — file
   deletion goes through the recycle bin (`send2trash`).
 
 ---

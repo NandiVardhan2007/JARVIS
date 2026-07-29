@@ -68,7 +68,7 @@ async def auto_write_and_debug_code(prompt: str, filename: str) -> str:
             code = _extract_code(raw_response)
             
             # 2. Save file
-            save_path = os.path.join(os.path.expanduser("~"), "Documents", "JARVIS", f"{filename}.py")
+            save_path = os.path.join(os.path.expanduser("~"), "Documents", "VISION", f"{filename}.py")
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             with open(save_path, "w", encoding="utf-8") as f:
                 f.write(code)

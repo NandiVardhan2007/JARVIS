@@ -16,7 +16,7 @@ def _review_with_llm(code: str, prompt: str) -> str:
     from Tools.code_generator import _chat_completion
 
     system = (
-        "You are JARVIS, a senior software engineer performing a thorough code review. "
+        "You are VISION, a senior software engineer performing a thorough code review. "
         "Analyze the code for correctness, maintainability, performance, and security.\n\n"
         "Format your review as:\n"
         "## Summary\nBrief overall assessment (quality score 1-10 and one-line verdict).\n\n"
@@ -182,7 +182,7 @@ async def suggest_refactor(file_path: str) -> str:
         from Tools.code_generator import _chat_completion
 
         system = (
-            "You are JARVIS, a senior software architect specializing in code refactoring. "
+            "You are VISION, a senior software architect specializing in code refactoring. "
             "Analyze the code and provide specific, high-impact refactoring suggestions.\n\n"
             "Format:\n"
             "## Current Assessment\n"

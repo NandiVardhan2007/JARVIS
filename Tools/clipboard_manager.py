@@ -8,12 +8,12 @@ from livekit.agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = "jarvis_memory/clipboard.db"
+DB_PATH = "vision_memory/clipboard.db"
 _monitor_task = None
 _last_clipboard_content = ""
 
 def _ensure_db():
-    os.makedirs("jarvis_memory", exist_ok=True)
+    os.makedirs("vision_memory", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute('''CREATE TABLE IF NOT EXISTS clipboard_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

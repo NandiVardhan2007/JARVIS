@@ -1,4 +1,4 @@
-"""GitHub Integration Tool for JARVIS."""
+"""GitHub Integration Tool for VISION."""
 
 import os
 import logging
