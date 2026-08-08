@@ -62,8 +62,8 @@ def _load_tasks_from_db():
                 num = int(tid.split("_")[1])
                 if num > _task_counter:
                     _task_counter = num
-            except Exception:
-                pass
+            except Exception as parse_err:
+                logger.debug(f"Could not parse task_id counter from '{tid}': {parse_err}")
     except Exception as e:
         logger.error(f"Failed to load scheduled tasks: {e}")
 

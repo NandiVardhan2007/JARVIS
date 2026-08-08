@@ -210,7 +210,7 @@ async def unlock_phone(pin: str = "", pattern: str = "") -> str:
 
             script_content = "\n".join(script_lines) + "\n"
             script_path = os.path.join(tmp, "pattern.txt")
-            with open(script_path, "w") as f:
+            with open(script_path, "w", encoding="utf-8") as f:
                 f.write(script_content)
 
             await _adb_async("push", script_path, "/sdcard/pattern.txt")

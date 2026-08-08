@@ -13,14 +13,17 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("VISION.Config")
 
-def validate_environment():
+def validate_environment(strict: bool = True) -> bool:
     """
     Validates the environment configuration.
-    Raises SystemExit if a critical misconfiguration is found.
+    If strict is True, raises SystemExit if a critical misconfiguration is found.
+    Returns True if environment is fully valid, False otherwise.
     """
     # Always load the latest .env
     load_dotenv(override=True)
     logger.info("Running pre-flight environment checks...")
+
+    is_valid = True
 
     # 1. Check LiveKit (CRITICAL)
     livekit_key = os.getenv("LIVEKIT_API_KEY", "").strip()
@@ -30,7 +33,9 @@ def validate_environment():
     if not livekit_key or not livekit_secret or not livekit_url:
         logger.error("CRITICAL: LiveKit configuration is missing!")
         logger.error("Please ensure LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and LIVEKIT_URL are set in your .env file.")
-        sys.exit(1)
+        is_valid = False
+        if strict:
+            sys.exit(1)
 
     # 2. Check Groq API (WARNING)
     groq_key = os.getenv("GROQ_API_KEY", "").strip()
@@ -48,38 +53,21 @@ def validate_environment():
         if "FORCE_PIPER_TTS" in os.environ:
             del os.environ["FORCE_PIPER_TTS"]
         
-    # 4. Check Local LLM Health (LM Studio) — informational only. This used to
-    # block startup for up to 3s waiting on a network call; the agent's own
-    # FallbackAdapter already handles a genuinely-down local LLM at call time,
-    # so there's no need to hold up boot for a health check that's just a log
-    # line. Runs in the background and logs whenever it resolves.
-    local_llm_url = os.getenv("LOCAL_LLM_URL", "").strip()
-    if local_llm_url:
-        import threading
-
-        def _check_local_llm():
-            try:
-                base_url = local_llm_url
-                if base_url.endswith("/chat/completions"):
-                    base_url = base_url.replace("/chat/completions", "")
-                if base_url.endswith("/v1"):
-                    health_url = base_url + "/models"
-                else:
-                    health_url = base_url + "/v1/models"
-
-                resp = requests.get(health_url, timeout=3)
-                if resp.status_code == 200:
-                    models = resp.json().get("data", [])
-                    if models:
-                        logger.info(f"Local LLM is online. Model loaded: {models[0].get('id')}")
-                    else:
-                        logger.warning("Local LLM is online, but NO MODELS ARE LOADED in LM Studio! Code generation tools will fail.")
-                else:
-                    logger.warning(f"Local LLM returned unexpected status code: {resp.status_code}")
-            except Exception as e:
-                logger.warning(f"Local LLM offline at {local_llm_url} ({e}). Will fall back to Cloud LLM models (Groq / NVIDIA NIM) automatically if needed.")
-
-        threading.Thread(target=_check_local_llm, daemon=True).start()
+    # 4. Initialize & Validate Online AI API Load Balancer Pool
+    try:
+        from ai_load_balancer import get_global_balancer
+        balancer = get_global_balancer()
+        status = balancer.get_status()
+        if status["total_endpoints"] > 0:
+            providers = set(e["provider"] for e in status["endpoints"])
+            logger.info(
+                f"AI API Load Balancer online: {status['total_endpoints']} active endpoints "
+                f"across providers {list(providers)} using strategy '{status['strategy']}'."
+            )
+        else:
+            logger.warning("No LLM API keys found for OpenRouter, NVIDIA NIM, Groq, Gemini, or Local LLM!")
+    except Exception as e:
+        logger.warning(f"Failed to initialize AI Load Balancer: {e}")
 
     logger.info("Pre-flight checks complete. Booting VISION...\n")
 

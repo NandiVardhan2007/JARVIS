@@ -335,8 +335,8 @@ def _gesture_loop():
     if is_dragging:
         try:
             pyautogui.mouseUp()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error calling pyautogui.mouseUp: {e}")
 
     cap.release()
     hands.close()

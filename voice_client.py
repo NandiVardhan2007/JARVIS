@@ -200,8 +200,11 @@ async def _livekit_audio_task(state: VoiceClientState):
             log.warning("Audio playback error: %s", e)
         finally:
             if out_stream is not None:
-                out_stream.stop()
-                out_stream.close()
+                try:
+                    out_stream.stop()
+                    out_stream.close()
+                except Exception as stream_err:
+                    log.debug("Error closing audio output stream: %s", stream_err)
 
     @room.on("track_subscribed")
     def on_track_subscribed(track, publication, participant):

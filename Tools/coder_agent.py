@@ -13,23 +13,16 @@ LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:1234/v1")
 LOCAL_CODE_LLM_MODEL = os.getenv("LOCAL_CODE_LLM_MODEL", os.getenv("LOCAL_LLM_MODEL", "local-model"))
 
 def _call_llm(system: str, user: str) -> str:
-    url = LOCAL_LLM_URL + "/chat/completions" if not LOCAL_LLM_URL.endswith("chat/completions") else LOCAL_LLM_URL
-    resp = requests.post(
-        url,
-        headers={"Content-Type": "application/json"},
-        json={
-            "model": LOCAL_CODE_LLM_MODEL,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.2,
-            "max_tokens": 4096,
-        },
-        timeout=120,
+    from ai_load_balancer import get_global_balancer
+    balancer = get_global_balancer()
+    return balancer.chat_completion(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.2,
+        max_tokens=4096,
     )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
 
 def _extract_code(text: str, language: str = "python") -> str:
     """Extract code from markdown fences if present."""

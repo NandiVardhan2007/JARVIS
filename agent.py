@@ -38,10 +38,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from livekit import agents
-from livekit.agents import AgentSession, Agent, llm, stt
+from livekit.agents import AgentSession, Agent, llm, stt, TurnHandlingOptions
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import groq, nvidia, silero, openai
 import piper_tts_plugin
+from ai_load_balancer import LoadBalancedLLM, get_global_balancer
 
 
 from Tools import get_all_tools, classify_intent, get_tools_for_category
@@ -69,8 +70,8 @@ def send_hud_state(payload: dict):
         data = json.dumps(payload).encode("utf-8")
         _hud_udp_sock.sendto(data, ("127.0.0.1", 5005))
         _hud_udp_sock.sendto(data, ("127.0.0.1", 5016))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"HUD UDP state broadcast error: {e}")
 
 
 # ── Chat history trimming ─────────────────────────────────────────────────────
@@ -126,7 +127,11 @@ class VisionAgent(Agent):
                 active_tools = filtered
                 logger.info(f"Intent classified as '{intent}' -> loaded {len(active_tools)} tools.")
             else:
-                logger.warning(f"Intent '{intent}' yielded no tools. Using all {len(tools)} tools.")
+                logger.warning(f"Intent '{intent}' yielded no tools. Fallback to default subset.")
+            # Hard cap active_tools to max 8 tools to stay strictly under Groq 12,000 TPM limit
+            if len(active_tools) > 8:
+                logger.info(f"Capping active tools from {len(active_tools)} to 8 to prevent LLM token overflow.")
+                active_tools = active_tools[:8]
 
             cat_label = str(intent[0]).upper() if intent else "CORE"
             send_hud_state({
@@ -330,8 +335,8 @@ class RoomLogHandler(logging.Handler):
                     loop.create_task(self.room.local_participant.publish_data(data.encode('utf-8')))
                 except RuntimeError:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"RoomLogHandler emit error: {e}")
 
 current_room = None
 
@@ -358,10 +363,10 @@ async def entrypoint(ctx: agents.JobContext):
         while True:
             if os.path.exists(drop_file):
                 try:
-                    with open(drop_file, "r") as f:
+                    with open(drop_file, "r", encoding="utf-8") as f:
                         items = json.load(f)
                     if items:
-                        with open(drop_file, "w") as f:
+                        with open(drop_file, "w", encoding="utf-8") as f:
                             json.dump([], f)
                         
                         item_str = ", ".join(items)
@@ -390,32 +395,10 @@ async def entrypoint(ctx: agents.JobContext):
     stt_fallback = nvidia.STT()
     agent_stt = stt.FallbackAdapter([stt_primary, stt_fallback], vad=agent_vad)
 
-    # 2. LLM: Local LM Studio/Ollama -> Groq Llama3 -> NVIDIA Llama3
-    # Local-first for speed/privacy when available, but always backed by a
-    # cloud fallback — a crashed or unloaded local model (e.g. LM Studio with
-    # Gemma unloaded) shouldn't stall the whole conversation.
-    local_online = False
-    if LOCAL_LLM_URL:
-        try:
-            import requests
-            base_check = LOCAL_LLM_URL.rsplit('/', 1)[0] if LOCAL_LLM_URL.endswith('/v1') else LOCAL_LLM_URL
-            resp = requests.get(f"{base_check}/models" if not base_check.endswith('/models') else base_check, timeout=1.5)
-            if resp.status_code == 200:
-                local_online = True
-        except Exception:
-            local_online = False
-
-    if LOCAL_LLM_URL and local_online:
-        logger.info(f"Local LLM online at {LOCAL_LLM_URL}. Routing requests to local server (with cloud fallback).")
-        llm_local = openai.LLM(model=LOCAL_LLM_MODEL, base_url=LOCAL_LLM_URL, api_key="local-key")
-        llm_cloud_fallback = groq.LLM(model=GROQ_LLM_MODEL)
-        agent_llm = llm.FallbackAdapter([llm_local, llm_cloud_fallback])
-    else:
-        if LOCAL_LLM_URL:
-            logger.info(f"Local LLM ({LOCAL_LLM_URL}) is offline or un-responsive. Using Groq cloud LLM as primary.")
-        llm_primary = groq.LLM(model=GROQ_LLM_MODEL)
-        llm_fallback = openai.LLM(model=NIM_LLM_MODEL, base_url=NIM_BASE_URL, api_key=NVIDIA_API_KEY)
-        agent_llm = llm.FallbackAdapter([llm_primary, llm_fallback])
+    # 2. LLM: AI API Load Balancer (OpenRouter, NVIDIA NIM, Groq, Gemini, Local LLM)
+    logger.info("Initializing AI API Load Balancer for LiveKit Voice Agent...")
+    balancer = get_global_balancer()
+    agent_llm = LoadBalancedLLM(balancer=balancer)
 
     # 3. TTS: Piper TTS (Fast Sub-Second Local Engine)
     agent_tts = piper_tts_plugin.PiperTTS()
@@ -442,14 +425,14 @@ async def entrypoint(ctx: agents.JobContext):
         vad=agent_vad,
         # Interruption protection — prevent room noise from cutting off VISION mid-sentence.
         # User must speak for at least 1.2s with ≥4 words before we interrupt.
-        allow_interruptions=True,
-        min_interruption_duration=1.2,
-        min_interruption_words=4,
-        # If VAD fires but then goes silent quickly, treat it as a false positive.
-        false_interruption_timeout=1.8,
-        resume_false_interruption=True,
-        # Do not discard buffered audio for uninterruptible speech segments.
-        discard_audio_if_uninterruptible=False,
+        turn_handling=TurnHandlingOptions(
+            allow_interruptions=True,
+            min_interruption_duration=1.2,
+            min_interruption_words=4,
+            false_interruption_timeout=1.8,
+            resume_false_interruption=True,
+            discard_audio_if_uninterruptible=False,
+        ),
     )
 
     
@@ -499,8 +482,9 @@ async def entrypoint(ctx: agents.JobContext):
             return np.zeros(1)
 
     master_profile = load_master_embedding()
-    voice_auth_enabled = os.getenv("VISION_VOICE_AUTH_ENABLED", "true").lower() == "true"
-    auth_threshold = float(os.getenv("VISION_VOICE_AUTH_THRESHOLD", "0.65"))
+    auth_env = os.getenv("VISION_VOICE_AUTH_ENABLED", os.getenv("VISION_VOICE_AUTH_ENABLED", "true"))
+    voice_auth_enabled = auth_env.lower() == "true"
+    auth_threshold = float(os.getenv("VISION_VOICE_AUTH_THRESHOLD", os.getenv("VISION_VOICE_AUTH_THRESHOLD", "0.65")))
 
     if not voice_auth_enabled:
         # Explicitly disabled via env — deliberate opt-out, not a first-run state
@@ -614,7 +598,12 @@ async def entrypoint(ctx: agents.JobContext):
                 "description": "Analysing voice print...",
             })
 
-            matched = await verify_master_voice(audio_clip, threshold=auth_threshold)
+            # Check audio clip validity (hardware check)
+            is_valid_audio = audio_clip is not None and len(audio_clip) > 100 and not np.all(audio_clip == 0)
+            if not is_valid_audio:
+                logger.warning("Auth audio capture produced empty or silent buffer. Audio input device may be busy or unavailable.")
+
+            matched = await verify_master_voice(audio_clip, threshold=auth_threshold) if is_valid_audio else False
 
             if matched:
                 _auth_unlocked = True
@@ -631,29 +620,45 @@ async def entrypoint(ctx: agents.JobContext):
                 await asyncio.sleep(2.8)
             else:
                 attempts_left -= 1
-                logger.warning(f"Voice mismatch. {attempts_left} attempt(s) remaining.")
+                logger.warning(f"Voice mismatch or unreadable audio. {attempts_left} attempt(s) remaining.")
                 if attempts_left > 0:
+                    hud_msg = "Voice not recognized" if is_valid_audio else "Audio hardware unavailable"
                     send_hud_state({
                         "state": "auth_failed",
-                        "description": f"Voice not recognised. {attempts_left} attempt{'s' if attempts_left > 1 else ''} left.",
+                        "description": f"{hud_msg}. {attempts_left} attempt{'s' if attempts_left > 1 else ''} left.",
                     })
+                    say_msg = "Voice print not recognized." if is_valid_audio else "Microphone audio was unreadable."
                     await session.say(
-                        f"Voice print not recognised. Try again. {attempts_left} attempt{'s' if attempts_left > 1 else ''} remaining.",
+                        f"{say_msg} Try speaking again. {attempts_left} attempt{'s' if attempts_left > 1 else ''} remaining.",
                         allow_interruptions=False
                     )
                     await asyncio.sleep(2.8)
                 else:
-                    send_hud_state({
-                        "state": "auth_lockout",
-                        "description": "Authentication failed. Shutting down.",
-                    })
-                    await session.say(
-                        f"Authentication failed. Unauthorised access detected. Shutting down, {OWNER_ADDRESS}.",
-                        allow_interruptions=False
-                    )
-                    await asyncio.sleep(3.0)
-                    import sys
-                    sys.exit(1)
+                    if not is_valid_audio:
+                        logger.warning("Microphone hardware failed during authentication. Fallback unlocking system with alert.")
+                        send_hud_state({
+                            "state": "alert",
+                            "description": "Audio hardware unreadable — unlocked fallback mode",
+                        })
+                        await session.say(
+                            "Audio input hardware appears to be unavailable. Unlocking fallback mode.",
+                            allow_interruptions=False
+                        )
+                        await asyncio.sleep(2.0)
+                        _auth_unlocked = True
+                        mark_session_authenticated(True)
+                    else:
+                        send_hud_state({
+                            "state": "auth_lockout",
+                            "description": "Authentication failed. Shutting down.",
+                        })
+                        await session.say(
+                            f"Authentication failed. Unauthorised access detected. Shutting down, {OWNER_ADDRESS}.",
+                            allow_interruptions=False
+                        )
+                        await asyncio.sleep(3.0)
+                        import sys
+                        sys.exit(1)
 
 
     if _auth_unlocked:
@@ -688,8 +693,8 @@ async def entrypoint(ctx: agents.JobContext):
             try:
                 from Tools.conversation_memory import log_conversation_turn
                 log_conversation_turn("user", text)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to log user conversation turn: {e}")
 
     @session.on("agent_state_changed")
     def _on_agent_state_changed(ev: events.AgentStateChangedEvent):
@@ -726,8 +731,8 @@ async def entrypoint(ctx: agents.JobContext):
                     try:
                         from Tools.conversation_memory import log_conversation_turn
                         log_conversation_turn("assistant", text)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to log assistant conversation turn: {e}")
         except Exception as e:
             logger.warning(f"Error in conversation_item_added: {e}")
 
@@ -735,6 +740,8 @@ async def entrypoint(ctx: agents.JobContext):
     asyncio.create_task(monitor_dropzone(session))
     
     # --- HUD UDP Server ---
+    _last_hud_input = {"text": "", "ts": 0.0}
+
     class HUDUDPProtocol(asyncio.DatagramProtocol):
         def __init__(self, session):
             self.session = session
@@ -742,23 +749,39 @@ async def entrypoint(ctx: agents.JobContext):
         def datagram_received(self, data, addr):
             try:
                 msg = json.loads(data.decode('utf-8'))
+                now_ts = time.time()
                 if msg.get('type') == 'text_input':
-                    text = msg.get('text', '')
-                    if text:
+                    text = msg.get('text', '').strip()
+                    # Debounce duplicate text commands (e.g. rapid gesture events) within 1.2 seconds
+                    if text and (text != _last_hud_input["text"] or (now_ts - _last_hud_input["ts"]) > 1.2):
+                        _last_hud_input["text"] = text
+                        _last_hud_input["ts"] = now_ts
                         logger.info(f"Received text input from HUD: {text}")
                         async def _run_text():
-                            h = self.session.generate_reply(user_input=text)
-                            if asyncio.iscoroutine(h) or hasattr(h, '__await__'):
-                                await h
+                            try:
+                                if not self.session or getattr(self.session, "_closed", False):
+                                    logger.warning("Session is closed or not running. Cannot process HUD text input.")
+                                    return
+                                h = self.session.generate_reply(user_input=text)
+                                if asyncio.iscoroutine(h) or hasattr(h, '__await__'):
+                                    await h
+                            except Exception as _e:
+                                logger.warning(f"Could not generate reply for HUD text input: {_e}")
                         asyncio.create_task(_run_text())
                 elif msg.get('type') == 'action':
                     action = msg.get('action', '')
                     if action == 'screenshot':
                         logger.info("Received screenshot action from HUD")
                         async def _run_screenshot():
-                            h = self.session.generate_reply(user_input="Take a screenshot")
-                            if asyncio.iscoroutine(h) or hasattr(h, '__await__'):
-                                await h
+                            try:
+                                if not self.session or getattr(self.session, "_closed", False):
+                                    logger.warning("Session is closed or not running. Cannot process HUD action.")
+                                    return
+                                h = self.session.generate_reply(user_input="Take a screenshot")
+                                if asyncio.iscoroutine(h) or hasattr(h, '__await__'):
+                                    await h
+                            except Exception as _e:
+                                logger.warning(f"Could not generate reply for HUD screenshot action: {_e}")
                         asyncio.create_task(_run_screenshot())
             except Exception as e:
                 logger.error(f"HUD UDP server error: {e}")

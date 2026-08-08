@@ -75,18 +75,18 @@ def _get_thermal_celsius() -> Optional[float]:
             first_key = next(iter(temps))
             if temps[first_key]:
                 return max(t.current for t in temps[first_key])
-    except Exception:
-        pass
+    except Exception as thermal_err:
+        logger.debug(f"psutil sensors_temperatures check failed: {thermal_err}")
 
     # Fallback: read the kernel thermal zone directly
     try:
         zone_path = "/sys/class/thermal/thermal_zone0/temp"
         if os.path.isfile(zone_path):
-            with open(zone_path) as f:
+            with open(zone_path, "r", encoding="utf-8") as f:
                 millidegrees = int(f.read().strip())
                 return millidegrees / 1000.0
-    except Exception:
-        pass
+    except Exception as sys_err:
+        logger.debug(f"sys thermal zone reading failed: {sys_err}")
     return None
 
 
@@ -218,8 +218,8 @@ async def _run_optimization_pass(trigger: str) -> str:
     try:
         from agent import send_hud_state
         send_hud_state({"state": "notify", "description": summary})
-    except Exception:
-        pass
+    except Exception as hud_err:
+        logger.debug(f"send_hud_state failed in optimization pass: {hud_err}")
 
     return summary
 
@@ -261,8 +261,8 @@ async def _optimizer_loop():
                 try:
                     from agent import send_hud_state
                     send_hud_state({"state": "alert", "description": f"High CPU temperature: {temp_c:.0f}°C"})
-                except Exception:
-                    pass
+                except Exception as alert_err:
+                    logger.debug(f"send_hud_state alert failed for thermal warning: {alert_err}")
 
         except Exception as e:
             logger.warning(f"System optimizer check failed: {e}")

@@ -50,13 +50,8 @@ class LRUUserContexts:
 USER_CONTEXTS = LRUUserContexts(maxsize=100)
 
 def _build_llm():
-    if os.getenv("TELEGRAM_LLM_API", "").strip():
-        return openai.LLM(
-            model="meta/llama-3.3-70b-instruct",
-            api_key=os.getenv("TELEGRAM_LLM_API", "").strip(),
-            base_url="https://integrate.api.nvidia.com/v1",
-        )
-    return groq.LLM(model="llama-3.3-70b-versatile")
+    from ai_load_balancer import LoadBalancedLLM, get_global_balancer
+    return LoadBalancedLLM(balancer=get_global_balancer())
 
 def send_whatsapp_reply(chat_id: str, text: str):
     # Prefix text with robot emoji to prevent infinite loops when messaging yourself
@@ -383,12 +378,11 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
             except Exception as e:
                 result = str(e)
                 is_error = True
-                # Log to error telemetry for pattern detection
                 try:
                     from Tools.error_telemetry import log_tool_error
                     log_tool_error(tool_name, e, args)
-                except Exception:
-                    pass
+                except Exception as tel_err:
+                    logger.warning(f"Failed to record error telemetry for {tool_name}: {tel_err}")
                 
             MAX_TOOL_OUTPUT = 2000
             if len(result) > MAX_TOOL_OUTPUT:

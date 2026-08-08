@@ -42,7 +42,7 @@ from .code_review_agent import review_file, review_pr, suggest_refactor
 from .reminder import say_reminder, get_today_reminder_message_from_db
 from .whatsapp import send_whatsapp_message, send_whatsapp_media
 from .google_contacts import search_google_contact
-from .notepad import write_in_notepad
+from .notepad import write_in_notepad, open_notepad, type_and_save_notepad
 from .file_ops import (
     open_file_command, list_directory, search_files, create_file, 
     create_folder, copy_file_or_folder, move_or_rename_path, 
@@ -85,6 +85,10 @@ from .code_fixer import fix_code_error
 from .briefing import morning_briefing
 from .coder_agent import auto_write_and_debug_code
 from .codebase_rag import index_project_codebase, search_codebase
+from .academic_outreach import (
+    find_iit_internships_and_professors, draft_cold_email_to_professor,
+    list_drafted_cold_emails, send_approved_cold_emails
+)
 
 # ── Tool Categories ───────────────────────────────────────────────────────────
 
@@ -118,7 +122,9 @@ TOOL_CATEGORIES = {
         get_stock_price, get_crypto_price, portfolio_summary, add_to_portfolio
     ],
     "research": [
-        deep_research, compare_sources
+        deep_research, compare_sources,
+        find_iit_internships_and_professors, draft_cold_email_to_professor,
+        list_drafted_cold_emails, send_approved_cold_emails
     ],
     "code": [
         generate_and_type_code, run_file_in_vscode, review_file, 
@@ -144,7 +150,7 @@ TOOL_CATEGORIES = {
     "desktop": [
         manage_window, manage_window_state, list_active_windows, 
         open_app_on_screen, open_app, play_media, stop_media, desktop_control, 
-        press_key, type_user_message_auto, click_on_text, write_in_notepad,
+        press_key, type_user_message_auto, click_on_text, write_in_notepad, open_notepad, type_and_save_notepad,
         start_hand_gesture_control, stop_hand_gesture_control, get_gesture_control_status, set_gesture_sensitivity,
         open_file_command, read_screen, read_selected_region, list_monitors, take_screenshot,
         process_document_query, list_directory, search_files,
@@ -296,7 +302,7 @@ _INTENT_KEYWORDS = {
                       "fix error", "debug code", "code error", "compile error", "traceback"],
     "system":        ["process", "brightness", "volume", "system", "virus", "shut down",
                       "shutdown", "restart", "sleep", "pc", "computer", "power", "battery",
-                      "cpu", "ram", "storage", "disk", "webcam", "camera", "vision", "gesture", "gestures", "hand"],
+                      "cpu", "ram", "storage", "disk", "webcam", "camera", "gesture", "gestures", "hand"],
     "communication": ["discord", "whatsapp", "message", "call", "phone", "ring", "dial", "hang up", "end call"],
     "scheduler":     ["schedule", "timer", "remind me at", "remind me after", "briefing",
                       "morning briefing"],

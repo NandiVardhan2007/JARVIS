@@ -355,8 +355,8 @@ async def list_startup_apps() -> str:
                 for i in range(count):
                     name, val, _ = winreg.EnumValue(key, i)
                     startup_apps.append(f"• {name} -> {val}")
-        except Exception:
-            pass
+        except Exception as reg_err:
+            logger.debug(f"Reading Windows Registry path {subkey} failed: {reg_err}")
 
     if not startup_apps:
         return "No startup applications found in Windows Registry."

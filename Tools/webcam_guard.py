@@ -50,8 +50,8 @@ def _send_action_command(action_text: str):
         payload = json.dumps({'type': 'text_input', 'text': action_text}).encode("utf-8")
         _sock.sendto(payload, ("127.0.0.1", 5004))
         _sock.sendto(payload, ("127.0.0.1", 5016))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"_send_action_command UDP broadcast error: {e}")
 
 
 def _get_screen_size():
@@ -111,8 +111,8 @@ def _start_mjpeg_stream_server():
                     self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
                     self.end_headers()
                     self.wfile.write(frame_bytes)
-                except Exception:
-                    pass
+                except Exception as stream_err:
+                    logger.debug(f"HTTP MJPEG handler snapshot write error: {stream_err}")
                 return
 
             if self.path.startswith('/video_feed') or self.path == '/':
@@ -143,16 +143,16 @@ def _start_mjpeg_stream_server():
             pass  # Suppress HTTP access logging in stdout
 
     try:
-        _http_server = ThreadedHTTPServer(('0.0.0.0', 5005), CamHandler)
+        _http_server = ThreadedHTTPServer(('0.0.0.0', 5055), CamHandler)
         t = threading.Thread(target=_http_server.serve_forever, daemon=True)
         t.start()
-        logger.info("Live MJPEG video stream server running at http://127.0.0.1:5005/video_feed")
+        logger.info("Live MJPEG video stream server running at http://127.0.0.1:5055/video_feed")
     except Exception as e:
         _http_server = True
         logger.error(
-            f"Could not bind the video feed HTTP server on port 5005 ({e}). "
+            f"Could not bind the video feed HTTP server on port 5055 ({e}). "
             f"The frontend video widget will show a standby image instead of the live feed. "
-            f"Check if another process is already using port 5005: lsof -i :5005"
+            f"Check if another process is already using port 5055."
         )
 
 
@@ -288,29 +288,25 @@ def _camera_loop():
     screen_w, screen_h = _get_screen_size()
     uinput_mouse = None
     uinput_error = ""
-    try:
-        from evdev import UInput, ecodes as e
-        # Use EV_REL (relative movement) — GNOME Wayland treats EV_ABS as a touchscreen,
-        # only EV_REL is recognised as a real pointer and actually moves the cursor.
-        cap_events = {
-            e.EV_REL: [e.REL_X, e.REL_Y, e.REL_WHEEL],
-            e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE],
-        }
-        uinput_mouse = UInput(cap_events, name='vision-air-mouse')
-        # Opening the device node can succeed even when writes will fail (some
-        # permission/SELinux/AppArmor configurations allow open() but not
-        # write()) — a zero-delta test write catches that case now, rather
-        # than silently doing nothing on every real gesture later.
-        uinput_mouse.write(e.EV_REL, e.REL_X, 0)
-        uinput_mouse.syn()
-        logger.info("Kernel /dev/uinput virtual relative mouse initialized for GNOME Wayland!")
-    except Exception as _ue:
-        uinput_error = str(_ue)
-        logger.warning(f"uinput mouse unavailable: {_ue}")
-        if uinput_mouse:
-            try: uinput_mouse.close()
-            except Exception: pass
-        uinput_mouse = None
+    import sys
+    if sys.platform != "win32":
+        try:
+            from evdev import UInput, ecodes as e
+            cap_events = {
+                e.EV_REL: [e.REL_X, e.REL_Y, e.REL_WHEEL],
+                e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE],
+            }
+            uinput_mouse = UInput(cap_events, name='vision-air-mouse')
+            uinput_mouse.write(e.EV_REL, e.REL_X, 0)
+            uinput_mouse.syn()
+            logger.info("Kernel /dev/uinput virtual relative mouse initialized for GNOME Wayland!")
+        except Exception as _ue:
+            uinput_error = str(_ue)
+            logger.warning(f"uinput mouse unavailable: {_ue}")
+            if uinput_mouse:
+                try: uinput_mouse.close()
+                except Exception as close_err: logger.debug(f"uinput mouse close error: {close_err}")
+            uinput_mouse = None
 
     mouse = None
     pynput_error = ""
@@ -321,7 +317,7 @@ def _camera_loop():
         pynput_error = str(e)
         logger.warning(f"pynput mouse controller unavailable ({e}). Cursor control disabled.")
 
-    if not uinput_mouse and mouse:
+    if sys.platform != "win32" and not uinput_mouse and mouse:
         logger.warning(
             "Only pynput is available for cursor control, no uinput. On native Wayland "
             "(GNOME), pynput's absolute positioning frequently does not move the real "
@@ -351,7 +347,7 @@ def _camera_loop():
         _camera_ready_event.set()
         if uinput_mouse:
             try: uinput_mouse.close()
-            except Exception: pass
+            except Exception as close_err: logger.debug(f"uinput mouse close error on camera fail: {close_err}")
         return
 
     _camera_open_failed = False
@@ -398,8 +394,8 @@ def _camera_loop():
         cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         if os.path.exists(cascade_path):
             face_cascade = cv2.CascadeClassifier(cascade_path)
-    except Exception:
-        pass
+    except Exception as cascade_err:
+        logger.debug(f"Haar cascade face classifier load error: {cascade_err}")
 
     # Auto-release: continuous camera capture + per-frame hand tracking is a
     # real CPU/GPU cost. If no hand gesture has been seen AND nobody's
@@ -423,8 +419,8 @@ def _camera_loop():
                     "state": "notify",
                     "description": "Gesture control paused (idle) — camera released.",
                 })
-            except Exception:
-                pass
+            except Exception as hud_err:
+                logger.debug(f"HUD state update failed in webcam loop: {hud_err}")
             _camera_active = False
             break
 
@@ -452,8 +448,8 @@ def _camera_loop():
                     cv2.rectangle(frame, (fx, fy), (fx + fw, fy + fh), (0, 212, 255), 2)
                     cv2.rectangle(frame, (fx, fy - 22), (fx + fw, fy), (0, 212, 255), cv2.FILLED)
                     cv2.putText(frame, "MASTER FACE CONFIRMED", (fx + 4, fy - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 2)
-            except Exception:
-                pass
+            except Exception as face_err:
+                logger.debug(f"Face cascade detection error: {face_err}")
 
         landmarks = None
 
@@ -509,14 +505,14 @@ def _camera_loop():
                         uinput_mouse.write(e.EV_REL, e.REL_X, int(rel_dx))
                         uinput_mouse.write(e.EV_REL, e.REL_Y, int(rel_dy))
                         uinput_mouse.syn()
-                    except Exception:
-                        pass
+                    except Exception as ev_err:
+                        logger.debug(f"uinput mouse write error: {ev_err}")
 
                 if mouse:
                     try:
                         mouse.position = (curr_x, curr_y)
-                    except Exception:
-                        pass
+                    except Exception as pos_err:
+                        logger.debug(f"mouse position set error: {pos_err}")
 
                 # Adaptive Pinch Distance (Index tip to Thumb tip relative to hand scale)
                 pinch_raw = np.hypot(index_x - thumb_x, index_y - thumb_y)
@@ -538,11 +534,11 @@ def _camera_loop():
                                 from evdev import ecodes as e
                                 uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 1)
                                 uinput_mouse.syn()
-                            except Exception: pass
+                            except Exception as ev_err: logger.debug(f"uinput mouse BTN_LEFT press error: {ev_err}")
                         if mouse:
                             try:
                                 mouse.press(Button.left)
-                            except Exception: pass
+                            except Exception as m_err: logger.debug(f"mouse press error: {m_err}")
 
                     # Draw vibrant active pinch indicator (Cyan-Green glowing line)
                     cv2.line(frame, (ix_px, iy_px), (tx_px, ty_px), (255, 212, 0), 4)
@@ -557,11 +553,11 @@ def _camera_loop():
                                 from evdev import ecodes as e
                                 uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 0)
                                 uinput_mouse.syn()
-                            except Exception: pass
+                            except Exception as ev_err: logger.debug(f"uinput mouse BTN_LEFT release error: {ev_err}")
                         if mouse:
                             try:
                                 mouse.release(Button.left)
-                            except Exception: pass
+                            except Exception as m_err: logger.debug(f"mouse release error: {m_err}")
 
                         # Short tap pinch (<0.35s) = Click / Double Click
                         if pinch_duration < 0.35:
@@ -570,13 +566,13 @@ def _camera_loop():
                                 if mouse:
                                     try:
                                         mouse.click(Button.left, 2)
-                                    except Exception: pass
+                                    except Exception as click_err: logger.debug(f"mouse double click error: {click_err}")
                             else:
                                 logger.info("Short pinch detected -> Single Click")
                                 if mouse:
                                     try:
                                         mouse.click(Button.left, 1)
-                                    except Exception: pass
+                                    except Exception as click_err: logger.debug(f"mouse single click error: {click_err}")
 
                             last_click_time = now
 
@@ -595,8 +591,8 @@ def _camera_loop():
                         if mouse:
                             try:
                                 mouse.click(Button.right, 1)
-                            except Exception:
-                                pass
+                            except Exception as rclick_err:
+                                logger.debug(f"mouse right click error: {rclick_err}")
                         last_right_click_time = now
                         cv2.putText(frame, "RIGHT CLICK", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 140, 255), 2)
                     was_right_pinched = is_right_pinched
@@ -622,8 +618,8 @@ def _camera_loop():
                             if mouse:
                                 try:
                                     mouse.scroll(0, direction * SCROLL_TICKS_PER_UNIT)
-                                except Exception:
-                                    pass
+                                except Exception as scroll_err:
+                                    logger.debug(f"mouse scroll error: {scroll_err}")
                             scroll_ref_y = scroll_y
                             did_scroll_this_hold = True
                             cv2.putText(frame, "SCROLLING", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
@@ -687,8 +683,8 @@ def _camera_loop():
         try:
             _, buffer = cv2.imencode('.jpg', frame)
             _latest_encoded_frame = buffer.tobytes()
-        except Exception:
-            pass
+        except Exception as enc_err:
+            logger.debug(f"cv2 frame imencode JPEG error: {enc_err}")
 
         # Show live feedback desktop window
         try:
@@ -696,15 +692,15 @@ def _camera_loop():
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
-        except Exception:
-            pass
+        except Exception as show_err:
+            logger.debug(f"cv2.imshow display error: {show_err}")
 
     # Safety release when loop exits
     if mouse and is_dragging:
         try:
             mouse.release(Button.left)
-        except Exception:
-            pass
+        except Exception as rel_err:
+            logger.debug(f"mouse release on loop exit error: {rel_err}")
 
     cap.release()
     cv2.destroyAllWindows()
@@ -748,8 +744,8 @@ def _analyze_gesture(landmarks) -> str | None:
         if index_up and pinky_up and not middle_up and not ring_up:
             return "ROCK_ON"
 
-    except Exception:
-        pass
+    except Exception as analyze_err:
+        logger.debug(f"Gesture analysis exception: {analyze_err}")
     return None
 
 def _handle_gesture_action(gesture: str):
@@ -773,8 +769,8 @@ def _handle_gesture_action(gesture: str):
                 "tool_name": f"GESTURE_{gesture}",
                 "description": f"Triggering gesture action: {action}",
             })
-        except Exception:
-            pass
+        except Exception as hud_err:
+            logger.debug(f"send_hud_state for gesture action failed: {hud_err}")
         _send_action_command(action)
 
 
@@ -890,8 +886,8 @@ async def get_webcam_diagnostics() -> str:
         current_user = os.environ.get("USER", "")
         in_video_group = current_user in video_group_members
         lines.append(f"• User '{current_user}' in 'video' group: {in_video_group}")
-    except Exception:
-        pass
+    except Exception as grp_err:
+        logger.debug(f"User video group check failed: {grp_err}")
 
     # Live camera-open test — reuses the same probing logic start_webcam_guard uses.
     try:

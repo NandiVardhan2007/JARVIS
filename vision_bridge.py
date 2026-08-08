@@ -32,10 +32,7 @@ import socket
 try:
     import websockets
 except ImportError:  # pragma: no cover
-    raise SystemExit(
-        "The 'websockets' package is required.\n"
-        "Install it with:  pip install websockets"
-    )
+    websockets = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -102,15 +99,21 @@ class Hub:
         for port in MEDIA_PORTS:
             try:
                 self._cmd_sock.sendto(data, ("127.0.0.1", port))
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("media send port %s failed: %s", port, e)
 
 
 def derive_state(raw: dict) -> str:
     """Pick the face state from the explicit agent state + live audio levels."""
     hud_state = str(raw.get("state", "idle")).lower()
-    ai = float(raw.get("ai_level", 0.0) or 0.0)
-    mic = float(raw.get("mic_level", 0.0) or 0.0)
+    try:
+        ai = float(raw.get("ai_level", 0.0) or 0.0)
+    except (ValueError, TypeError):
+        ai = 0.0
+    try:
+        mic = float(raw.get("mic_level", 0.0) or 0.0)
+    except (ValueError, TypeError):
+        mic = 0.0
     muted = bool(raw.get("mic_muted", False))
 
     if hud_state in ("speaking", "listening", "thinking", "alert", "input"):
@@ -193,16 +196,17 @@ async def ws_handler(ws, hub: Hub):
         if hub.last_payload:
             try:
                 await ws.send(json.dumps(hub.last_payload))
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Failed initial snapshot send to WS client: %s", e)
         async for message in ws:
             try:
                 obj = json.loads(message)
-            except Exception:
+            except Exception as e:
+                log.warning("Invalid JSON received from WS client: %s", e)
                 continue
             _route_command(obj, hub)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("WebSocket handler exception: %s", e)
     finally:
         hub.remove(ws)
 
@@ -230,6 +234,9 @@ def _route_command(obj: dict, hub: Hub):
 
 
 async def main():
+    if websockets is None:
+        log.error("The 'websockets' package is required to run vision_bridge. Please install: pip install websockets")
+        return
     loop = asyncio.get_running_loop()
     hub = Hub()
 

@@ -58,9 +58,10 @@ async def generate_ai_video(
 
         size_str = f"{os.path.getsize(output_path) // 1024} KB"
         try:
-            os.startfile(output_path)
-        except Exception:
-            pass
+            if hasattr(os, "startfile"):
+                os.startfile(output_path)
+        except Exception as start_err:
+            logger.warning(f"Could not automatically open video file {output_path}: {start_err}")
 
         return (
             f"Video generated successfully.\n"
@@ -102,7 +103,7 @@ async def generate_local_image_comfyui(prompt: str, model_name: str = "novaReali
     workflow_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "comfy_api.json")
     
     if os.path.exists(workflow_path):
-        with open(workflow_path, "r") as f:
+        with open(workflow_path, "r", encoding="utf-8") as f:
             workflow = json.load(f)
             # Naive prompt replacement if we find a CLIP node
             for node_id, node in workflow.items():

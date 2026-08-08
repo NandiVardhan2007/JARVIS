@@ -7,7 +7,7 @@ env/
 .venv/
 xtts_env/
 xtts_models/
-jarvis_memory/
+vision_memory/
 *.db
 *.sqlite3
 *.log
@@ -15,15 +15,15 @@ token.pickle
 credentials.json
 .DS_Store
 
-jarvis-waha/
+vision-waha/
 telegram_offset.txt
 *.onnx
 models/
-jarvis.db
-jarvis_waha.db
+vision.db
+vision_waha.db
 pretrained_models/
 
 # Output and recording directories
-JARVIS_Screenshots/
+VISION_Screenshots/
 Output/
 output/

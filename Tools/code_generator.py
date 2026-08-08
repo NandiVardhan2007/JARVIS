@@ -25,56 +25,18 @@ LOCAL_CODE_LLM_MODEL = os.getenv("LOCAL_CODE_LLM_MODEL", os.getenv("LOCAL_LLM_MO
 
 def _chat_completion(system: str, user: str) -> str:
     """
-    Calls Groq first; falls back to NVIDIA NIM if Groq fails or key is missing.
+    Calls the AI API Load Balancer across OpenRouter, NVIDIA NIM, Groq, Gemini, and Local LLM.
     Returns the raw content string from the model.
     """
-    def _call(url: str, key: str, model: str) -> str:
-        resp = requests.post(
-            url,
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user",   "content": user},
-                ],
-                "temperature": 0.2,
-                "max_tokens": 4096,
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
-
-    # 0. Try Local LLM
-    if LOCAL_LLM_URL:
-        try:
-            result = _call(LOCAL_LLM_URL + "/chat/completions" if not LOCAL_LLM_URL.endswith("chat/completions") else LOCAL_LLM_URL, "local-key", LOCAL_CODE_LLM_MODEL)
-            logger.info("Code generated via local LLM.")
-            return result
-        except Exception as e:
-            logger.warning(f"Local LLM code generation failed ({e}), falling back...")
-
-    # 1. Try Groq
-    if GROQ_API_KEY:
-        try:
-            result = _call(GROQ_API_URL, GROQ_API_KEY, GROQ_LLM_MODEL)
-            logger.info("Code generated via Groq.")
-            return result
-        except Exception as e:
-            logger.warning(f"Groq code generation failed ({e}), trying NVIDIA NIM...")
-
-    # 2. Fallback to NIM
-    if NVIDIA_API_KEY:
-        try:
-            result = _call(NIM_API_URL, NVIDIA_API_KEY, NIM_LLM_MODEL)
-            logger.info("Code generated via NVIDIA NIM fallback.")
-            return result
-        except Exception as e:
-            raise RuntimeError(f"Both Groq and NVIDIA NIM failed. Last error: {e}")
-
-    raise RuntimeError(
-        "No API keys configured. Set GROQ_API_KEY or NVIDIA_API_KEY in your .env file."
+    from ai_load_balancer import get_global_balancer
+    balancer = get_global_balancer()
+    return balancer.chat_completion(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user",   "content": user},
+        ],
+        temperature=0.2,
+        max_tokens=4096,
     )
 
 

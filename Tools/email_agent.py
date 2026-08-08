@@ -50,8 +50,8 @@ def imap_connection():
     finally:
         try:
             conn.logout()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"IMAP logout exception: {e}")
 
 
 def _decode_header(raw: str) -> str:
@@ -105,8 +105,8 @@ def _format_email_summary(msg: email.message.Message, uid: str) -> str:
     try:
         parsed = email.utils.parsedate_to_datetime(date)
         date = parsed.strftime("%b %d, %I:%M %p")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Email date parsing failed for '{date}': {e}")
     snippet = _extract_text(msg)[:100].replace("\n", " ").strip()
     return f"[ID:{uid}] {subj}\n  From: {frm}\n  Date: {date}\n  Preview: {snippet}..."
 
@@ -412,42 +412,17 @@ LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "local-model")
 
 
 def _email_llm(system: str, user: str) -> str:
-    """Call the LLM using local LM Studio or fallback to NVIDIA NIM."""
-    import requests as _requests
-
-    if LOCAL_LLM_URL:
-        url = LOCAL_LLM_URL + "/chat/completions" if not LOCAL_LLM_URL.endswith("chat/completions") else LOCAL_LLM_URL
-        api_key = "local-key"
-        model = LOCAL_LLM_MODEL
-    elif EMAIL_AGENT_LLM_API:
-        url = _NIM_URL
-        api_key = EMAIL_AGENT_LLM_API
-        model = _NIM_MODEL
-    else:
-        raise RuntimeError(
-            "Neither LOCAL_LLM_URL nor EMAIL_AGENT_LLM_API is set in .env. "
-            "Cannot use LLM features in the email agent."
-        )
-
-    resp = _requests.post(
-        url,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.3,
-            "max_tokens": 1024,
-        },
-        timeout=30,
+    """Call the LLM using AI API Load Balancer."""
+    from ai_load_balancer import get_global_balancer
+    balancer = get_global_balancer()
+    return balancer.chat_completion(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.3,
+        max_tokens=2048,
     )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
 
 
 @function_tool

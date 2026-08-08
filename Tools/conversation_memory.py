@@ -73,17 +73,17 @@ def log_conversation_turn(role: str, text: str):
 def _load_index_state() -> dict:
     try:
         if os.path.isfile(_INDEX_STATE_PATH):
-            with open(_INDEX_STATE_PATH) as f:
+            with open(_INDEX_STATE_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Could not load conversation index state: {e}")
     return {}
 
 
 def _save_index_state(state: dict):
     try:
         os.makedirs(CONV_DIR, exist_ok=True)
-        with open(_INDEX_STATE_PATH, "w") as f:
+        with open(_INDEX_STATE_PATH, "w", encoding="utf-8") as f:
             json.dump(state, f)
     except Exception as e:
         logger.debug(f"Could not save conversation index state: {e}")

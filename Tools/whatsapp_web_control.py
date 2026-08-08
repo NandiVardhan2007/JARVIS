@@ -62,8 +62,8 @@ async def read_unreads_on_whatsapp() -> str:
                     # Guess some typical spacing layout
                     msg_preview = lines[-2] if len(lines) > 2 else lines[-1]
                     output.append(f"- From '{sender}': \"{msg_preview}\"")
-            except Exception:
-                pass
+            except Exception as parse_err:
+                logger.debug(f"WhatsApp Web unread thread element parsing error: {parse_err}")
 
         return "\n".join(output)
     except Exception as e:

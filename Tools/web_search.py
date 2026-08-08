@@ -33,7 +33,7 @@ async def search_web(query: str) -> str:
     try:
         import wikipedia
         wikipedia.set_lang("en")
-        summary = wikipedia.summary(query, sentences=3, auto_suggest=True)
+        summary = wikipedia.summary(query, sentences=3, auto_suggest=False)
         if summary and len(summary) > 20:
             return f"Wikipedia:\n{summary}"
     except Exception as e:
@@ -68,7 +68,10 @@ async def search_web(query: str) -> str:
 
     # 3. Direct DuckDuckGo search (Fallback)
     try:
-        from duckduckgo_search import DDGS
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
         from tenacity import retry, stop_after_attempt, wait_fixed
         
         @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))

@@ -253,9 +253,7 @@ class DocumentProcessor:
     # ── LLM query ─────────────────────────────────────────────────────────
 
     async def query_llm(self, question: str, chunks: List[str]) -> str:
-        api_key = os.getenv("GROQ_API_KEY", "")
-        if not api_key:
-            return "Error: GROQ_API_KEY is not set in .env — cannot process documents."
+        from ai_load_balancer import get_global_balancer
 
         context = "\n\n".join(chunks)
         if len(context) > MAX_CONTEXT_CHARS:
@@ -270,33 +268,26 @@ class DocumentProcessor:
             "- Be detailed yet concise. Respond in English."
         )
 
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {
-            "model": GROQ_MODEL,
-            "messages": [
-                {"role": "system", "content": (
-                    "You are VISION, an expert document analyst. Answer the user's question "
-                    "using ONLY the provided document context. Rules:\n"
-                    "- Cite specific sections, page numbers, or paragraphs when possible.\n"
-                    "- Quote exact figures, dates, names, and amounts from the document.\n"
-                    "- If the answer is not in the provided context, say: 'This information "
-                    "is not present in the document.'\n"
-                    "- Be concise but thorough. Prefer structured answers for complex questions.\n"
-                    "- Never fabricate information that isn't in the context."
-                )},
+        balancer = get_global_balancer()
+        system_msg = (
+            "You are VISION, an expert document analyst. Answer the user's question "
+            "using ONLY the provided document context. Rules:\n"
+            "- Cite specific sections, page numbers, or paragraphs when possible.\n"
+            "- Quote exact figures, dates, names, and amounts from the document.\n"
+            "- If the answer is not in the provided context, say: 'This information "
+            "is not present in the document.'\n"
+            "- Be concise but thorough. Prefer structured answers for complex questions.\n"
+            "- Never fabricate information that isn't in the context."
+        )
+
+        return await balancer.achat_completion(
+            messages=[
+                {"role": "system", "content": system_msg},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.1,
-            "max_tokens": 2000,
-        }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-                if resp.status != 200:
-                    err = await resp.text()
-                    return f"Groq API error ({resp.status}): {err[:200]}"
-                data = await resp.json()
-                return data["choices"][0]["message"]["content"].strip()
+            temperature=0.1,
+            max_tokens=2000,
+        )
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────

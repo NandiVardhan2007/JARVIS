@@ -67,8 +67,8 @@ async def get_news(topic: str = "world") -> str:
                 title = entry.get("title", "No title")
                 headlines.append(f"• {title}")
             return f"Top headlines (couldn't find specific '{topic}' news):\n" + "\n".join(headlines)
-    except Exception:
-        pass
+    except Exception as rss_err:
+        logger.warning(f"Google RSS news fallback failed: {rss_err}")
 
     return "Unable to fetch news at the moment. Please try again shortly."
 

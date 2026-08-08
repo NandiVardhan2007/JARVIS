@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../theme.dart';
 
-/// Live Visual Feed widget connecting to VISION MJPEG video stream (http://127.0.0.1:5005/snapshot.jpg).
+/// Live Visual Feed widget connecting to VISION MJPEG video stream (http://127.0.0.1:5055/snapshot.jpg).
 class CameraCard extends StatefulWidget {
   final VoidCallback? onStartWebcam;
   final VoidCallback? onStopWebcam;
@@ -19,8 +21,9 @@ class CameraCard extends StatefulWidget {
 
 class _CameraCardState extends State<CameraCard> {
   bool _isOnline = false;
-  Timer? _frameTimer;
-  int _seq = 0;
+  Uint8List? _frameBytes;
+  Timer? _fetchTimer;
+  bool _isFetching = false;
 
   @override
   void initState() {
@@ -29,21 +32,60 @@ class _CameraCardState extends State<CameraCard> {
   }
 
   void _startTimer() {
-    _frameTimer?.cancel();
-    // Use 50ms interval when online for live stream, 2.5s interval when offline to prevent socket exception floods
-    final duration = _isOnline ? const Duration(milliseconds: 50) : const Duration(milliseconds: 2500);
-    _frameTimer = Timer.periodic(duration, (_) {
-      if (mounted) {
+    _fetchTimer?.cancel();
+    final duration = _isOnline
+        ? const Duration(milliseconds: 60)
+        : const Duration(milliseconds: 2000);
+    _fetchTimer = Timer.periodic(duration, (_) => _fetchFrame());
+    _fetchFrame();
+  }
+
+  Future<void> _fetchFrame() async {
+    if (_isFetching) return;
+    _isFetching = true;
+    try {
+      final response = await http
+          .get(Uri.parse('http://127.0.0.1:5055/snapshot.jpg'))
+          .timeout(const Duration(milliseconds: 1500));
+      if (response.statusCode == 200 && mounted) {
+        final wasOnline = _isOnline;
         setState(() {
-          _seq++;
+          _frameBytes = response.bodyBytes;
+          _isOnline = true;
         });
+        if (!wasOnline) {
+          _startTimer();
+        }
+      } else if (mounted) {
+        final wasOnline = _isOnline;
+        setState(() {
+          _frameBytes = null;
+          _isOnline = false;
+        });
+        if (wasOnline) {
+          _startTimer();
+        }
       }
-    });
+    } catch (_) {
+      // Silently catch SocketException / TimeoutException when backend is offline
+      if (mounted) {
+        final wasOnline = _isOnline;
+        setState(() {
+          _frameBytes = null;
+          _isOnline = false;
+        });
+        if (wasOnline) {
+          _startTimer();
+        }
+      }
+    } finally {
+      _isFetching = false;
+    }
   }
 
   @override
   void dispose() {
-    _frameTimer?.cancel();
+    _fetchTimer?.cancel();
     super.dispose();
   }
 
@@ -101,68 +143,45 @@ class _CameraCardState extends State<CameraCard> {
               height: 180,
               width: double.infinity,
               color: Colors.black45,
-              child: Image.network(
-                'http://127.0.0.1:5005/snapshot.jpg?seq=$_seq',
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                errorBuilder: (context, error, stackTrace) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (_isOnline && mounted) {
-                      setState(() {
-                        _isOnline = false;
-                        _startTimer();
-                      });
-                    }
-                  });
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.videocam_off_outlined,
-                            color: VisionTheme.textDim,
-                            size: 32,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Webcam Feed Offline',
-                            style: TextStyle(
-                              color: VisionTheme.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Say "start webcam" or tap button below',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
+              child: _isOnline && _frameBytes != null
+                  ? Image.memory(
+                      _frameBytes!,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                    )
+                  : const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.videocam_off_outlined,
                               color: VisionTheme.textDim,
-                              fontSize: 10,
+                              size: 32,
                             ),
-                          ),
-                        ],
+                            SizedBox(height: 8),
+                            Text(
+                              'Webcam Feed Offline',
+                              style: TextStyle(
+                                color: VisionTheme.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Say "start webcam" or tap button below',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: VisionTheme.textDim,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!_isOnline && mounted) {
-                        setState(() {
-                          _isOnline = true;
-                          _startTimer();
-                        });
-                      }
-                    });
-                    return child;
-                  }
-                  return child;
-                },
-              ),
             ),
           ),
           const SizedBox(height: 10),

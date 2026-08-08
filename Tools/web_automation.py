@@ -68,8 +68,8 @@ async def _idle_watchdog():
                     "state": "notify",
                     "description": "Browser session closed (idle) to free up memory.",
                 })
-            except Exception:
-                pass
+            except Exception as hud_err:
+                logger.debug(f"send_hud_state notify failed in idle watchdog: {hud_err}")
             await close_browser()
 
 
@@ -83,8 +83,8 @@ async def _ensure_browser():
             # Cheap liveness check
             _ = _browser.is_connected()
             return
-        except Exception:
-            pass
+        except Exception as check_err:
+            logger.debug(f"Playwright browser liveness check failed: {check_err}")
 
     try:
         from playwright.async_api import async_playwright
@@ -222,8 +222,8 @@ async def close_browser_tab(tab_name: Optional[str] = None) -> str:
 
     try:
         await page.close()
-    except Exception:
-        pass
+    except Exception as close_err:
+        logger.debug(f"Error closing page in close_browser_tab: {close_err}")
     _tabs.pop(name, None)
 
     if _active_tab == name:
@@ -439,8 +439,8 @@ async def _watch_loop(watch_id: str, url: str, interval: float):
                                 "state": "notify",
                                 "description": f"Page changed: {url}",
                             })
-                        except Exception:
-                            pass  # HUD notification is best-effort only
+                        except Exception as hud_err:
+                            logger.debug(f"HUD notification for page change failed: {hud_err}")
                     entry["last_hash"] = digest
                 except Exception as e:
                     logger.warning(f"Watch tick failed for {url}: {e}")

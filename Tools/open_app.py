@@ -76,6 +76,11 @@ async def open_app(app_name: str) -> str:
     try:
         query = app_name.lower().strip()
 
+        # Check for notepad specifically to run taskbar search + Ctrl+N workflow
+        if query in ("notepad", "text editor"):
+            from .notepad import open_notepad
+            return await open_notepad()
+
         # 1. Check direct protocol URI scheme (e.g., ms-settings:, whatsapp:)
         if query in ("settings", "ms-settings"):
             os.system("start ms-settings:")

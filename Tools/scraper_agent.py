@@ -269,42 +269,16 @@ LOCAL_LLM_MODEL = _os.getenv("LOCAL_LLM_MODEL", "local-model")
 
 
 def _scraper_llm(system: str, user: str) -> str:
-    """Call the LLM using local LM Studio or fallback to NVIDIA NIM."""
-    import requests as _requests
-
-    if LOCAL_LLM_URL:
-        url = LOCAL_LLM_URL + "/chat/completions" if not LOCAL_LLM_URL.endswith("chat/completions") else LOCAL_LLM_URL
-        api_key = "local-key"
-        model = LOCAL_LLM_MODEL
-    elif SCRAPER_AGENT_LLM_API:
-        url = _NIM_URL
-        api_key = SCRAPER_AGENT_LLM_API
-        model = _NIM_MODEL
-    else:
-        raise RuntimeError(
-            "Neither LOCAL_LLM_URL nor SCRAPER_AGENT_LLM_API is set in .env. "
-            "Cannot use LLM features in the scraper agent."
-        )
-
-    resp = _requests.post(
-        url,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.3,
-            "max_tokens": 1024,
-        },
-        timeout=30,
+    """Call the LLM using AI API Load Balancer."""
+    from ai_load_balancer import get_global_balancer
+    balancer = get_global_balancer()
+    return balancer.chat_completion(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.3,
     )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
 
 
 @function_tool

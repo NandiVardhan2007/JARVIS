@@ -170,8 +170,8 @@ async def open_app_on_screen(
 
         try:
             win.restore()
-        except Exception:
-            pass
+        except Exception as res_err:
+            logger.debug(f"Window restore failed for '{win.title}': {res_err}")
 
         if screen_side == "left":
             win.moveTo(0, 0)
