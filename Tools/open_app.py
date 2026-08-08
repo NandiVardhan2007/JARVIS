@@ -16,9 +16,11 @@ logger = logging.getLogger(__name__)
 APP_MAP = {
     "notepad": ["notepad.exe"],
     "text editor": ["notepad.exe"],
-    "browser": ["msedge.exe", "chrome.exe", "firefox.exe"],
+    "browser": ["msedge.exe", "chrome.exe", "firefox.exe", "brave.exe"],
     "chrome": ["chrome.exe"],
     "edge": ["msedge.exe"],
+    "firefox": ["firefox.exe"],
+    "brave": ["brave.exe"],
     "terminal": ["wt.exe", "cmd.exe", "powershell.exe"],
     "command prompt": ["cmd.exe"],
     "cmd": ["cmd.exe"],
@@ -27,13 +29,17 @@ APP_MAP = {
     "file manager": ["explorer.exe"],
     "explorer": ["explorer.exe"],
     "calculator": ["calc.exe", "ms-calculator:"],
+    "camera": ["microsoft.windows.camera:"],
+    "webcam": ["microsoft.windows.camera:"],
     "paint": ["mspaint.exe"],
+    "photos": ["ms-photos:"],
     "vscode": ["code.cmd", "code.exe"],
     "vs code": ["code.cmd", "code.exe"],
     "code": ["code.cmd", "code.exe"],
     "whatsapp": ["whatsapp.exe", "whatsapp:"],
-    "spotify": ["spotify.exe"],
+    "spotify": ["spotify.exe", "spotify:"],
     "discord": ["discord.exe"],
+    "vlc": ["vlc.exe"],
     "task manager": ["taskmgr.exe"],
     "word": ["winword.exe"],
     "excel": ["excel.exe"],
@@ -41,6 +47,9 @@ APP_MAP = {
     "settings": ["ms-settings:"],
     "control panel": ["control.exe"],
     "snipping tool": ["snippingtool.exe"],
+    "zoom": ["zoom.exe"],
+    "steam": ["steam.exe", "steam:"],
+    "telegram": ["telegram.exe"],
 }
 
 def _search_start_menu_shortcuts(app_name: str) -> str | None:
@@ -61,6 +70,21 @@ def _search_start_menu_shortcuts(app_name: str) -> str | None:
                     clean_file = file.lower().replace(".lnk", "").replace(" ", "")
                     if clean_query in clean_file or clean_file in clean_query:
                         return os.path.join(root, file)
+    return None
+
+def _search_app_execution_aliases(app_name: str) -> str | None:
+    """Searches Windows App Execution Aliases in %LOCALAPPDATA%\\Microsoft\\WindowsApps."""
+    local_app_data = os.getenv("LOCALAPPDATA", "")
+    if not local_app_data:
+        return None
+    alias_dir = os.path.join(local_app_data, "Microsoft", "WindowsApps")
+    if os.path.exists(alias_dir):
+        clean = app_name.lower().replace(" ", "")
+        for file in os.listdir(alias_dir):
+            if file.lower().endswith(".exe"):
+                clean_f = file.lower().replace(".exe", "").replace(" ", "")
+                if clean in clean_f or clean_f in clean:
+                    return os.path.join(alias_dir, file)
     return None
 
 @function_tool
@@ -111,7 +135,13 @@ async def open_app(app_name: str) -> str:
             os.startfile(shortcut_path)
             return f"Launched '{app_name}' via Windows Start Menu shortcut, sir."
 
-        # 5. Fallback: OS start command
+        # 5. Windows App Execution Alias search
+        alias_path = _search_app_execution_aliases(query)
+        if alias_path:
+            subprocess.Popen([alias_path], shell=False, creationflags=subprocess.DETACHED_PROCESS)
+            return f"Launched '{app_name}' via Windows App Alias, sir."
+
+        # 6. Fallback: OS start command
         res = os.system(f'start "" "{query}"')
         if res == 0:
             return f"'{app_name}' launched successfully, sir."

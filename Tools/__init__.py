@@ -31,7 +31,10 @@ from .system_optimizer import (
     get_system_health_report, optimize_system_now,
     get_pending_optimization_suggestions, start_system_optimizer, stop_system_optimizer,
 )
-from .desktop_control import desktop_control, press_key, type_user_message_auto, click_on_text
+from .desktop_control import (
+    desktop_control, press_key, type_user_message_auto, click_on_text,
+    click_coordinates, smart_click_and_type, fill_form_fields
+)
 from .email_sender import send_email, validate_email
 from .email_agent import read_inbox, read_email, search_emails, reply_email, mark_email_read, label_email, summarize_email, delete_emails
 from .scraper_agent import scrape_url, extract_tables, get_page_links, take_web_screenshot, ai_summarize_page
@@ -150,7 +153,8 @@ TOOL_CATEGORIES = {
     "desktop": [
         manage_window, manage_window_state, list_active_windows, 
         open_app_on_screen, open_app, play_media, stop_media, desktop_control, 
-        press_key, type_user_message_auto, click_on_text, write_in_notepad, open_notepad, type_and_save_notepad,
+        press_key, type_user_message_auto, click_on_text, click_coordinates, smart_click_and_type, fill_form_fields,
+        write_in_notepad, open_notepad, type_and_save_notepad,
         start_hand_gesture_control, stop_hand_gesture_control, get_gesture_control_status, set_gesture_sensitivity,
         open_file_command, read_screen, read_selected_region, list_monitors, take_screenshot,
         process_document_query, list_directory, search_files,

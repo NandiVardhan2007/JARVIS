@@ -30,6 +30,7 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 
 import logging
 import os
+import re
 import json
 import socket
 from dotenv import load_dotenv
@@ -83,6 +84,61 @@ def send_hud_state(payload: dict):
 MAX_HISTORY_MESSAGES = 10  # keep system prompt + last ~5 user/assistant turns to stay under Groq 12k TPM limit
 
 
+def rank_tools_for_user_query(candidate_tools: list, query_text: str, max_tools: int = 10) -> list:
+    """
+    Ranks candidate tools by semantic & keyword relevance to user query,
+    ensuring essential tools (e.g. open_app, type_user_message_auto, click_on_text, fill_form_fields)
+    are prioritized over arbitrary slice truncation.
+    """
+    if len(candidate_tools) <= max_tools:
+        return candidate_tools
+
+    clean_text = query_text.lower().strip()
+    words = set(re.findall(r'\b\w+\b', clean_text))
+
+    scored_tools = []
+    for tool in candidate_tools:
+        name = getattr(tool.info, 'name', str(tool)).lower()
+        desc = getattr(tool.info, 'description', '').lower()
+
+        score = 0.0
+
+        # Exact verb/action keyword match bonuses
+        if "open" in words or "launch" in words or "start" in words:
+            if name in ("open_app", "open_notepad", "open_webpage", "open_file_command", "open_phone_app"):
+                score += 50.0
+        if "type" in words or "write" in words or "text" in words or "fill" in words:
+            if name in ("type_user_message_auto", "write_in_notepad", "fill_form_fields", "smart_click_and_type", "type_into_form", "phone_type"):
+                score += 50.0
+        if "click" in words or "tap" in words or "press" in words:
+            if name in ("click_on_text", "smart_click_and_type", "click_coordinates", "click_web_element", "phone_tap"):
+                score += 50.0
+        if "key" in words or "hotkey" in words or "shortcut" in words or "button" in words:
+            if name in ("press_key", "phone_press_key", "desktop_control"):
+                score += 50.0
+        if "screenshot" in words or "screen" in words or "snap" in words or "capture" in words:
+            if name in ("take_screenshot", "read_screen", "take_web_screenshot"):
+                score += 50.0
+
+        # Keyword match in tool name
+        for w in words:
+            if len(w) >= 3:
+                if w in name:
+                    score += 15.0
+                if w in desc:
+                    score += 3.0
+
+        # Base high-priority core tools
+        if name in ("execute_agent_tasks", "search_web", "open_app", "type_user_message_auto", "click_on_text"):
+            score += 5.0
+
+        scored_tools.append((score, tool))
+
+    scored_tools.sort(key=lambda x: x[0], reverse=True)
+    selected = [t for _, t in scored_tools[:max_tools]]
+    return selected
+
+
 class VisionAgent(Agent):
     """Agent subclass that trims conversation history before each LLM call."""
 
@@ -111,27 +167,25 @@ class VisionAgent(Agent):
         
         active_tools = tools
         if recent_user_text:
-            # Try current message intent first
             current_text = recent_user_text[0]
             intent = classify_intent(current_text)
             
-            # If default intent and we have history, fallback to combined context
             if intent == ["core"] and len(recent_user_text) >= 2:
                 combined_text = " ".join(reversed(recent_user_text))
                 intent = classify_intent(combined_text)
                 
             intent_tools = get_tools_for_category(intent)
-            # Keep only the tools that match the intent, but if none match somehow, fallback to all tools
             filtered = [t for t in tools if t in intent_tools]
             if filtered:
                 active_tools = filtered
-                logger.info(f"Intent classified as '{intent}' -> loaded {len(active_tools)} tools.")
+                logger.info(f"Intent classified as '{intent}' -> loaded {len(active_tools)} candidate tools.")
             else:
                 logger.warning(f"Intent '{intent}' yielded no tools. Fallback to default subset.")
-            # Hard cap active_tools to max 8 tools to stay strictly under Groq 12,000 TPM limit
-            if len(active_tools) > 8:
-                logger.info(f"Capping active tools from {len(active_tools)} to 8 to prevent LLM token overflow.")
-                active_tools = active_tools[:8]
+
+            # Rank active_tools by relevance score to current query text (max 10 active tools)
+            if len(active_tools) > 10:
+                active_tools = rank_tools_for_user_query(active_tools, current_text, max_tools=10)
+                logger.info(f"Relevance-ranked active tools for query '{current_text[:40]}': {[t.info.name for t in active_tools]}")
 
             cat_label = str(intent[0]).upper() if intent else "CORE"
             send_hud_state({

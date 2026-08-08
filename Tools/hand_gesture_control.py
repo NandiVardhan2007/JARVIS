@@ -51,17 +51,26 @@ def _get_screen_dimensions() -> Tuple[int, int]:
         w, h = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
         return max(800, w), max(600, h)
 
+def _fast_set_cursor_pos(x: int, y: int):
+    """Low-latency native Windows API cursor dispatch, falling back to pyautogui."""
+    try:
+        import ctypes
+        ctypes.windll.user32.SetCursorPos(int(x), int(y))
+    except Exception:
+        import pyautogui
+        pyautogui.moveTo(int(x), int(y))
+
 class PrecisionAdaptiveFilter:
     """
-    Advanced Velocity-Adaptive Filter (One-Euro style) with micro-jitter suppression.
-    Locks cursor position when stationary and scales responsiveness dynamically during movement.
+    Advanced Velocity-Adaptive Filter (One-Euro style) with soft exponential damping.
+    Prevents cursor stickiness on small UI targets while eliminating tremor when stationary.
     """
-    def __init__(self, min_alpha=0.14, max_alpha=0.88, deadzone_px=3.0):
+    def __init__(self, min_alpha: float = 0.12, max_alpha: float = 0.88, soft_deadzone_px: float = 1.5):
         self.min_alpha = min_alpha
         self.max_alpha = max_alpha
-        self.deadzone_px = deadzone_px
-        self.prev_x = None
-        self.prev_y = None
+        self.soft_deadzone_px = soft_deadzone_px
+        self.prev_x: Optional[float] = None
+        self.prev_y: Optional[float] = None
         self.last_time = time.time()
 
     def update(self, target_x: float, target_y: float) -> Tuple[float, float]:
@@ -78,16 +87,22 @@ class PrecisionAdaptiveFilter:
         dy = target_y - self.prev_y
         dist = math.hypot(dx, dy)
 
-        # Micro-jitter deadzone: ignore minuscule hand noise when hovering over UI controls
-        if dist < self.deadzone_px:
+        if dist < 1e-6:
             return self.prev_x, self.prev_y
+
+        # Soft exponential damping for micro-movements instead of hard freeze
+        if dist < self.soft_deadzone_px:
+            damped_ratio = (dist / self.soft_deadzone_px) ** 1.5
+            dx *= damped_ratio
+            dy *= damped_ratio
+            dist *= damped_ratio
 
         # Speed calculation (pixels per second)
         speed = dist / dt
-        speed_norm = min(1.0, speed / 1600.0)
+        speed_norm = min(1.0, speed / 1800.0)
         
-        # Adaptive smoothing factor
-        alpha = self.min_alpha + (self.max_alpha - self.min_alpha) * (speed_norm ** 1.4)
+        # Adaptive smoothing factor (One-Euro curve)
+        alpha = self.min_alpha + (self.max_alpha - self.min_alpha) * (speed_norm ** 1.3)
 
         filtered_x = self.prev_x + alpha * dx
         filtered_y = self.prev_y + alpha * dy
@@ -101,9 +116,9 @@ class PrecisionAdaptiveFilter:
         self.prev_y = None
         self.last_time = time.time()
 
-def _gesture_loop():
+def _gesture_loop(show_preview: bool = False):
     """Background thread running OpenCV frame capture and MediaPipe gesture tracking."""
-    global _gesture_active, _last_click_time, _status_info
+    global _gesture_active, _last_click_time, _status_info, _sensitivity_scale
 
     try:
         import cv2
@@ -119,22 +134,28 @@ def _gesture_loop():
         return
 
     pyautogui.FAILSAFE = False
-    pyautogui.PAUSE = 0.005
+    pyautogui.PAUSE = 0.0
 
     screen_w, screen_h = _get_screen_dimensions()
-    adaptive_filter = PrecisionAdaptiveFilter(min_alpha=0.15, max_alpha=0.88, deadzone_px=3.0)
+    adaptive_filter = PrecisionAdaptiveFilter(min_alpha=0.12, max_alpha=0.88, soft_deadzone_px=1.5)
     
-    mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands(
-        static_image_mode=False,
-        max_num_hands=1,
-        min_detection_confidence=0.75,
-        min_tracking_confidence=0.75
-    )
+    try:
+        from Tools.webcam_guard import _get_hand_tracker
+        tracker_mode, tracker, mp_module = _get_hand_tracker()
+    except Exception as te:
+        logger.error(f"Error importing _get_hand_tracker: {te}")
+        tracker_mode, tracker, mp_module = None, None, None
+
+    if tracker is None:
+        logger.error("Hand gesture control: Could not initialize MediaPipe hand tracker.")
+        with _state_lock:
+            _status_info["last_error"] = "MediaPipe hand tracker unavailable"
+            _status_info["active"] = False
+            _gesture_active = False
+        return
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW if os.name == 'nt' else cv2.CAP_ANY)
     if not cap.isOpened():
-        # Fallback without CAP_DSHOW
         cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
@@ -147,6 +168,8 @@ def _gesture_loop():
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    try: cap.set(cv2.CAP_PROP_FPS, 60)
+    except Exception: pass
 
     frame_count = 0
     start_time = time.time()
@@ -159,10 +182,6 @@ def _gesture_loop():
     logger.info("Ultra-Stable Virtual Air Mouse Engine started on Windows.")
     with _state_lock:
         _status_info["active"] = True
-
-    # Camera screen coordinate mapping margins
-    margin_x = 0.12
-    margin_y = 0.14
 
     while not _gesture_stop_event.is_set() and _gesture_active:
         try:
@@ -181,15 +200,30 @@ def _gesture_loop():
 
             # Flip frame horizontally for intuitive mirrored motion
             frame = cv2.flip(frame, 1)
+            h_frame, w_frame, _ = frame.shape
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb_frame)
+            
+            landmarks = None
+            if tracker_mode == 'tasks':
+                mp_image = mp_module.Image(image_format=mp_module.ImageFormat.SRGB, data=rgb_frame)
+                res = tracker.detect(mp_image)
+                if res.hand_landmarks:
+                    landmarks = res.hand_landmarks[0]
+            elif tracker_mode == 'legacy':
+                res = tracker.process(rgb_frame)
+                if res.multi_hand_landmarks:
+                    landmarks = res.multi_hand_landmarks[0].landmark
 
             gesture_label = "No Hand Detected"
 
-            if results.multi_hand_landmarks and len(results.multi_hand_landmarks) > 0:
-                landmarks = results.multi_hand_landmarks[0].landmark
+            if landmarks and len(landmarks) >= 21:
+                if show_preview:
+                    for lm in landmarks:
+                        lx, ly = int(lm.x * w_frame), int(lm.y * h_frame)
+                        cv2.circle(frame, (lx, ly), 3, (0, 255, 255), cv2.FILLED)
 
                 # Key Landmarks
+                wrist = landmarks[0]
                 thumb_tip = landmarks[4]
                 index_tip = landmarks[8]
                 middle_tip = landmarks[12]
@@ -201,6 +235,10 @@ def _gesture_loop():
                 ring_pip = landmarks[14]
                 pinky_pip = landmarks[18]
                 index_mcp = landmarks[5]
+                middle_mcp = landmarks[9]
+
+                # Compute scale-invariant hand size metric (wrist to middle MCP distance)
+                hand_scale = math.hypot(middle_mcp.x - wrist.x, middle_mcp.y - wrist.y) + 1e-5
 
                 # Blend Index Tip (82%) + Index MCP (18%) to suppress high-frequency landmark jitter
                 track_x = index_tip.x * 0.82 + index_mcp.x * 0.18
@@ -212,9 +250,18 @@ def _gesture_loop():
                 ring_up = ring_tip.y < ring_pip.y
                 pinky_up = pinky_tip.y < pinky_pip.y
 
-                # Distances
+                # Scale-normalized distances (distance-independent)
                 pinch_dist = math.hypot(index_tip.x - thumb_tip.x, index_tip.y - thumb_tip.y)
+                rel_pinch = pinch_dist / hand_scale
+
                 middle_pinch_dist = math.hypot(middle_tip.x - thumb_tip.x, middle_tip.y - thumb_tip.y)
+                rel_middle_pinch = middle_pinch_dist / hand_scale
+
+                # Dynamic sensitivity scaling
+                with _state_lock:
+                    sens = _sensitivity_scale
+                margin_x = max(0.04, min(0.22, 0.13 / sens))
+                margin_y = max(0.04, min(0.22, 0.15 / sens))
 
                 # Interpolate to screen space
                 raw_target_x = np.interp(track_x, (margin_x, 1.0 - margin_x), (0, screen_w))
@@ -227,16 +274,19 @@ def _gesture_loop():
                 cursor_x = int(max(0, min(screen_w - 1, filt_x)))
                 cursor_y = int(max(0, min(screen_h - 1, filt_y)))
 
+                ix_px, iy_px = int(index_tip.x * w_frame), int(index_tip.y * h_frame)
+                tx_px, ty_px = int(thumb_tip.x * w_frame), int(thumb_tip.y * h_frame)
+
                 # 1. Open Palm -> Air Mouse Paused
-                if index_up and middle_up and ring_up and pinky_up and pinch_dist > 0.11:
+                if index_up and middle_up and ring_up and pinky_up and rel_pinch > 0.45:
                     gesture_label = "Palm (Air Mouse Paused)"
                     if is_dragging:
                         pyautogui.mouseUp()
                         is_dragging = False
                     click_lock_pos = None
 
-                # 2. Pinch (Left Click / Drag & Drop)
-                elif pinch_dist < 0.040 or (is_dragging and pinch_dist < 0.062):
+                # 2. Pinch (Left Click / Drag & Drop with Click Stabilization)
+                elif rel_pinch < 0.28 or pinch_dist < 0.040 or (is_dragging and rel_pinch < 0.38):
                     gesture_label = "Pinch (Left Click / Drag)"
 
                     if click_lock_pos is None:
@@ -249,9 +299,13 @@ def _gesture_loop():
                         is_dragging = True
 
                     if is_dragging:
-                        pyautogui.moveTo(cursor_x, cursor_y)
+                        _fast_set_cursor_pos(cursor_x, cursor_y)
                     else:
-                        pyautogui.moveTo(click_lock_pos[0], click_lock_pos[1])
+                        _fast_set_cursor_pos(click_lock_pos[0], click_lock_pos[1])
+
+                    if show_preview:
+                        cv2.line(frame, (ix_px, iy_px), (tx_px, ty_px), (255, 212, 0), 4)
+                        cv2.circle(frame, (ix_px, iy_px), 12, (255, 212, 0), cv2.FILLED)
 
                 # 3. Pinch Released -> Trigger Single or Double Click
                 elif click_lock_pos is not None:
@@ -272,7 +326,7 @@ def _gesture_loop():
                     click_lock_pos = None
 
                 # 4. Middle + Thumb Pinch -> Right Click
-                elif middle_pinch_dist < 0.040:
+                elif rel_middle_pinch < 0.28 or middle_pinch_dist < 0.040:
                     gesture_label = "Middle Pinch (Right Click)"
                     if is_dragging:
                         pyautogui.mouseUp()
@@ -281,6 +335,9 @@ def _gesture_loop():
                         pyautogui.rightClick()
                         _last_click_time = now
                     click_lock_pos = None
+                    if show_preview:
+                        mx_px, my_px = int(middle_tip.x * w_frame), int(middle_tip.y * h_frame)
+                        cv2.line(frame, (mx_px, my_px), (tx_px, ty_px), (0, 140, 255), 4)
 
                 # 5. Two Fingers Extended -> Smooth Scroll
                 elif index_up and middle_up and not ring_up and not pinky_up:
@@ -307,8 +364,10 @@ def _gesture_loop():
                     if is_dragging:
                         pyautogui.mouseUp()
                         is_dragging = False
-                    pyautogui.moveTo(cursor_x, cursor_y)
+                    _fast_set_cursor_pos(cursor_x, cursor_y)
                     click_lock_pos = None
+                    if show_preview:
+                        cv2.circle(frame, (ix_px, iy_px), 10, (0, 255, 0), cv2.FILLED)
 
                 else:
                     if is_dragging:
@@ -327,10 +386,32 @@ def _gesture_loop():
             with _state_lock:
                 _status_info["current_gesture"] = gesture_label
 
+            if show_preview:
+                curr_fps = _status_info.get("fps", 0)
+                curr_sens = _status_info.get("sensitivity", 1.3)
+                # Drawing HUD panel
+                cv2.rectangle(frame, (10, 10), (460, 115), (0, 0, 0), cv2.FILLED)
+                cv2.rectangle(frame, (10, 10), (460, 115), (0, 255, 0), 2)
+                cv2.putText(frame, f"VISION Virtual Mouse Test (FPS: {curr_fps})", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                cv2.putText(frame, f"Gesture: {gesture_label}", (20, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+                cv2.putText(frame, f"Cursor: ({cursor_x if 'cursor_x' in locals() else 0}, {cursor_y if 'cursor_y' in locals() else 0}) | Sens: {curr_sens}x", (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
+                cv2.putText(frame, "[+] / [-]: Sens  |  Press 'q' or ESC to Exit", (10, h_frame - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 255, 100), 1)
+
+                cv2.imshow("VISION - Virtual Air Mouse Test", frame)
+                key = cv2.waitKey(1) & 0xFF
+                if key in (27, ord('q'), ord('Q')):
+                    _gesture_stop_event.set()
+                    _gesture_active = False
+                    break
+                elif key in (ord('+'), ord('=')):
+                    set_gesture_sensitivity(_sensitivity_scale + 0.2)
+                elif key in (ord('-'), ord('_')):
+                    set_gesture_sensitivity(_sensitivity_scale - 0.2)
+
         except Exception as frame_err:
             logger.warning(f"Error in gesture loop iteration: {frame_err}")
 
-        time.sleep(0.010)
+        time.sleep(0.005)
 
     if is_dragging:
         try:
@@ -339,7 +420,13 @@ def _gesture_loop():
             logger.debug(f"Error calling pyautogui.mouseUp: {e}")
 
     cap.release()
-    hands.close()
+    if tracker and hasattr(tracker, 'close'):
+        try: tracker.close()
+        except Exception: pass
+    if show_preview:
+        try: cv2.destroyAllWindows()
+        except Exception: pass
+
     with _state_lock:
         _status_info["active"] = False
         _status_info["current_gesture"] = "Stopped"
@@ -407,3 +494,22 @@ async def set_gesture_sensitivity(sensitivity: float = 1.3) -> str:
     with _state_lock:
         _status_info["sensitivity"] = round(val, 2)
     return f"Air Mouse sensitivity set to {round(val, 2)}."
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("        VISION - Standalone Virtual Air Mouse Test")
+    print("=" * 60)
+    print("Starting webcam hand tracking & cursor control...")
+    print("Point index finger to move, pinch thumb & index to click/drag,")
+    print("middle finger pinch for right-click, two fingers to scroll.")
+    print("Press 'q' or 'ESC' in the camera window to stop.")
+    print("=" * 60)
+
+    _gesture_active = True
+    _gesture_stop_event.clear()
+    try:
+        _gesture_loop(show_preview=True)
+    except KeyboardInterrupt:
+        print("\nStopping Virtual Air Mouse...")
+        _gesture_stop_event.set()
+        _gesture_active = False

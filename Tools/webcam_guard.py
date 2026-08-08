@@ -359,10 +359,17 @@ def _camera_loop():
 
     screen_w, screen_h = _get_screen_size()
     prev_x, prev_y = screen_w // 2, screen_h // 2
-    alpha = 0.35  # Exponential moving average smoothing factor
     margin = 0.15  # Bounding margin to easily reach screen corners
 
+    try:
+        from Tools.hand_gesture_control import PrecisionAdaptiveFilter, _fast_set_cursor_pos
+        adaptive_filter = PrecisionAdaptiveFilter(min_alpha=0.14, max_alpha=0.88, soft_deadzone_px=1.5)
+    except Exception:
+        adaptive_filter = None
+        _fast_set_cursor_pos = None
+
     is_dragging = False
+    click_lock_pos = None
     pinch_start_time = 0.0
     last_click_time = 0.0
     last_right_click_time = 0.0
@@ -484,19 +491,17 @@ def _camera_loop():
                 target_x = int(norm_x * screen_w)
                 target_y = int(norm_y * screen_h)
 
-                # Smooth cursor movement using EMA with 3px anti-jitter deadzone
-                dx = abs(target_x - prev_x)
-                dy = abs(target_y - prev_y)
-                if dx > 2 or dy > 2:
-                    curr_x = int(alpha * target_x + (1 - alpha) * prev_x)
-                    curr_y = int(alpha * target_y + (1 - alpha) * prev_y)
-                    # Compute relative delta BEFORE updating prev (delta = new - old)
-                    rel_dx = curr_x - prev_x
-                    rel_dy = curr_y - prev_y
-                    prev_x, prev_y = curr_x, curr_y
+                # Adaptive One-Euro smoothing with soft exponential damping
+                if adaptive_filter:
+                    filt_x, filt_y = adaptive_filter.update(target_x, target_y)
+                    curr_x = int(max(0, min(screen_w - 1, filt_x)))
+                    curr_y = int(max(0, min(screen_h - 1, filt_y)))
                 else:
-                    curr_x, curr_y = prev_x, prev_y
-                    rel_dx, rel_dy = 0, 0
+                    curr_x, curr_y = target_x, target_y
+
+                rel_dx = curr_x - prev_x
+                rel_dy = curr_y - prev_y
+                prev_x, prev_y = curr_x, curr_y
 
                 # Move desktop cursor — send relative deltas via uinput (GNOME Wayland)
                 if uinput_mouse and (rel_dx != 0 or rel_dy != 0):
@@ -507,12 +512,6 @@ def _camera_loop():
                         uinput_mouse.syn()
                     except Exception as ev_err:
                         logger.debug(f"uinput mouse write error: {ev_err}")
-
-                if mouse:
-                    try:
-                        mouse.position = (curr_x, curr_y)
-                    except Exception as pos_err:
-                        logger.debug(f"mouse position set error: {pos_err}")
 
                 # Adaptive Pinch Distance (Index tip to Thumb tip relative to hand scale)
                 pinch_raw = np.hypot(index_x - thumb_x, index_y - thumb_y)
@@ -526,6 +525,9 @@ def _camera_loop():
                 tx_px, ty_px = int(thumb_x * w), int(thumb_y * h)
 
                 if is_pinched:
+                    if click_lock_pos is None:
+                        click_lock_pos = (curr_x, curr_y)
+
                     if not is_dragging:
                         is_dragging = True
                         pinch_start_time = now
@@ -540,11 +542,26 @@ def _camera_loop():
                                 mouse.press(Button.left)
                             except Exception as m_err: logger.debug(f"mouse press error: {m_err}")
 
+                    # Position cursor — drag follows movement, click locks position to suppress drift
+                    active_pos = (curr_x, curr_y) if (now - pinch_start_time > 0.18) else click_lock_pos
+                    if _fast_set_cursor_pos:
+                        _fast_set_cursor_pos(active_pos[0], active_pos[1])
+                    elif mouse:
+                        try: mouse.position = active_pos
+                        except Exception: pass
+
                     # Draw vibrant active pinch indicator (Cyan-Green glowing line)
                     cv2.line(frame, (ix_px, iy_px), (tx_px, ty_px), (255, 212, 0), 4)
                     cv2.circle(frame, (ix_px, iy_px), 12, (255, 212, 0), cv2.FILLED)
                     cv2.putText(frame, "PINCH CLICK / GRAB ACTIVE", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 212, 0), 2)
                 else:
+                    click_lock_pos = None
+                    if _fast_set_cursor_pos:
+                        _fast_set_cursor_pos(curr_x, curr_y)
+                    elif mouse:
+                        try: mouse.position = (curr_x, curr_y)
+                        except Exception: pass
+
                     if is_dragging:
                         is_dragging = False
                         pinch_duration = now - pinch_start_time

@@ -120,3 +120,95 @@ async def click_on_text(target_text: str) -> str:
         return f"Could not find visible text '{target_text}' on screen."
     except Exception as e:
         return f"OCR click failed: {e}"
+
+@function_tool
+async def click_coordinates(x: int, y: int, clicks: int = 1, button: str = "left") -> str:
+    """
+    Clicks at specific screen pixel coordinates on Windows.
+
+    Args:
+        x: Horizontal screen pixel coordinate (e.g. 500).
+        y: Vertical screen pixel coordinate (e.g. 300).
+        clicks: Number of clicks (1 for single click, 2 for double click).
+        button: Mouse button ("left", "right", "middle").
+    """
+    try:
+        import pyautogui
+        pyautogui.FAILSAFE = False
+        pyautogui.click(x=int(x), y=int(y), clicks=int(clicks), button=button)
+        return f"Successfully clicked ({x}, {y}) with {button} button {clicks} time(s)."
+    except Exception as e:
+        return f"Click coordinates failed: {e}"
+
+@function_tool
+async def smart_click_and_type(target_label: str, text_to_type: str, press_enter: bool = True) -> str:
+    """
+    Finds a UI input field or label on screen, clicks it, and types specified text.
+
+    Args:
+        target_label: Text label or placeholder near the input box (e.g. "Username", "Search", "Password").
+        text_to_type: Text string to type into the field.
+        press_enter: If True, presses Enter after typing (default: True).
+    """
+    try:
+        import pyautogui
+        import pyperclip
+        pyautogui.FAILSAFE = False
+
+        res = await click_on_text(target_label)
+        if "Clicked" not in res:
+            logger.info(f"Target text '{target_label}' not found by OCR. Typing directly into focused window.")
+
+        time.sleep(0.15)
+        pyperclip.copy(text_to_type)
+        pyautogui.hotkey("ctrl", "v")
+        if press_enter:
+            time.sleep(0.1)
+            pyautogui.press("enter")
+        return f"Typed '{text_to_type}' into field '{target_label}' (Enter={'yes' if press_enter else 'no'})."
+    except Exception as e:
+        return f"Smart click and type failed: {e}"
+
+@function_tool
+async def fill_form_fields(fields_json: str, submit: bool = True) -> str:
+    """
+    Fills out a multi-field desktop or web form by auto-clicking labels, typing values, and submitting.
+
+    Args:
+        fields_json: JSON string mapping field labels/names to values, e.g.:
+                     '{"Name": "Nandi", "Email": "nandu@example.com", "Message": "Hello world"}'
+        submit: If True, presses Enter or clicks 'Submit' button on completion (default: True).
+    """
+    try:
+        import json
+        import pyautogui
+        import pyperclip
+        pyautogui.FAILSAFE = False
+
+        data = json.loads(fields_json)
+        if not isinstance(data, dict):
+            return "fields_json must be a JSON object of field_label -> value pairs."
+
+        filled_count = 0
+        for label, val in data.items():
+            val_str = str(val)
+            ocr_res = await click_on_text(label)
+            if "Clicked" in ocr_res:
+                pyautogui.moveRel(50, 0)
+                pyautogui.click()
+            time.sleep(0.15)
+            pyautogui.hotkey("ctrl", "a")
+            pyperclip.copy(val_str)
+            pyautogui.hotkey("ctrl", "v")
+            pyautogui.press("tab")
+            filled_count += 1
+
+        if submit:
+            time.sleep(0.2)
+            sub_res = await click_on_text("submit")
+            if "Clicked" not in sub_res:
+                pyautogui.press("enter")
+
+        return f"Successfully filled {filled_count} form field(s) (Submitted: {submit})."
+    except Exception as e:
+        return f"Form filling failed: {e}"
