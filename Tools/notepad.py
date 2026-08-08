@@ -11,7 +11,7 @@ import subprocess
 import time
 from datetime import datetime
 from typing import Literal
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
@@ -141,11 +141,11 @@ async def write_in_notepad(
             "general": f"{title}\n{'=' * len(title)}\n\n{content}\n",
         }
 
-        doc_text = templates.get(document_type, templates["general"])
+        doc_text = templates.get(document_type.lower(), templates["general"])
 
-        # 2. Inject text into Notepad tab via Clipboard
-        pyperclip.copy(doc_text)
-        pyautogui.hotkey("ctrl", "v")
+        # 2. Inject text into Notepad tab via character-by-character typing animation
+        from Tools.desktop_control import type_text_natively
+        type_text_natively(doc_text)
         time.sleep(0.5)
 
         saved_info = ""

@@ -4,7 +4,7 @@ import logging
 import os
 import subprocess
 import requests
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,8 @@ async def generate_and_type_code(
                     pyautogui.hotkey("ctrl", "a")
                     pyautogui.press("delete")
                 
-            pyautogui.write(code, interval=0.02)
+            from Tools.desktop_control import type_text_natively
+            type_text_natively(code)
             
             if open_notepad:
                 # Save the file

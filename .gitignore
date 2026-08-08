@@ -1,29 +1,94 @@
+# Environment & Secrets
 .env
+.env.*
+!.env.example
+token.pickle
+credentials.json
+*.pem
+*.key
+
+# Python build & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 venv/
 env/
 .venv/
 xtts_env/
+
+# React & Node.js Frontend (vision_react)
+vision_react/node_modules/
+vision_react/dist/
+vision_react/.vite/
+vision_react/npm-debug.log*
+vision_react/yarn-debug.log*
+vision_react/yarn-error.log*
+vision_react/.env.local
+vision_react/.env.*.local
+
+# ML Models & Heavy Binaries
+models/
 xtts_models/
-vision_memory/
+pretrained_models/
+espeak-ng-data/
+*.onnx
+*.pth
+*.bin
+*.pt
+*.tflite
+*.safetensors
+*.tar.bz2
+*.zip
+
+# Databases & Runtime State
 *.db
 *.sqlite3
-*.log
-token.pickle
-credentials.json
-.DS_Store
-
-vision-waha/
-telegram_offset.txt
-*.onnx
-models/
 vision.db
 vision_waha.db
-pretrained_models/
+vision_memory/
+dropped_items.json
+telegram_offset.txt
 
-# Output and recording directories
+# Logs & Debug Outputs
+*.log
+vision_bridge.log
+VISION.log
+
+# Generated Media & Output Directories
+VISION_OUTPUTS/
 VISION_Screenshots/
 Output/
 output/
+*.wav
+*.mp3
+*.mp4
+*.png
+*.jpg
+*.jpeg
+
+# OS & IDE Noise
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.vscode/
+.idea/
+.gemini/
+.agents/

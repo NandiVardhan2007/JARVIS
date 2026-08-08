@@ -7,7 +7,7 @@ import os
 import shutil
 import time
 from typing import Literal, Optional
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +66,55 @@ async def press_key(key: str) -> str:
     except Exception as e:
         return f"Key press failed: {e}"
 
+def type_text_natively(text: str, default_interval: float = 0.015):
+    """
+    Types text character-by-character with a realistic visual typing animation,
+    instead of pasting the entire block via clipboard instantly.
+    """
+    if not text:
+        return
+    try:
+        import pyautogui
+        import pyperclip
+        pyautogui.FAILSAFE = False
+
+        n = len(text)
+        if n <= 250:
+            interval = max(0.012, default_interval)
+        elif n <= 800:
+            interval = 0.008
+        else:
+            interval = 0.003
+
+        for char in text:
+            if char == "\n":
+                pyautogui.press("enter")
+                time.sleep(interval * 1.5)
+            elif char == "\t":
+                pyautogui.press("tab")
+                time.sleep(interval)
+            elif ord(char) < 128:
+                pyautogui.write(char)
+                time.sleep(interval)
+            else:
+                pyperclip.copy(char)
+                pyautogui.hotkey("ctrl", "v")
+                time.sleep(interval)
+    except Exception as e:
+        logger.warning(f"Native keystroke typing error: {e}")
+        try:
+            import pyperclip
+            import pyautogui
+            pyperclip.copy(text)
+            pyautogui.hotkey("ctrl", "v")
+        except Exception:
+            pass
+
+
 @function_tool
 async def type_user_message_auto(message: str) -> str:
     """
-    Types or pastes a message into the currently active window on Windows.
+    Types a message into the currently active window on Windows character by character.
 
     Args:
         message: The text to type.
@@ -77,14 +122,8 @@ async def type_user_message_auto(message: str) -> str:
     if not message or not message.strip():
         return "No message provided to type."
     try:
-        import pyautogui
-        import pyperclip
         time.sleep(0.2)
-        
-        # Fast, unicode-safe typing via Windows clipboard paste
-        pyperclip.copy(message)
-        pyautogui.hotkey("ctrl", "v")
-        
+        type_text_natively(message)
         preview = message[:60] + ("..." if len(message) > 60 else "")
         return f'Typed: "{preview}"'
     except Exception as e:
@@ -160,8 +199,7 @@ async def smart_click_and_type(target_label: str, text_to_type: str, press_enter
             logger.info(f"Target text '{target_label}' not found by OCR. Typing directly into focused window.")
 
         time.sleep(0.15)
-        pyperclip.copy(text_to_type)
-        pyautogui.hotkey("ctrl", "v")
+        type_text_natively(text_to_type)
         if press_enter:
             time.sleep(0.1)
             pyautogui.press("enter")
@@ -182,7 +220,6 @@ async def fill_form_fields(fields_json: str, submit: bool = True) -> str:
     try:
         import json
         import pyautogui
-        import pyperclip
         pyautogui.FAILSAFE = False
 
         data = json.loads(fields_json)
@@ -198,8 +235,7 @@ async def fill_form_fields(fields_json: str, submit: bool = True) -> str:
                 pyautogui.click()
             time.sleep(0.15)
             pyautogui.hotkey("ctrl", "a")
-            pyperclip.copy(val_str)
-            pyautogui.hotkey("ctrl", "v")
+            type_text_natively(val_str)
             pyautogui.press("tab")
             filled_count += 1
 

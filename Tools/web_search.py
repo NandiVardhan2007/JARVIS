@@ -3,7 +3,7 @@
 import logging
 import requests
 import warnings
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 # Suppress noisy rust debug logs and DDGS rename warning
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="duckduckgo_search")

@@ -27,7 +27,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 

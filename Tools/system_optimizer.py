@@ -30,7 +30,7 @@ import shutil
 import time
 from typing import Optional
 
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
@@ -66,19 +66,33 @@ def get_pending_suggestions_text() -> str:
 def _get_thermal_celsius() -> Optional[float]:
     try:
         import psutil
-        temps = psutil.sensors_temperatures()
-        if temps:
-            for label in ("coretemp", "cpu_thermal", "k10temp", "acpitz"):
-                if label in temps and temps[label]:
-                    return max(t.current for t in temps[label])
-            # Fall back to whatever's first
-            first_key = next(iter(temps))
-            if temps[first_key]:
-                return max(t.current for t in temps[first_key])
+        if hasattr(psutil, "sensors_temperatures"):
+            temps = psutil.sensors_temperatures()
+            if temps:
+                for label in ("coretemp", "cpu_thermal", "k10temp", "acpitz"):
+                    if label in temps and temps[label]:
+                        return max(t.current for t in temps[label])
+                first_key = next(iter(temps))
+                if temps[first_key]:
+                    return max(t.current for t in temps[first_key])
     except Exception as thermal_err:
         logger.debug(f"psutil sensors_temperatures check failed: {thermal_err}")
 
-    # Fallback: read the kernel thermal zone directly
+    # Fallback: Windows WMI Thermal Zone query
+    if os.name == "nt":
+        try:
+            import subprocess
+            cmd = 'powershell -Command "Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object -ExpandProperty CurrentTemperature"'
+            out = subprocess.check_output(cmd, shell=True, timeout=2).decode().strip()
+            if out:
+                kelvin_deci = float(out.split()[0])
+                celsius = (kelvin_deci / 10.0) - 273.15
+                if 0 < celsius < 125:
+                    return round(celsius, 1)
+        except Exception as wmi_err:
+            logger.debug(f"Windows WMI thermal check failed: {wmi_err}")
+
+    # Fallback: Linux kernel thermal zone directly
     try:
         zone_path = "/sys/class/thermal/thermal_zone0/temp"
         if os.path.isfile(zone_path):

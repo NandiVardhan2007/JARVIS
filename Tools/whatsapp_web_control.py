@@ -6,7 +6,7 @@ and reply under local user session command.
 
 import logging
 import asyncio
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 

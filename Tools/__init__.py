@@ -101,7 +101,11 @@ from .web_automation import (
     download_file_from_page, upload_file_to_page, read_page_aloud,
     start_watching_page, list_watched_pages, check_page_changes, stop_watching_page,
 )
-from .webcam_guard import start_webcam_guard, stop_webcam_guard, analyze_what_master_is_doing, analyze_webcam_frame_vlm, get_webcam_diagnostics
+from .webcam_guard import (
+    start_webcam_guard, stop_webcam_guard, analyze_what_master_is_doing,
+    analyze_webcam_frame_vlm, get_webcam_diagnostics,
+    enable_hand_mouse_control, disable_hand_mouse_control,
+)
 from .whatsapp_web_control import open_whatsapp_web, read_unreads_on_whatsapp, send_whatsapp_reply
 
 # Core tools are always loaded regardless of intent
@@ -142,7 +146,7 @@ TOOL_CATEGORIES = {
         scan_system_for_viruses, list_processes, find_process,
         kill_process, get_top_resource_hogs, restart_process, control_ac_bulb,
         start_webcam_guard, stop_webcam_guard, analyze_what_master_is_doing, analyze_webcam_frame_vlm,
-        get_webcam_diagnostics,
+        get_webcam_diagnostics, enable_hand_mouse_control, disable_hand_mouse_control,
         start_hand_gesture_control, stop_hand_gesture_control, get_gesture_control_status, set_gesture_sensitivity,
         search_package, install_package, remove_package, check_for_updates, update_system,
         list_services, get_service_status, control_service,
@@ -213,7 +217,7 @@ AGENT_ROSTER = {
 }
 
 
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 
 @function_tool

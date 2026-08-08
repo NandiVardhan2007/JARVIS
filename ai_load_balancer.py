@@ -16,23 +16,15 @@ Features:
 
 import os
 import time
+import asyncio
 import logging
 import threading
-import asyncio
 import random
 from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 import requests
 from dotenv import load_dotenv
 
-# LiveKit imports (optional at import time, resolved when LiveKit adapter is used)
-try:
-    from livekit.agents import llm
-    from livekit.plugins import openai as lk_openai
-    LIVEKIT_AVAILABLE = True
-except ImportError:
-    LIVEKIT_AVAILABLE = False
-    llm = None
-    lk_openai = None
+from dotenv import load_dotenv
 
 logger = logging.getLogger("VISION.AILoadBalancer")
 
@@ -95,7 +87,15 @@ class AIEndpoint:
     @property
     def avg_latency(self) -> float:
         if not self.latency_history:
-            return 0.5  # Default baseline 500ms
+            if self.provider == "groq":
+                return 0.35  # Groq ultra-fast (~350ms)
+            elif self.provider in ("nvidia_nim", "gemini"):
+                return 0.50  # Fast NIM / Gemini (~500ms)
+            elif self.provider in ("deepseek", "openai"):
+                return 0.80  # Cloud OpenAI/DeepSeek (~800ms)
+            elif self.provider == "openrouter":
+                return 15.0  # OpenRouter queue baseline (~15s)
+            return 0.5
         return sum(self.latency_history[-10:]) / len(self.latency_history[-10:])
 
     def trigger_cooldown(self, seconds: float = 60.0, reason: str = ""):
@@ -128,18 +128,14 @@ class AIEndpoint:
                 self._lk_instance = lk_openai.LLM.with_openrouter(
                     model=self.model,
                     api_key=self.api_key,
-                )
-            elif self.provider == "groq":
-                self._lk_instance = lk_openai.LLM(
-                    model=self.model,
-                    api_key=self.api_key,
-                    base_url=self.base_url,
+                    max_retries=1,
                 )
             else:
                 self._lk_instance = lk_openai.LLM(
                     model=self.model,
                     api_key=self.api_key,
                     base_url=self.base_url,
+                    max_retries=1,
                 )
         return self._lk_instance
 
@@ -160,7 +156,7 @@ class AILoadBalancer:
         self._init_endpoints_from_env()
 
     def _init_endpoints_from_env(self):
-        """Discovers and parses API keys from environment variables."""
+        """Discovers and parses API keys from environment variables, ordered by provider latency."""
         with self._lock:
             self.endpoints.clear()
 
@@ -172,39 +168,7 @@ class AILoadBalancer:
                 single = os.getenv(single_env, "").strip()
                 return [single] if single else []
 
-            # 1. OpenRouter
-            or_keys = _parse_keys("OPENROUTER_API_KEYS", "OPENROUTER_API_KEY")
-            or_model = DEFAULT_MODELS["openrouter"]
-            for idx, key in enumerate(or_keys):
-                self.endpoints.append(
-                    AIEndpoint(
-                        endpoint_id=f"openrouter_{idx+1}",
-                        provider="openrouter",
-                        base_url=DEFAULT_BASE_URLS["openrouter"],
-                        api_key=key,
-                        model=or_model,
-                        extra_headers={
-                            "HTTP-Referer": "https://github.com/NandiVardhan2007/JARVIS",
-                            "X-Title": "VISION AI Load Balancer",
-                        },
-                    )
-                )
-
-            # 2. NVIDIA NIM
-            nim_keys = _parse_keys("NVIDIA_API_KEYS", "NVIDIA_API_KEY")
-            nim_model = DEFAULT_MODELS["nvidia_nim"]
-            for idx, key in enumerate(nim_keys):
-                self.endpoints.append(
-                    AIEndpoint(
-                        endpoint_id=f"nvidia_nim_{idx+1}",
-                        provider="nvidia_nim",
-                        base_url=DEFAULT_BASE_URLS["nvidia_nim"],
-                        api_key=key,
-                        model=nim_model,
-                    )
-                )
-
-            # 3. Groq
+            # 1. Groq (Primary Ultra-Fast Engine — ~350ms latency)
             groq_keys = _parse_keys("GROQ_API_KEYS", "GROQ_API_KEY")
             groq_model = DEFAULT_MODELS["groq"]
             for idx, key in enumerate(groq_keys):
@@ -215,10 +179,26 @@ class AILoadBalancer:
                         base_url=DEFAULT_BASE_URLS["groq"],
                         api_key=key,
                         model=groq_model,
+                        weight=10.0,
                     )
                 )
 
-            # 4. Google Gemini
+            # 2. NVIDIA NIM (High-Speed Dedicated GPU Endpoint — ~500ms latency)
+            nim_keys = _parse_keys("NVIDIA_API_KEYS", "NVIDIA_API_KEY")
+            nim_model = DEFAULT_MODELS["nvidia_nim"]
+            for idx, key in enumerate(nim_keys):
+                self.endpoints.append(
+                    AIEndpoint(
+                        endpoint_id=f"nvidia_nim_{idx+1}",
+                        provider="nvidia_nim",
+                        base_url=DEFAULT_BASE_URLS["nvidia_nim"],
+                        api_key=key,
+                        model=nim_model,
+                        weight=10.0,
+                    )
+                )
+
+            # 3. Google Gemini (Fast 2.0 Flash Engine — ~500ms latency)
             gemini_keys = _parse_keys("GEMINI_API_KEYS", "GEMINI_API_KEY")
             gemini_model = DEFAULT_MODELS["gemini"]
             for idx, key in enumerate(gemini_keys):
@@ -229,10 +209,11 @@ class AILoadBalancer:
                         base_url=DEFAULT_BASE_URLS["gemini"],
                         api_key=key,
                         model=gemini_model,
+                        weight=7.0,
                     )
                 )
 
-            # 5. DeepSeek / OpenAI (Online Cloud Providers)
+            # 4. DeepSeek & OpenAI (Cloud Fallbacks)
             ds_keys = _parse_keys("DEEPSEEK_API_KEYS", "DEEPSEEK_API_KEY")
             for idx, key in enumerate(ds_keys):
                 self.endpoints.append(
@@ -242,6 +223,7 @@ class AILoadBalancer:
                         base_url=DEFAULT_BASE_URLS["deepseek"],
                         api_key=key,
                         model=DEFAULT_MODELS["deepseek"],
+                        weight=5.0,
                     )
                 )
 
@@ -254,6 +236,26 @@ class AILoadBalancer:
                         base_url=DEFAULT_BASE_URLS["openai"],
                         api_key=key,
                         model=DEFAULT_MODELS["openai"],
+                        weight=5.0,
+                    )
+                )
+
+            # 5. OpenRouter (Multi-Key Backup Pool — Last-Resort Fallback)
+            or_keys = _parse_keys("OPENROUTER_API_KEYS", "OPENROUTER_API_KEY")
+            or_model = DEFAULT_MODELS["openrouter"]
+            for idx, key in enumerate(or_keys):
+                self.endpoints.append(
+                    AIEndpoint(
+                        endpoint_id=f"openrouter_{idx+1}",
+                        provider="openrouter",
+                        base_url=DEFAULT_BASE_URLS["openrouter"],
+                        api_key=key,
+                        model=or_model,
+                        weight=1.0,
+                        extra_headers={
+                            "HTTP-Referer": "https://github.com/NandiVardhan2007/VISION",
+                            "X-Title": "VISION AI Load Balancer",
+                        },
                     )
                 )
 
@@ -261,6 +263,13 @@ class AILoadBalancer:
                 f"AI Load Balancer initialized with {len(self.endpoints)} endpoints across providers: "
                 f"{list(set(e.provider for e in self.endpoints))} | Strategy: {self.strategy}"
             )
+
+    def cooldown_provider(self, provider: str, seconds: float = 1800.0, reason: str = ""):
+        """Triggers cooldown for ALL endpoints matching the specified provider."""
+        with self._lock:
+            for ep in self.endpoints:
+                if ep.provider == provider:
+                    ep.trigger_cooldown(seconds=seconds, reason=reason)
 
     def select_endpoint(
         self,
@@ -304,19 +313,25 @@ class AILoadBalancer:
 
     def chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Any]] = None,
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         strategy: Optional[str] = None,
         preferred_provider: Optional[str] = None,
-        max_retries: int = 3,
-    ) -> str:
+        max_retries: int = 15,
+    ) -> Any:
         """Synchronous chat completion with automatic failover and rate-limit handling."""
         last_exception = None
 
         for attempt in range(max_retries):
-            endpoint = self.select_endpoint(strategy=strategy, preferred_provider=preferred_provider)
+            try:
+                endpoint = self.select_endpoint(strategy=strategy, preferred_provider=preferred_provider)
+            except RuntimeError as e:
+                logger.error(f"No available AI endpoints: {e}")
+                raise e
+
             target_model = model or endpoint.model
 
             headers = {
@@ -332,56 +347,79 @@ class AILoadBalancer:
                 "max_tokens": max_tokens,
             }
 
+            if tools:
+                formatted_tools = []
+                for t in tools:
+                    if hasattr(t, "info") and hasattr(t.info, "to_openai_tool"):
+                        formatted_tools.append(t.info.to_openai_tool())
+                    elif isinstance(t, dict):
+                        formatted_tools.append(t)
+                if formatted_tools:
+                    payload["tools"] = formatted_tools
+                    payload["tool_choice"] = "auto"
+
             url = f"{endpoint.base_url}/chat/completions"
             endpoint.record_request_start()
             start_t = time.time()
 
             try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=60)
+                resp = requests.post(url, headers=headers, json=payload, timeout=30)
                 dur = time.time() - start_t
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    content = data["choices"][0]["message"]["content"]
+                    msg_obj = data["choices"][0]["message"]
                     endpoint.record_request_end(duration_sec=dur, success=True)
-                    return content
+                    if msg_obj.get("tool_calls"):
+                        return {"content": msg_obj.get("content", "") or "", "tool_calls": msg_obj["tool_calls"]}
+                    return msg_obj.get("content", "") or ""
+                elif resp.status_code in (401, 402, 403, 404):
+                    endpoint.record_request_end(duration_sec=dur, success=False)
+                    endpoint.trigger_cooldown(seconds=86400, reason=f"HTTP {resp.status_code} Auth/Billing/Model Error: {resp.text[:150]}")
+                    logger.warning(f"Endpoint [{endpoint.id}] disabled for 24h. Retrying request (attempt {attempt+1}/{max_retries})...")
+                    last_exception = RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                    continue
                 elif resp.status_code == 429:
                     endpoint.record_request_end(duration_sec=dur, success=False)
-                    endpoint.trigger_cooldown(seconds=60, reason="HTTP 429 Rate Limit Exceeded")
-                    logger.warning(f"Retrying request on another key (attempt {attempt+1}/{max_retries})...")
+                    endpoint.trigger_cooldown(seconds=120, reason="HTTP 429 Rate Limit Exceeded")
+                    logger.warning(f"Endpoint [{endpoint.id}] rate limited. Retrying request (attempt {attempt+1}/{max_retries})...")
+                    last_exception = RuntimeError(f"HTTP 429: Rate Limit Exceeded")
                     continue
                 else:
                     endpoint.record_request_end(duration_sec=dur, success=False)
-                    if resp.status_code >= 500:
-                        endpoint.trigger_cooldown(seconds=30, reason=f"HTTP {resp.status_code} Server Error")
-                    logger.warning(f"Endpoint {endpoint.id} returned status {resp.status_code}: {resp.text[:200]}")
-                    last_exception = RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+                    cooldown_sec = 60 if resp.status_code >= 500 else 30
+                    endpoint.trigger_cooldown(seconds=cooldown_sec, reason=f"HTTP {resp.status_code} Error: {resp.text[:150]}")
+                    logger.warning(f"Endpoint [{endpoint.id}] returned status {resp.status_code}: {resp.text[:200]}")
+                    last_exception = RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                    continue
 
             except Exception as e:
                 dur = time.time() - start_t
                 endpoint.record_request_end(duration_sec=dur, success=False)
-                logger.warning(f"Request error on endpoint {endpoint.id}: {e}")
-                endpoint.trigger_cooldown(seconds=30, reason=str(e))
+                logger.warning(f"Request error on endpoint [{endpoint.id}]: {e}")
+                endpoint.trigger_cooldown(seconds=60, reason=str(e))
                 last_exception = e
 
         raise RuntimeError(f"All AI Load Balancer attempts failed after {max_retries} retries. Last error: {last_exception}")
 
     async def achat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Any]] = None,
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         strategy: Optional[str] = None,
         preferred_provider: Optional[str] = None,
-        max_retries: int = 3,
-    ) -> str:
+        max_retries: int = 5,
+    ) -> Any:
         """Asynchronous non-blocking wrapper for chat completions."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.chat_completion(
                 messages=messages,
+                tools=tools,
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -413,7 +451,7 @@ class AILoadBalancer:
             }
 
 
-# Singleton Global Load Balancer Instance
+# Global convenience functions
 _global_balancer: Optional[AILoadBalancer] = None
 
 def get_global_balancer() -> AILoadBalancer:
@@ -423,75 +461,3 @@ def get_global_balancer() -> AILoadBalancer:
     return _global_balancer
 
 
-# LiveKit Adapter Integration (if livekit is installed)
-if LIVEKIT_AVAILABLE:
-    class LoadBalancedLLM(llm.LLM):
-        """
-        LiveKit LLM Adapter that delegates voice conversation requests to the
-        least-busy AI endpoint managed by AILoadBalancer.
-        """
-
-        def __init__(self, balancer: Optional[AILoadBalancer] = None):
-            super().__init__()
-            self.balancer = balancer or get_global_balancer()
-
-        def chat(
-            self,
-            *,
-            chat_ctx: llm.ChatContext,
-            tools: Optional[List[Any]] = None,
-            conn_options: Optional[Any] = None,
-            **kwargs,
-        ) -> llm.LLMStream:
-            # Pick least-busy endpoint
-            endpoint = self.balancer.select_endpoint(strategy="least_busy")
-            lk_llm = endpoint.get_livekit_llm()
-
-            # Record concurrency
-            endpoint.record_request_start()
-            start_time = time.time()
-
-            import inspect
-
-            def _build_kwargs(target_llm):
-                sig = inspect.signature(target_llm.chat)
-                call_kwargs = {}
-                if "chat_ctx" in sig.parameters:
-                    call_kwargs["chat_ctx"] = chat_ctx
-                if tools is not None and "tools" in sig.parameters:
-                    call_kwargs["tools"] = tools
-                if conn_options is not None and "conn_options" in sig.parameters:
-                    call_kwargs["conn_options"] = conn_options
-                for k, v in kwargs.items():
-                    if k in sig.parameters:
-                        call_kwargs[k] = v
-                return call_kwargs
-
-            try:
-                stream = lk_llm.chat(**_build_kwargs(lk_llm))
-            except Exception as e:
-                endpoint.record_request_end(duration_sec=time.time() - start_time, success=False)
-                if "429" in str(e) or "rate" in str(e).lower():
-                    endpoint.trigger_cooldown(60, "LiveKit LLM 429 Rate Limit")
-                # Fallback to secondary endpoint
-                fb_endpoint = self.balancer.select_endpoint(strategy="least_busy")
-                fb_llm = fb_endpoint.get_livekit_llm()
-                fb_endpoint.record_request_start()
-                stream = fb_llm.chat(**_build_kwargs(fb_llm))
-                endpoint = fb_endpoint
-
-            # Decorate the stream object to track completion
-            original_aclose = getattr(stream, "aclose", None)
-
-            async def _tracked_aclose(*args, **kwargs_inner):
-                endpoint.record_request_end(duration_sec=time.time() - start_time, success=True)
-                if original_aclose:
-                    await original_aclose(*args, **kwargs_inner)
-
-            stream.aclose = _tracked_aclose
-            return stream
-
-else:
-    class LoadBalancedLLM:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("LiveKit is not installed in this environment.")

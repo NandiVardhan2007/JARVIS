@@ -16,7 +16,7 @@ import asyncio
 import logging
 import threading
 from typing import Optional, Tuple
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
@@ -203,18 +203,55 @@ def _gesture_loop(show_preview: bool = False):
             h_frame, w_frame, _ = frame.shape
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            landmarks = None
+            all_hands = []
             if tracker_mode == 'tasks':
                 mp_image = mp_module.Image(image_format=mp_module.ImageFormat.SRGB, data=rgb_frame)
                 res = tracker.detect(mp_image)
                 if res.hand_landmarks:
-                    landmarks = res.hand_landmarks[0]
+                    all_hands = res.hand_landmarks
             elif tracker_mode == 'legacy':
                 res = tracker.process(rgb_frame)
                 if res.multi_hand_landmarks:
-                    landmarks = res.multi_hand_landmarks[0].landmark
+                    all_hands = [hl.landmark for hl in res.multi_hand_landmarks]
 
             gesture_label = "No Hand Detected"
+            landmarks = all_hands[0] if len(all_hands) > 0 else None
+
+            # ── Dual-Hand Gesture Processing (2 Hands Detected) ───────────────────
+            is_dual_hand = len(all_hands) >= 2
+            dual_precision_active = False
+
+            if is_dual_hand:
+                hand1, hand2 = all_hands[0], all_hands[1]
+                if show_preview:
+                    for lm in hand2:
+                        lx, ly = int(lm.x * w_frame), int(lm.y * h_frame)
+                        cv2.circle(frame, (lx, ly), 3, (255, 0, 255), cv2.FILLED)
+
+                # Check if Hand 2 is a Fist (Precision Clutch)
+                h2_fist = (hand2[8].y > hand2[6].y and hand2[12].y > hand2[10].y and hand2[16].y > hand2[14].y)
+                if h2_fist:
+                    dual_precision_active = True
+
+                # Dual-Hand Zoom (distance between index tips)
+                h1_ix, h1_iy = hand1[8].x, hand1[8].y
+                h2_ix, h2_iy = hand2[8].x, hand2[8].y
+                two_hand_dist = math.hypot(h1_ix - h2_ix, h1_iy - h2_iy)
+
+                if 'last_two_hand_dist' in locals() and last_two_hand_dist is not None:
+                    dist_delta = two_hand_dist - last_two_hand_dist
+                    if (now - last_pinch_release_time) > 0.4:
+                        if dist_delta > 0.045:
+                            pyautogui.hotkey('ctrl', '+')
+                            gesture_label = "Dual-Hand Zoom In (+)"
+                            last_pinch_release_time = now
+                        elif dist_delta < -0.045:
+                            pyautogui.hotkey('ctrl', '-')
+                            gesture_label = "Dual-Hand Zoom Out (-)"
+                            last_pinch_release_time = now
+                last_two_hand_dist = two_hand_dist
+            else:
+                last_two_hand_dist = None
 
             if landmarks and len(landmarks) >= 21:
                 if show_preview:
@@ -244,22 +281,9 @@ def _gesture_loop(show_preview: bool = False):
                 track_x = index_tip.x * 0.82 + index_mcp.x * 0.18
                 track_y = index_tip.y * 0.82 + index_mcp.y * 0.18
 
-                # Extended States
-                index_up = index_tip.y < index_pip.y
-                middle_up = middle_tip.y < middle_pip.y
-                ring_up = ring_tip.y < ring_pip.y
-                pinky_up = pinky_tip.y < pinky_pip.y
-
-                # Scale-normalized distances (distance-independent)
-                pinch_dist = math.hypot(index_tip.x - thumb_tip.x, index_tip.y - thumb_tip.y)
-                rel_pinch = pinch_dist / hand_scale
-
-                middle_pinch_dist = math.hypot(middle_tip.x - thumb_tip.x, middle_tip.y - thumb_tip.y)
-                rel_middle_pinch = middle_pinch_dist / hand_scale
-
-                # Dynamic sensitivity scaling
+                # Dynamic sensitivity scaling (with dual-hand sniper mode dampening)
                 with _state_lock:
-                    sens = _sensitivity_scale
+                    sens = _sensitivity_scale * (0.30 if dual_precision_active else 1.0)
                 margin_x = max(0.04, min(0.22, 0.13 / sens))
                 margin_y = max(0.04, min(0.22, 0.15 / sens))
 
@@ -273,6 +297,19 @@ def _gesture_loop(show_preview: bool = False):
                 # Clamp coordinates inside screen bounds
                 cursor_x = int(max(0, min(screen_w - 1, filt_x)))
                 cursor_y = int(max(0, min(screen_h - 1, filt_y)))
+
+                # Finger extension states
+                index_up = index_tip.y < index_pip.y
+                middle_up = middle_tip.y < middle_pip.y
+                ring_up = ring_tip.y < ring_pip.y
+                pinky_up = pinky_tip.y < pinky_pip.y
+
+                # Scale-normalized distances (distance-independent)
+                pinch_dist = math.hypot(index_tip.x - thumb_tip.x, index_tip.y - thumb_tip.y)
+                rel_pinch = pinch_dist / hand_scale
+
+                middle_pinch_dist = math.hypot(middle_tip.x - thumb_tip.x, middle_tip.y - thumb_tip.y)
+                rel_middle_pinch = middle_pinch_dist / hand_scale
 
                 ix_px, iy_px = int(index_tip.x * w_frame), int(index_tip.y * h_frame)
                 tx_px, ty_px = int(thumb_tip.x * w_frame), int(thumb_tip.y * h_frame)

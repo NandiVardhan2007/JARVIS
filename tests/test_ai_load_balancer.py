@@ -129,6 +129,52 @@ class TestAILoadBalancer(unittest.TestCase):
         self.assertEqual(output, "Failed over successfully!")
         self.assertEqual(mock_post.call_count, 2)
 
+    @patch("requests.post")
+    def test_chat_completion_failover_on_402_insufficient_credits(self, mock_post):
+        # 402 Insufficient credits triggers 24h cooldown and fails over to next key
+        mock_resp_402 = MagicMock()
+        mock_resp_402.status_code = 402
+        mock_resp_402.text = "User has insufficient credits."
+
+        mock_resp_200 = MagicMock()
+        mock_resp_200.status_code = 200
+        mock_resp_200.json.return_value = {
+            "choices": [{"message": {"content": "Recovered from 402 credits error!"}}]
+        }
+
+        mock_post.side_effect = [mock_resp_402, mock_resp_200]
+
+        balancer = AILoadBalancer()
+        ep0 = balancer.endpoints[0]
+        output = balancer.chat_completion(
+            messages=[{"role": "user", "content": "Test 402 handling"}]
+        )
+        self.assertEqual(output, "Recovered from 402 credits error!")
+        self.assertTrue(ep0.is_cooling_down)
+        self.assertGreater(ep0.cooldown_until, time.time() + 80000)
+
+    @patch("requests.post")
+    def test_chat_completion_failover_on_401_unauthorized(self, mock_post):
+        mock_resp_401 = MagicMock()
+        mock_resp_401.status_code = 401
+        mock_resp_401.text = "Invalid API key"
+
+        mock_resp_200 = MagicMock()
+        mock_resp_200.status_code = 200
+        mock_resp_200.json.return_value = {
+            "choices": [{"message": {"content": "Recovered from 401 auth error!"}}]
+        }
+
+        mock_post.side_effect = [mock_resp_401, mock_resp_200]
+
+        balancer = AILoadBalancer()
+        ep0 = balancer.endpoints[0]
+        output = balancer.chat_completion(
+            messages=[{"role": "user", "content": "Test 401 handling"}]
+        )
+        self.assertEqual(output, "Recovered from 401 auth error!")
+        self.assertTrue(ep0.is_cooling_down)
+
 
 @unittest.skipUnless(LIVEKIT_AVAILABLE, "LiveKit not available")
 class TestLiveKitIntegration(unittest.TestCase):

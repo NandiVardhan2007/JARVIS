@@ -53,16 +53,16 @@ stop_vision.bat
                      │ vision_bridge.py │  WebSocket bridge (localhost:8765)
                      └────────┬─────────┘
                               │ WebSocket
-                     ┌────────▼─────────┐
-                     │  vision_face/    │  Flutter frontend — animated
-                     │  (Flutter app)   │  avatar, dashboard, controls
-                     └──────────────────┘
+                      ┌────────▼─────────┐
+                      │  vision_react/   │  React frontend — animated
+                      │  (React app)     │  avatar, dashboard, controls
+                      └──────────────────┘
 ```
 
 `vision_launcher.py` starts `agent.py` and `voice_client.py` as separate
 processes with a watchdog that restarts the agent if it crashes. The
-Flutter app is a separate process you run yourself (`flutter run`) and
-connects over WebSocket — it also runs a believable demo-mode animation
+React app is a separate process you run (`npm run dev` inside `vision_react`)
+and connects over WebSocket — it also runs a believable demo-mode animation
 automatically if the backend isn't running yet, and switches to live data
 the moment it connects.
 
@@ -80,7 +80,7 @@ right before executing, not just once at session start. Re-enrollment is
 available through conversation ("VISION, re-register my voice").
 
 ### Animated avatar
-`vision_face/lib/face/` — a hand-built vector avatar (not a canned GIF/video):
+`vision_react/src/face/` — a hand-built vector avatar (not a canned GIF/video):
 real audio-amplitude-driven lip sync, 11 emotions inferred from live
 conversation state and transcript content, natural blinking/gaze/breathing,
 subtle head movement, and state-reactive effects (thinking particles,
@@ -174,11 +174,11 @@ On first launch (no master voice enrolled yet), VISION will ask you to
 read a short sentence aloud and register your voice. After that, it
 verifies your voice each session before unlocking.
 
-### 4. Run the Flutter frontend (optional but recommended)
+### 4. Run the React frontend
 ```bash
-cd vision_face
-flutter pub get
-flutter run -d linux   # or your target device
+cd vision_react
+npm install
+npm run dev
 ```
 
 ---
@@ -189,13 +189,13 @@ vision/
 ├── vision_launcher.py     # Entry point — spawns agent.py + voice_client.py, watchdog
 ├── agent.py               # LiveKit Agent: STT/LLM/TTS pipeline, personality, voice-auth gate
 ├── voice_client.py        # Headless mic capture + speech playback + state mirror
-├── vision_bridge.py       # WebSocket bridge to the Flutter frontend
+├── vision_bridge.py       # WebSocket bridge to the React frontend
 ├── config.py              # Environment validation, local-LLM health check
 ├── requirements.txt
 ├── .env.example
 ├── VISION_VNEXT_ROADMAP.md  # Design notes / gap analysis from the vNext pass
-├── vision_face/           # Flutter frontend (animated avatar + dashboard)
-│   └── lib/face/          # The avatar rig: painter, params, animation driver
+├── vision_react/          # React frontend (animated avatar + dashboard)
+│   └── src/face/          # The avatar rig: canvas painter, params, animation driver
 └── Tools/
     ├── __init__.py        # Tool registry — get_all_tools(), AGENT_ROSTER, categories
     ├── system_control.py  # Windows power, volume, brightness, clipboard, antivirus

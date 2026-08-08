@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import aiohttp
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 

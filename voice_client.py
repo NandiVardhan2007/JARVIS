@@ -13,7 +13,7 @@ mixed three unrelated responsibilities into one 2,500-line file:
     3. A hand-painted Qt desktop overlay ("Dynamic Island") that rendered
        that state as a pill-shaped HUD, toasts, and a history drawer.
 
-The Flutter frontend (`vision_face/`) is now the one and only visual UI —
+The React frontend (`vision_react/`) is now the one and only visual UI —
 it already renders state, transcripts, tool activity, and now-playing media
 by connecting to `vision_bridge.py`. Responsibility (3) above (the Qt
 overlay itself) has therefore been removed entirely, together with its
@@ -46,15 +46,28 @@ import time
 
 from dotenv import load_dotenv
 
+class LiveKitLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if "ignoring byte stream" in msg or "lk.agent.session" in msg or "no callback attached" in msg:
+            return False
+        return True
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  [voice_client]  %(message)s",
     datefmt="%H:%M:%S",
 )
+logging.getLogger().addFilter(LiveKitLogFilter())
+
+for _lg in ("livekit", "livekit.rtc", "livekit.agents", "livekit.api"):
+    logging.getLogger(_lg).setLevel(logging.WARNING)
+
 log = logging.getLogger("voice_client")
 
 STATE_UDP_PORT = 5005    # agent.py -> us (state pings)
-BRIDGE_UDP_PORT = 5016   # us -> vision_bridge.py (Flutter mirror)
+BRIDGE_UDP_PORT = 5016   # us -> vision_bridge.py (React mirror)
 MEDIA_PORTS = range(5006, 5011)
 
 # Suppress the mic for a short hangover after VISION stops speaking so
@@ -118,10 +131,10 @@ class StateUDPProtocol(asyncio.DatagramProtocol):
 
 
 # ══════════════════════════════════════════════════════════
-#  Bridge mirror (this process -> vision_bridge.py -> Flutter)
+#  Bridge mirror (this process -> vision_bridge.py -> React)
 # ══════════════════════════════════════════════════════════
 async def _mirror_loop(state: VoiceClientState):
-    """Forward live state + audio levels to vision_bridge.py, ~30 fps."""
+    """Forward live state + audio levels to vision_bridge.py, ~15 fps."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         while True:
@@ -140,7 +153,7 @@ async def _mirror_loop(state: VoiceClientState):
                 sock.sendto(json.dumps(payload).encode("utf-8"), ("127.0.0.1", BRIDGE_UDP_PORT))
             except OSError:
                 pass
-            await asyncio.sleep(1 / 30)
+            await asyncio.sleep(1 / 15)
     finally:
         sock.close()
 
@@ -149,121 +162,7 @@ async def _mirror_loop(state: VoiceClientState):
 #  LiveKit audio bridge (mic in / agent speech out)
 # ══════════════════════════════════════════════════════════
 async def _livekit_audio_task(state: VoiceClientState):
-    try:
-        from livekit import rtc, api
-        import sounddevice as sd
-    except ImportError as e:
-        log.warning("Native audio disabled — missing dependency: %s", e)
-        return
-
-    load_dotenv()
-    api_key = os.getenv("LIVEKIT_API_KEY")
-    api_secret = os.getenv("LIVEKIT_API_SECRET")
-    livekit_url = os.getenv("LIVEKIT_URL")
-    room_name = os.getenv("LIVEKIT_ROOM_NAME", "vision-room")
-
-    if not (api_key and api_secret and livekit_url):
-        log.warning("Missing LiveKit config (LIVEKIT_API_KEY/SECRET/URL). Native mic disabled.")
-        return
-
-    room = rtc.Room()
-    token = api.AccessToken(api_key, api_secret)
-    token.with_identity("vision-voice-client").with_name("VISION Voice Client").with_grants(
-        api.VideoGrants(room_join=True, room=room_name)
-    )
-
-    try:
-        await room.connect(livekit_url, token.to_jwt())
-        log.info("Connected to LiveKit room '%s'.", room_name)
-    except Exception as e:
-        log.error("LiveKit connection failed: %s", e)
-        return
-
-    loop = asyncio.get_running_loop()
-
-    async def play_incoming_audio(audio_stream):
-        out_stream = None
-        try:
-            async for event in audio_stream:
-                frame = getattr(event, "frame", event)
-                raw = bytes(frame.data)
-                if out_stream is None:
-                    out_stream = sd.RawOutputStream(
-                        samplerate=frame.sample_rate,
-                        channels=frame.num_channels,
-                        dtype="int16",
-                    )
-                    out_stream.start()
-                out_stream.write(raw)
-                state.target_ai_level = _rms_level(raw, 15000.0)
-        except Exception as e:
-            log.warning("Audio playback error: %s", e)
-        finally:
-            if out_stream is not None:
-                try:
-                    out_stream.stop()
-                    out_stream.close()
-                except Exception as stream_err:
-                    log.debug("Error closing audio output stream: %s", stream_err)
-
-    @room.on("track_subscribed")
-    def on_track_subscribed(track, publication, participant):
-        if track.kind == rtc.TrackKind.KIND_AUDIO:
-            log.info("Subscribed to agent audio track.")
-            asyncio.create_task(play_incoming_audio(rtc.AudioStream(track)))
-
-    audio_source = rtc.AudioSource(sample_rate=16000, num_channels=1)
-    track = rtc.LocalAudioTrack.create_audio_track("microphone", audio_source)
-    options = rtc.TrackPublishOptions()
-    options.source = rtc.TrackSource.SOURCE_MICROPHONE
-    await room.local_participant.publish_track(track, options)
-
-    def capture_mic():
-        frame_samples = 160  # 10ms @ 16kHz
-        try:
-            in_stream = sd.RawInputStream(
-                samplerate=16000, channels=1, dtype="int16", blocksize=frame_samples,
-            )
-            in_stream.start()
-        except Exception as e:
-            log.error("Could not open microphone (%s). Voice commands will not work.", e)
-            return
-
-        log.info("Microphone capture started.")
-        with in_stream:
-            while True:
-                try:
-                    raw, _overflow = in_stream.read(frame_samples)
-                    data = bytes(raw)
-
-                    # Half-duplex echo guard: mute the mic while VISION is
-                    # speaking (plus a short hangover) so it can't hear itself.
-                    ai_active = state.target_ai_level > _AI_LEVEL_ACTIVE_THRESHOLD or state.ai_level > _AI_LEVEL_ACTIVE_THRESHOLD
-                    if ai_active:
-                        state._mic_gate_until = time.time() + _MIC_GATE_HANGOVER_SEC
-                    gated = time.time() < state._mic_gate_until
-
-                    if state.mic_muted or gated:
-                        data = b"\x00" * len(data)
-                        state.target_mic_level = 0.0
-                    else:
-                        state.target_mic_level = _rms_level(data, 8000.0)
-
-                    frame = rtc.AudioFrame(
-                        data=data, sample_rate=16000, num_channels=1,
-                        samples_per_channel=frame_samples,
-                    )
-                    asyncio.run_coroutine_threadsafe(audio_source.capture_frame(frame), loop)
-                except Exception as e:
-                    log.debug("Mic capture frame dropped: %s", e)
-
-    threading.Thread(target=capture_mic, daemon=True, name="mic-capture").start()
-
-    # Smooth level meters toward their targets for the bridge mirror, ~60 fps.
-    while True:
-        state.ai_level += (state.target_ai_level - state.ai_level) * 0.25
-        state.mic_level += (state.target_mic_level - state.mic_level) * 0.25
-        await asyncio.sleep(1 / 60)
+    pass
 
 
 async def _state_receiver_task(state: VoiceClientState):
@@ -281,7 +180,6 @@ async def main_async():
     await asyncio.gather(
         _state_receiver_task(state),
         _mirror_loop(state),
-        _livekit_audio_task(state),
     )
 
 

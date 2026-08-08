@@ -11,7 +11,7 @@ import logging
 import threading
 import base64
 import requests
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,8 @@ _http_server = None
 _camera_ready_event = threading.Event()
 _camera_open_failed = False
 _uinput_available = False
-_mouse_backend_status = ""
+_air_mouse_enabled = os.getenv("VISION_ENABLE_HAND_MOUSE", "true").lower() == "true"
+_gesture_actions_enabled = os.getenv("VISION_ENABLE_GESTURE_ACTIONS", "false").lower() == "true"
 
 # Last time the frontend actually pulled a frame (snapshot/video_feed hit).
 # The idle-timeout in _camera_loop only releases the camera when BOTH no
@@ -111,6 +112,8 @@ def _start_mjpeg_stream_server():
                     self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
                     self.end_headers()
                     self.wfile.write(frame_bytes)
+                except (ConnectionResetError, BrokenPipeError, OSError):
+                    pass
                 except Exception as stream_err:
                     logger.debug(f"HTTP MJPEG handler snapshot write error: {stream_err}")
                 return
@@ -157,13 +160,13 @@ def _start_mjpeg_stream_server():
 
 
 
-def _get_hand_tracker():
+def _get_hand_tracker(max_num_hands: int = 2):
     try:
         import mediapipe as mp
         # 1. Try legacy solutions API first if present
         if hasattr(mp, 'solutions') and hasattr(mp.solutions, 'hands'):
             logger.info("MediaPipe: Using mp.solutions.hands legacy API")
-            return ('legacy', mp.solutions.hands.Hands(max_num_hands=1, min_detection_confidence=0.6), mp)
+            return ('legacy', mp.solutions.hands.Hands(max_num_hands=max_num_hands, min_detection_confidence=0.6), mp)
         
         # 2. MediaPipe 0.10+ Tasks API
         from mediapipe.tasks import python as mp_tasks
@@ -180,7 +183,7 @@ def _get_hand_tracker():
         base_options = mp_tasks.BaseOptions(model_asset_path=model_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
-            num_hands=1,
+            num_hands=max_num_hands,
             min_hand_detection_confidence=0.5,
             min_hand_presence_confidence=0.5,
             min_tracking_confidence=0.5
@@ -503,116 +506,116 @@ def _camera_loop():
                 rel_dy = curr_y - prev_y
                 prev_x, prev_y = curr_x, curr_y
 
-                # Move desktop cursor — send relative deltas via uinput (GNOME Wayland)
-                if uinput_mouse and (rel_dx != 0 or rel_dy != 0):
-                    try:
-                        from evdev import ecodes as e
-                        uinput_mouse.write(e.EV_REL, e.REL_X, int(rel_dx))
-                        uinput_mouse.write(e.EV_REL, e.REL_Y, int(rel_dy))
-                        uinput_mouse.syn()
-                    except Exception as ev_err:
-                        logger.debug(f"uinput mouse write error: {ev_err}")
+                # Move desktop cursor & handle pinches ONLY if air mouse mode is explicitly enabled
+                if _air_mouse_enabled:
+                    if uinput_mouse and (rel_dx != 0 or rel_dy != 0):
+                        try:
+                            from evdev import ecodes as e
+                            uinput_mouse.write(e.EV_REL, e.REL_X, int(rel_dx))
+                            uinput_mouse.write(e.EV_REL, e.REL_Y, int(rel_dy))
+                            uinput_mouse.syn()
+                        except Exception as ev_err:
+                            logger.debug(f"uinput mouse write error: {ev_err}")
 
-                # Adaptive Pinch Distance (Index tip to Thumb tip relative to hand scale)
-                pinch_raw = np.hypot(index_x - thumb_x, index_y - thumb_y)
-                rel_pinch = pinch_raw / hand_scale
-                now = time.time()
+                    # Adaptive Pinch Distance (Index tip to Thumb tip relative to hand scale)
+                    pinch_raw = np.hypot(index_x - thumb_x, index_y - thumb_y)
+                    rel_pinch = pinch_raw / hand_scale
+                    now = time.time()
 
-                # PINCH CLICK & DRAG WINDOW LOGIC
-                is_pinched = (rel_pinch < 0.28) or (pinch_raw < 0.045)
+                    # PINCH CLICK & DRAG WINDOW LOGIC
+                    is_pinched = (rel_pinch < 0.28) or (pinch_raw < 0.045)
 
-                ix_px, iy_px = int(index_x * w), int(index_y * h)
-                tx_px, ty_px = int(thumb_x * w), int(thumb_y * h)
+                    ix_px, iy_px = int(index_x * w), int(index_y * h)
+                    tx_px, ty_px = int(thumb_x * w), int(thumb_y * h)
 
-                if is_pinched:
-                    if click_lock_pos is None:
-                        click_lock_pos = (curr_x, curr_y)
+                    if is_pinched:
+                        if click_lock_pos is None:
+                            click_lock_pos = (curr_x, curr_y)
 
-                    if not is_dragging:
-                        is_dragging = True
-                        pinch_start_time = now
-                        if uinput_mouse:
-                            try:
-                                from evdev import ecodes as e
-                                uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 1)
-                                uinput_mouse.syn()
-                            except Exception as ev_err: logger.debug(f"uinput mouse BTN_LEFT press error: {ev_err}")
-                        if mouse:
-                            try:
-                                mouse.press(Button.left)
-                            except Exception as m_err: logger.debug(f"mouse press error: {m_err}")
+                        if not is_dragging:
+                            is_dragging = True
+                            pinch_start_time = now
+                            if uinput_mouse:
+                                try:
+                                    from evdev import ecodes as e
+                                    uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 1)
+                                    uinput_mouse.syn()
+                                except Exception as ev_err: logger.debug(f"uinput mouse BTN_LEFT press error: {ev_err}")
+                            if mouse:
+                                try:
+                                    mouse.press(Button.left)
+                                except Exception as m_err: logger.debug(f"mouse press error: {m_err}")
 
-                    # Position cursor — drag follows movement, click locks position to suppress drift
-                    active_pos = (curr_x, curr_y) if (now - pinch_start_time > 0.18) else click_lock_pos
-                    if _fast_set_cursor_pos:
-                        _fast_set_cursor_pos(active_pos[0], active_pos[1])
-                    elif mouse:
-                        try: mouse.position = active_pos
-                        except Exception: pass
+                        # Position cursor — drag follows movement, click locks position to suppress drift
+                        active_pos = (curr_x, curr_y) if (now - pinch_start_time > 0.18) else click_lock_pos
+                        if _fast_set_cursor_pos:
+                            _fast_set_cursor_pos(active_pos[0], active_pos[1])
+                        elif mouse:
+                            try: mouse.position = active_pos
+                            except Exception: pass
 
-                    # Draw vibrant active pinch indicator (Cyan-Green glowing line)
-                    cv2.line(frame, (ix_px, iy_px), (tx_px, ty_px), (255, 212, 0), 4)
-                    cv2.circle(frame, (ix_px, iy_px), 12, (255, 212, 0), cv2.FILLED)
-                    cv2.putText(frame, "PINCH CLICK / GRAB ACTIVE", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 212, 0), 2)
-                else:
-                    click_lock_pos = None
-                    if _fast_set_cursor_pos:
-                        _fast_set_cursor_pos(curr_x, curr_y)
-                    elif mouse:
-                        try: mouse.position = (curr_x, curr_y)
-                        except Exception: pass
+                        # Draw vibrant active pinch indicator (Cyan-Green glowing line)
+                        cv2.line(frame, (ix_px, iy_px), (tx_px, ty_px), (255, 212, 0), 4)
+                        cv2.circle(frame, (ix_px, iy_px), 12, (255, 212, 0), cv2.FILLED)
+                        cv2.putText(frame, "PINCH CLICK / GRAB ACTIVE", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 212, 0), 2)
+                    else:
+                        click_lock_pos = None
+                        if _fast_set_cursor_pos:
+                            _fast_set_cursor_pos(curr_x, curr_y)
+                        elif mouse:
+                            try: mouse.position = (curr_x, curr_y)
+                            except Exception: pass
 
-                    if is_dragging:
-                        is_dragging = False
-                        pinch_duration = now - pinch_start_time
-                        if uinput_mouse:
-                            try:
-                                from evdev import ecodes as e
-                                uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 0)
-                                uinput_mouse.syn()
-                            except Exception as ev_err: logger.debug(f"uinput mouse BTN_LEFT release error: {ev_err}")
-                        if mouse:
-                            try:
-                                mouse.release(Button.left)
-                            except Exception as m_err: logger.debug(f"mouse release error: {m_err}")
+                        if is_dragging:
+                            is_dragging = False
+                            pinch_duration = now - pinch_start_time
+                            if uinput_mouse:
+                                try:
+                                    from evdev import ecodes as e
+                                    uinput_mouse.write(e.EV_KEY, e.BTN_LEFT, 0)
+                                    uinput_mouse.syn()
+                                except Exception as ev_err: logger.debug(f"uinput mouse BTN_LEFT release error: {ev_err}")
+                            if mouse:
+                                try:
+                                    mouse.release(Button.left)
+                                except Exception as m_err: logger.debug(f"mouse release error: {m_err}")
 
-                        # Short tap pinch (<0.35s) = Click / Double Click
-                        if pinch_duration < 0.35:
-                            if (now - last_click_time) < 0.4:
-                                logger.info("Double pinch detected -> Double Click")
-                                if mouse:
-                                    try:
-                                        mouse.click(Button.left, 2)
-                                    except Exception as click_err: logger.debug(f"mouse double click error: {click_err}")
-                            else:
-                                logger.info("Short pinch detected -> Single Click")
-                                if mouse:
-                                    try:
-                                        mouse.click(Button.left, 1)
-                                    except Exception as click_err: logger.debug(f"mouse single click error: {click_err}")
+                            # Short tap pinch (<0.35s) = Click / Double Click
+                            if pinch_duration < 0.35:
+                                if (now - last_click_time) < 0.4:
+                                    logger.info("Double pinch detected -> Double Click")
+                                    if mouse:
+                                        try:
+                                            mouse.click(Button.left, 2)
+                                        except Exception as click_err: logger.debug(f"mouse double click error: {click_err}")
+                                else:
+                                    logger.info("Short pinch detected -> Single Click")
+                                    if mouse:
+                                        try:
+                                            mouse.click(Button.left, 1)
+                                        except Exception as click_err: logger.debug(f"mouse single click error: {click_err}")
 
-                            last_click_time = now
+                                last_click_time = now
 
-                    # Draw green pointer circle at index tip position
-                    cv2.circle(frame, (ix_px, iy_px), 8, (0, 255, 0), cv2.FILLED)
-                    cv2.putText(frame, f"INDEX CURSOR ({curr_x}, {curr_y})", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        # Draw green pointer circle at index tip position
+                        cv2.circle(frame, (ix_px, iy_px), 8, (0, 255, 0), cv2.FILLED)
+                        cv2.putText(frame, f"INDEX CURSOR ({curr_x}, {curr_y})", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-                    # RIGHT-CLICK: thumb + middle-finger pinch (only when not also
-                    # doing a left-click/drag pinch with the index finger).
-                    middle_x, middle_y = landmarks[12].x, landmarks[12].y
-                    right_pinch_raw = np.hypot(middle_x - thumb_x, middle_y - thumb_y)
-                    is_right_pinched = (right_pinch_raw / hand_scale) < 0.28
+                        # RIGHT-CLICK: thumb + middle-finger pinch
+                        middle_x, middle_y = landmarks[12].x, landmarks[12].y
+                        right_pinch_raw = np.hypot(middle_x - thumb_x, middle_y - thumb_y)
+                        is_right_pinched = (right_pinch_raw / hand_scale) < 0.28
 
-                    if is_right_pinched and not was_right_pinched and (now - last_right_click_time) > 0.5:
-                        logger.info("Thumb-middle pinch detected -> Right Click")
-                        if mouse:
-                            try:
-                                mouse.click(Button.right, 1)
-                            except Exception as rclick_err:
-                                logger.debug(f"mouse right click error: {rclick_err}")
-                        last_right_click_time = now
-                        cv2.putText(frame, "RIGHT CLICK", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 140, 255), 2)
-                    was_right_pinched = is_right_pinched
+                        if is_right_pinched and not was_right_pinched and (now - last_right_click_time) > 0.5:
+                            logger.info("Thumb-middle pinch detected -> Right Click")
+                            if mouse:
+                                try:
+                                    mouse.click(Button.right, 1)
+                                except Exception as rclick_err:
+                                    logger.debug(f"mouse right click error: {rclick_err}")
+                            last_right_click_time = now
+                            cv2.putText(frame, "RIGHT CLICK", (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 140, 255), 2)
+                        was_right_pinched = is_right_pinched
 
                 # Action Gestures (Victory, Fist, Palm, Thumbs Up/Down, Point Up, Rock On)
                 gesture = _analyze_gesture(landmarks)
@@ -676,9 +679,9 @@ def _camera_loop():
                 else:
                     swipe_ref_x = None
 
-                if gesture:
-                    # Only fire discrete one-shot action if this hold wasn't actually used
-                    # for continuous scrolling/swiping.
+                if gesture and _gesture_actions_enabled:
+                    # Only fire discrete one-shot action if gesture actions are explicitly enabled
+                    # and this hold wasn't actually used for continuous scrolling/swiping.
                     suppressed = (gesture == "VICTORY" and did_scroll_this_hold) or \
                                  (gesture == "PALM" and did_swipe_this_hold)
                     action_cooldown = 5.0  # Require 5s minimum between discrete static gesture actions
@@ -1044,7 +1047,25 @@ async def analyze_what_master_is_doing() -> str:
         "Look at this image and describe in 1-2 sentences what the person in front of the camera is doing right now. Be playful and precise, like VISION would be."
     )
 
-# Auto-start HTTP MJPEG stream server on port 5005
+@function_tool
+async def enable_hand_mouse_control() -> str:
+    """
+    Enables moving the Windows cursor via hand gestures (Virtual Air Mouse).
+    """
+    global _air_mouse_enabled
+    _air_mouse_enabled = True
+    return "Virtual hand mouse control activated, sir. Point your index finger to move the cursor, pinch to click."
+
+@function_tool
+async def disable_hand_mouse_control() -> str:
+    """
+    Disables moving the Windows cursor via hand gestures while keeping camera gestures and visual checks active.
+    """
+    global _air_mouse_enabled
+    _air_mouse_enabled = False
+    return "Virtual hand mouse control deactivated, sir. Your camera remains active for static gestures and visual checks without overriding your physical mouse."
+
+# Auto-start HTTP MJPEG stream server on port 5055
 try:
     _start_mjpeg_stream_server()
 except Exception as _err:

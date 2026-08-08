@@ -182,7 +182,7 @@ natural extensions of `file_ops.py` + `scheduler.py`.
 recommended treating avatar/lip-sync as a future follow-on project. That was
 wrong — it was written from a shallow pass over the Flutter code (checking
 for insecure URLs and hardcoded secrets, nothing deeper) and missed that
-`vision_face/lib/face/` (~1,150 lines across three files) already contains a
+`vision_react/src/face/` (~1,150 lines across three files) already contains a
 genuinely sophisticated, working, LIVE-WIRED avatar:
 
 - **Real lip sync**, driven by actual TTS audio amplitude (not a canned

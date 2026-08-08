@@ -6,7 +6,7 @@ and the GitHub integration from github_tool.py for PR fetching.
 
 import logging
 import os
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 

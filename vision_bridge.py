@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-vision_bridge.py — WebSocket bridge between the VISION backend and the Flutter
-frontend (vision_face/).
+vision_bridge.py — WebSocket bridge between the VISION backend and the React
+frontend (vision_react/).
 
 What it does
 ------------
-1. Serves a WebSocket on ws://127.0.0.1:8765 that the Flutter app connects to.
+1. Serves a WebSocket on ws://127.0.0.1:8765 that the React app connects to.
 2. Receives live state + audio levels from the running PyQt HUD
    (dynamic_island.py) over UDP 127.0.0.1:5016 — see `_mirror_to_bridge()`
    which the HUD calls every frame — and rebroadcasts it, as JSON, to every
-   connected Flutter client.
+   connected React client.
 3. Derives the discrete face state (idle / listening / thinking / speaking)
    from audio amplitude, since the agent itself doesn't emit those.
-4. Relays commands from Flutter back to the backend:
+4. Relays commands from React back to the backend:
       - text_input / action  -> UDP 127.0.0.1:5004  (agent command server)
       - media playpause/stop  -> UDP 127.0.0.1:5006-5010 (media listener)
 
 This runs ALONGSIDE the existing HUD and changes nothing about how VISION
 works. If the HUD isn't running, the bridge simply has nothing to forward and
-the Flutter app stays in its self-contained demo mode.
+the React app stays in its self-contained demo mode.
 
 Requires:  pip install websockets
 Run:       python vision_bridge.py
@@ -55,7 +55,7 @@ _FACE_STATES = ("idle", "listening", "thinking", "speaking", "input", "alert")
 
 
 class Hub:
-    """Tracks connected Flutter clients and the last known snapshot."""
+    """Tracks connected React clients and the last known snapshot."""
 
     def __init__(self):
         self.clients: set = set()
@@ -65,11 +65,11 @@ class Hub:
     # ── client management ───────────────────────────────────────────────
     def add(self, ws):
         self.clients.add(ws)
-        log.info("Flutter client connected (%d total)", len(self.clients))
+        log.info("React client connected (%d total)", len(self.clients))
 
     def remove(self, ws):
         self.clients.discard(ws)
-        log.info("Flutter client disconnected (%d total)", len(self.clients))
+        log.info("React client disconnected (%d total)", len(self.clients))
 
     async def broadcast(self, payload: dict):
         self.last_payload = payload
@@ -252,7 +252,7 @@ async def main():
 
     async with websockets.serve(handler, WS_HOST, WS_PORT):
         log.info("WebSocket ready on ws://%s:%d", WS_HOST, WS_PORT)
-        log.info("Start the Flutter app (vision_face) to connect.")
+        log.info("Start the React app (vision_react) to connect.")
         await asyncio.Future()  # run forever
 
 

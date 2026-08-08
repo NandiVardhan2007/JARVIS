@@ -24,8 +24,7 @@ OWNER_CONTACTS = [c.strip() for c in _owner_env.split(",")]
 
 PORT = int(os.getenv("WHATSAPP_WEBHOOK_PORT", "5006"))
 
-from livekit.agents.llm import ChatContext, ChatMessage
-from livekit.plugins import groq, openai
+from ai_load_balancer import get_global_balancer
 from Tools import get_all_tools, get_tools_for_category, classify_intent
 
 from collections import OrderedDict
@@ -290,126 +289,34 @@ async def handle_whatsapp_message(chat_id: str, text: str, is_owner: bool = Fals
         else:
             active_tools = []
         
-    msgs = ctx.messages()
-    if len(msgs) > 0 and msgs[0].role == "system":
-        msgs[0].content = [dynamic_prompt]
+    messages = USER_CONTEXTS[chat_id] if chat_id in USER_CONTEXTS else []
+    if messages and messages[0].get("role") == "system":
+        messages[0]["content"] = dynamic_prompt
     else:
-        ctx._items.insert(0, ChatMessage(role="system", content=[dynamic_prompt]))
+        messages.insert(0, {"role": "system", "content": dynamic_prompt})
         
-    ctx.add_message(role="user", content=text)
+    messages.append({"role": "user", "content": text})
+    if len(messages) > 10:
+        messages = [messages[0]] + messages[-9:]
+    USER_CONTEXTS[chat_id] = messages
+
     logger.info(f"Processing message from {chat_id} (is_owner={is_owner}): {text[:50]}")
     
-    llm = _build_llm()
-    
-    MAX_LOOPS = 5
-    from livekit.agents.llm.chat_context import FunctionCall, FunctionCallOutput
-    tools_dict = {t.info.name: t._func for t in active_tools}
-
-    for loop_num in range(MAX_LOOPS):
-        try:
-            res = await llm.chat(chat_ctx=ctx, tools=active_tools).collect()
-        except Exception as e:
-            logger.error(f"LLM request failed: {e}")
-            break
-            
-        response_text = res.text if res.text else ""
-            
-        if not res.tool_calls:
-            if response_text:
-                if has_media and msg_type in ("ptt", "audio", "voice"):
-                    audio_b64 = await _generate_tts_waha(response_text)
-                    if audio_b64:
-                        send_whatsapp_voice(chat_id, audio_b64)
-                    else:
-                        send_whatsapp_reply(chat_id, response_text)
-                else:
-                    send_whatsapp_reply(chat_id, response_text)
-                ctx.add_message(role="assistant", content=response_text)
-            break
-            
-        # Execute tools
-        for tc in res.tool_calls:
-            ctx.insert(FunctionCall(call_id=tc.call_id, name=tc.name, arguments=tc.arguments))
-            
-        if response_text:
-            ctx.add_message(role="assistant", content=response_text)
+    balancer = get_global_balancer()
+    try:
+        reply_text = await balancer.achat_completion(messages=messages, tools=active_tools)
+        if reply_text:
             if has_media and msg_type in ("ptt", "audio", "voice"):
-                audio_b64 = await _generate_tts_waha(response_text)
+                audio_b64 = await _generate_tts_waha(reply_text)
                 if audio_b64:
                     send_whatsapp_voice(chat_id, audio_b64)
                 else:
-                    send_whatsapp_reply(chat_id, response_text)
+                    send_whatsapp_reply(chat_id, reply_text)
             else:
-                send_whatsapp_reply(chat_id, response_text)
-            
-        # Inform user a tool is running
-        
-        has_new_tool_calls = False
-        for tc in res.tool_calls:
-            tool_name = tc.name
-            args_str = tc.arguments
-            
-            # Check for identical repeated tool calls
-            call_signature = f"{tool_name}:{args_str}"
-            if getattr(ctx, '_last_tool_call_signature', None) == call_signature:
-                logger.warning(f"Preventing repeated identical tool call: {call_signature}")
-                ctx.insert(FunctionCallOutput(call_id=tc.call_id, name=tool_name, output="System Error: You already made this exact tool call. Please stop looping and provide a final text response to the user.", is_error=True))
-                continue
-                
-            ctx._last_tool_call_signature = call_signature
-            has_new_tool_calls = True
-            
-            try:
-                args = json.loads(args_str) if args_str.strip() else {}
-            except Exception:
-                args = {}
-                
-            try:
-                func = tools_dict.get(tool_name)
-                if func is None:
-                    result = f"Error: Tool {tool_name} not found."
-                    is_error = True
-                elif asyncio.iscoroutinefunction(func):
-                    result = str(await func(**args))
-                    is_error = False
-                else:
-                    result = str(func(**args))
-                    is_error = False
-            except Exception as e:
-                result = str(e)
-                is_error = True
-                try:
-                    from Tools.error_telemetry import log_tool_error
-                    log_tool_error(tool_name, e, args)
-                except Exception as tel_err:
-                    logger.warning(f"Failed to record error telemetry for {tool_name}: {tel_err}")
-                
-            MAX_TOOL_OUTPUT = 2000
-            if len(result) > MAX_TOOL_OUTPUT:
-                result = result[:MAX_TOOL_OUTPUT] + f"\n... [Truncated, original length {len(result)} chars]"
-
-            ctx.insert(FunctionCallOutput(call_id=tc.call_id, name=tool_name, output=result, is_error=is_error))
-            
-            if is_error:
-                send_whatsapp_reply(chat_id, f"❌ *Failed:* `{tool_name}`")
-            else:
-                send_whatsapp_reply(chat_id, f"✅ *Finished:* `{tool_name}`")
-                
-        if not has_new_tool_calls:
-            logger.info("No new tool calls executed (duplicate detection). Breaking loop.")
-            break
-                
-            # Intercept image tools
-            if not is_error and "Saved to: " in result:
-                try:
-                    import re
-                    match = re.search(r"Saved to:\s*(.+)", result)
-                    if match:
-                        file_path = match.group(1).strip()
-                        if os.path.exists(file_path):
-                            send_whatsapp_image(chat_id, file_path, caption=f"Generated by {tool_name}")
-                except Exception as e:
-                    logger.error(f"Failed to extract and send image: {e}")
+                send_whatsapp_reply(chat_id, reply_text)
+            messages.append({"role": "assistant", "content": reply_text})
+    except Exception as e:
+        logger.error(f"LLM request failed: {e}")
 
 
 import time

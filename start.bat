@@ -25,13 +25,13 @@ echo [start] Reset VISION.log - recording clean logs for this session...
 echo [start] 1 of 3: Starting bridge on ws://127.0.0.1:8765 ...
 start /B venv\Scripts\python.exe vision_bridge.py > vision_bridge.log 2>&1
 
-:: 2. Launch Flutter Frontend in Background
-where flutter >nul 2>&1
+:: 2. Launch React Frontend in Background
+where npm >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [start] 2 of 3: Launching Flutter face frontend...
-    start /B cmd /c "cd /d vision_face && flutter run -d windows"
+    echo [start] 2 of 3: Launching React UI frontend at http://localhost:5173 ...
+    start /B cmd /c "cd /d vision_react && npm run dev"
 ) else (
-    echo [start] 2 of 3: Flutter CLI not found on PATH. Skipping Flutter GUI launch.
+    echo [start] 2 of 3: Node.js/npm not found on PATH. Skipping React GUI launch.
 )
 
 :: 3. Launch VISION Backend

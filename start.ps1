@@ -27,13 +27,13 @@ Write-Host "[start] Reset VISION.log — recording clean logs for this session..
 Write-Host "[start] (1/3) Starting bridge on ws://127.0.0.1:8765 ..." -ForegroundColor Yellow
 $bridgeProcess = Start-Process $venvPython -ArgumentList "vision_bridge.py" -PassThru -NoNewWindow
 
-# 2. Launch Flutter UI Frontend
-$flutterProcess = $null
-if (Get-Command flutter -ErrorAction SilentlyContinue) {
-    Write-Host "[start] (2/3) Launching Flutter UI Frontend..." -ForegroundColor Yellow
-    $flutterProcess = Start-Process flutter -ArgumentList "run", "-d", "windows" -WorkingDirectory ".\vision_face" -PassThru -NoNewWindow
+# 2. Launch React UI Frontend
+$reactProcess = $null
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    Write-Host "[start] (2/3) Launching React UI Frontend (http://localhost:5173)..." -ForegroundColor Yellow
+    $reactProcess = Start-Process npm -ArgumentList "run", "dev" -WorkingDirectory ".\vision_react" -PassThru -NoNewWindow
 } else {
-    Write-Host "[start] (2/3) Flutter CLI not found on PATH. Skipping Flutter GUI." -ForegroundColor DarkYellow
+    Write-Host "[start] (2/3) Node/npm not found on PATH. Skipping React GUI." -ForegroundColor DarkYellow
 }
 
 # 3. Boot Backend
@@ -48,7 +48,7 @@ try {
     if ($bridgeProcess -and -not $bridgeProcess.HasExited) {
         Stop-Process -Id $bridgeProcess.Id -Force -ErrorAction SilentlyContinue
     }
-    if ($flutterProcess -and -not $flutterProcess.HasExited) {
-        Stop-Process -Id $flutterProcess.Id -Force -ErrorAction SilentlyContinue
+    if ($reactProcess -and -not $reactProcess.HasExited) {
+        Stop-Process -Id $reactProcess.Id -Force -ErrorAction SilentlyContinue
     }
 }

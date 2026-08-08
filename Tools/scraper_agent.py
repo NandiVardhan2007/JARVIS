@@ -8,7 +8,7 @@ import logging
 import re
 from urllib.parse import urljoin, urlparse
 
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 

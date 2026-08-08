@@ -36,23 +36,10 @@ def main():
     # If this is a child process, dispatch it
     if len(sys.argv) > 1:
         if sys.argv[1] == "agent":
-            # Override sys.argv for the agent to parse
-            sys.argv = [sys.argv[0], "connect", "--room", sys.argv[2]]
             import agent
-            agent.agents.cli.run_app(
-                agent.agents.WorkerOptions(
-                    entrypoint_fnc=agent.entrypoint,
-                    worker_type=agent.agents.WorkerType.ROOM,
-                    agent_name="vision",
-                )
-            )
+            agent.main()
             return
         elif sys.argv[1] == "ui":
-            # Set the room name in env so the voice client picks it up
-            os.environ["LIVEKIT_ROOM_NAME"] = sys.argv[2]
-            # Headless native audio client (mic capture + speech playback +
-            # state mirror to vision_bridge.py / the Flutter UI). Replaces the
-            # old PyQt "Dynamic Island" HUD, which has been removed.
             import voice_client
             voice_client.main()
             return
@@ -84,7 +71,7 @@ def main():
     time.sleep(2)
 
     # Launch the headless voice client (mic/audio + state mirror to the
-    # Flutter frontend via vision_bridge.py)
+    # React frontend via vision_bridge.py)
     voice_proc = subprocess.Popen(cmd + ["ui", room_name])
 
     # Watchdog loop

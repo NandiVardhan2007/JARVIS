@@ -239,7 +239,7 @@ ENROLLMENT_PARAGRAPH = (
 )
 
 
-from livekit.agents import function_tool  # noqa: E402  (kept near the tool it defines)
+from Tools.function_tool import function_tool  # noqa: E402  (kept near the tool it defines)
 
 
 @function_tool

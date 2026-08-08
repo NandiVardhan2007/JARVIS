@@ -6,7 +6,7 @@ import webbrowser
 import requests
 from base64 import b64decode
 from Crypto.Cipher import DES
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 try:
     import vlc

@@ -7,7 +7,7 @@ Requires a credentials.json file in the root directory.
 import logging
 import os
 import pickle
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 

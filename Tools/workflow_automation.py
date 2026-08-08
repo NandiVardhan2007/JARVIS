@@ -15,7 +15,7 @@ import json
 import logging
 import os
 
-from livekit.agents import function_tool
+from Tools.function_tool import function_tool
 
 logger = logging.getLogger(__name__)
 
