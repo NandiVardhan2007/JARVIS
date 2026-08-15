@@ -25,6 +25,11 @@ except ImportError:
 
 APP_COMMAND_MAP = {
     "notepad": "notepad.exe",
+    "notemate": "notepad.exe",
+    "notpad": "notepad.exe",
+    "notepade": "notepad.exe",
+    "note": "notepad.exe",
+    "notes": "notepad.exe",
     "word": "winword",
     "excel": "excel",
     "calc": "calc.exe",
@@ -35,85 +40,132 @@ APP_COMMAND_MAP = {
 
 
 def _ensure_and_focus_window(app_name: str) -> bool:
-    """Focus target application window; if not open, launch it automatically."""
-    target = app_name.lower().strip()
+    """Focus target application window with Win32 foreground activation; if not open, launch it automatically."""
+    raw = app_name.lower().strip()
+    target = "notepad" if ("not" in raw or "note" in raw) else raw
 
-    # 1. Try to find and activate existing window
-    if gw:
-        try:
-            for w in gw.getAllWindows():
-                if w.title and target in w.title.lower():
-                    if w.isMinimized:
-                        w.restore()
-                    w.activate()
-                    time.sleep(0.4)
-                    logger.info(f"[InputTool] Activated existing window: '{w.title}'")
-                    return True
-        except Exception as e:
-            logger.debug(f"[InputTool] Window focus check: {e}")
+    user32 = ctypes.windll.user32
+    target_hwnd = None
 
-    # 2. If not open, launch the application
-    cmd = APP_COMMAND_MAP.get(target, target)
-    logger.info(f"[InputTool] Window '{target}' not found open. Launching via '{cmd}'...")
-    try:
-        subprocess.Popen(cmd, shell=True)
-        time.sleep(1.0)
-        # Try to focus again
-        if gw:
-            for w in gw.getAllWindows():
-                if w.title and target in w.title.lower():
-                    w.activate()
-                    time.sleep(0.3)
-                    return True
+    def enum_cb(hwnd, extra):
+        nonlocal target_hwnd
+        if user32.IsWindowVisible(hwnd):
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buff, length + 1)
+                title = buff.value.lower()
+                if target in title:
+                    target_hwnd = hwnd
+                    return False
         return True
-    except Exception as e:
-        logger.error(f"[InputTool] Failed to launch '{app_name}': {e}")
-        return False
+
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+
+    # 1. Search for existing window
+    user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+
+    # 2. If not found, launch the application
+    if not target_hwnd:
+        cmd = APP_COMMAND_MAP.get(target, APP_COMMAND_MAP.get(raw, raw))
+        logger.info(f"[InputTool] Window '{target}' not found open. Launching via '{cmd}'...")
+        try:
+            subprocess.Popen(cmd, shell=True)
+            for _ in range(25):
+                time.sleep(0.12)
+                user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+                if target_hwnd:
+                    break
+        except Exception as e:
+            logger.error(f"[InputTool] Failed to launch '{cmd}': {e}")
+            return False
+
+    # 3. Force foreground focus using Win32 Alt-key bypass & AttachThreadInput
+    if target_hwnd:
+        try:
+            current_thread = user32.GetCurrentThreadId()
+            remote_thread = user32.GetWindowThreadProcessId(target_hwnd, None)
+            user32.AttachThreadInput(current_thread, remote_thread, True)
+            user32.keybd_event(0x12, 0, 0, 0) # Alt down
+            user32.ShowWindow(target_hwnd, 9) # SW_RESTORE
+            user32.SetForegroundWindow(target_hwnd)
+            user32.BringWindowToTop(target_hwnd)
+            user32.keybd_event(0x12, 0, 2, 0) # Alt up
+            user32.SetFocus(target_hwnd)
+            user32.AttachThreadInput(current_thread, remote_thread, False)
+            time.sleep(0.3)
+            logger.info(f"[InputTool] Focused window HWND {target_hwnd} for '{target}'")
+            return True
+        except Exception as e:
+            logger.debug(f"[InputTool] Focus window error: {e}")
+
+    return False
 
 
-def _type_letter_by_letter(text: str, target_wpm: int = 85):
+# Win32 SendInput Unicode structures for 100% accurate, zero-typo character typing
+import ctypes
+
+class _KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ('wVk', ctypes.c_ushort),
+        ('wScan', ctypes.c_ushort),
+        ('dwFlags', ctypes.c_ulong),
+        ('time', ctypes.c_ulong),
+        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong))
+    ]
+
+class _INPUT(ctypes.Structure):
+    class _INPUT_UNION(ctypes.Union):
+        _fields_ = [('ki', _KEYBDINPUT)]
+    _anonymous_ = ('_u',)
+    _fields_ = [('type', ctypes.c_ulong), ('_u', _INPUT_UNION)]
+
+
+def _type_letter_by_letter(text: str, delay_per_char: float = 0.003, target_wpm: Optional[int] = None, **kwargs):
     """
-    Types text letter-by-letter at human typing speed (70-100 Words Per Minute).
-    1 Word = 5 characters on average.
-    At 85 WPM = ~7.1 chars/sec -> base delay ~0.11 - 0.14s per character.
+    Types text letter-by-letter using native Windows Win32 SendInput KEYEVENTF_UNICODE.
+    Zero dropped Shift keys, zero typos, flawless punctuation '(', ')', ':', and capital letters.
     """
-    if not pyautogui:
+    if not text:
         return
 
-    # Calculate delay per character based on requested WPM
-    base_delay = 60.0 / (max(40, min(140, target_wpm)) * 5.0)
+    try:
+        for char in text:
+            if char == '\n':
+                # VK_RETURN = 0x0D
+                inp_down = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=0, time=0, dwExtraInfo=None))
+                inp_up = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=2, time=0, dwExtraInfo=None))
+                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
+                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
+                time.sleep(0.02)
+            elif char == '\t':
+                # VK_TAB = 0x09
+                inp_down = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=0, time=0, dwExtraInfo=None))
+                inp_up = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=2, time=0, dwExtraInfo=None))
+                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
+                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
+                time.sleep(0.01)
+            else:
+                # KEYEVENTF_UNICODE = 0x0004, KEYEVENTF_KEYUP = 0x0002
+                code = ord(char)
+                inp_down = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4, time=0, dwExtraInfo=None))
+                inp_up = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4 | 2, time=0, dwExtraInfo=None))
+                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
+                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
+                if delay_per_char > 0:
+                    time.sleep(delay_per_char)
+    except Exception as e:
+        logger.error(f"[InputTool] Win32 Unicode typing fallback: {e}")
+        if pyperclip and pyautogui:
+            pyperclip.copy(text)
+            pyautogui.hotkey("ctrl", "v")
 
-    for char in text:
-        # Natural human variance (+/- 20%)
-        char_delay = random.uniform(base_delay * 0.8, base_delay * 1.2)
 
-        if char == "\n":
-            pyautogui.press("enter")
-            time.sleep(base_delay * 1.5)
-        elif char == "\t":
-            pyautogui.press("tab")
-            time.sleep(base_delay)
-        else:
-            try:
-                if ord(char) < 128:
-                    pyautogui.write(char)
-                else:
-                    # Unicode / emoji glyph
-                    pyperclip.copy(char)
-                    pyautogui.hotkey("ctrl", "v")
-                time.sleep(char_delay)
-            except Exception:
-                if pyperclip:
-                    pyperclip.copy(char)
-                    pyautogui.hotkey("ctrl", "v")
-                time.sleep(char_delay)
-
-
-@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word) letter-by-letter at 70-100 words per minute.")
+@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word) letter-by-letter rapidly.")
 def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = True) -> str:
     """
     Ensures the target application (e.g. Notepad, Word, Editor) is open and focused,
-    then types the text letter-by-letter at natural 70-100 WPM speed.
+    then types the text letter-by-letter at fast streaming speed.
     """
     if not text:
         return "Error: Text content to type is required."
@@ -125,11 +177,11 @@ def type_text_into_application(text: str, target_app: Optional[str] = "Notepad",
     if not pyautogui:
         return "Error: PyAutoGUI automation package not available."
 
-    logger.info(f"[InputTool] Typing {len(text)} characters letter-by-letter at ~85 WPM into '{app}'...")
-    _type_letter_by_letter(text, target_wpm=85)
+    logger.info(f"[InputTool] Typing {len(text)} characters letter-by-letter at high speed into '{app}'...")
+    _type_letter_by_letter(text, delay_per_char=0.003)
 
     if press_enter:
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("enter")
 
     logger.info(f"[InputTool] Successfully typed text into '{app}'")

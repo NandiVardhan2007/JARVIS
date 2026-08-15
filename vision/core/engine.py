@@ -91,7 +91,7 @@ class VisionEngine:
             messages=llm_messages,
             tools=relevant_tools if relevant_tools else None,
             temperature=0.6,
-            max_tokens=150
+            max_tokens=1024
         )
 
         # 6. Handle Function/Tool Calls
@@ -160,10 +160,18 @@ class VisionEngine:
         except Exception as e:
             logger.debug(f"[VisionEngine] Auto fact extraction skipped: {e}")
 
-        # 9. Speech Synthesis Playback
+        # 9. Speech Synthesis Playback (Never synthesize raw JSON tool payloads)
         if synthesize_voice and final_text and self.tts:
+            spoken_text = final_text.strip()
+            # If model returned raw JSON tool call as content
+            if spoken_text.startswith("{") and ("\"name\"" in spoken_text or "'name'" in spoken_text):
+                spoken_text = "Done! I have finished typing the details."
+            elif len(spoken_text) > 250 and has_executed_tools:
+                # Keep spoken response concise when tools have performed the work
+                spoken_text = "I have written all your information into Notepad."
+
             try:
-                audio_bytes = await self.tts.synthesize(final_text)
+                audio_bytes = await self.tts.synthesize(spoken_text)
                 audio_player.play_wav_bytes(audio_bytes)
             except Exception as e:
                 logger.error(f"[VisionEngine] Voice synthesis failed: {e}")

@@ -187,17 +187,29 @@ class MAGEngine:
 
     def get_mag_prompt_injection(self, user_query: str) -> str:
         """Generate formatted dynamic long-term memory context for LLM prompt injection."""
-        relevant = self.search_memories(user_query, limit=5)
-        if not relevant:
-            # If no query-specific match, include top general profile facts
-            relevant = self.list_all(limit=4)
+        q_lower = user_query.lower()
+        # If user asks for comprehensive info about themselves
+        broad_keywords = ["everything", "all", "know about me", "who am i", "about me", "my details", "full profile", "my profile"]
+        is_broad = any(kw in q_lower for kw in broad_keywords)
+
+        if is_broad:
+            relevant = self.list_all(limit=40)
+        else:
+            relevant = self.search_memories(user_query, limit=15)
+            if not relevant:
+                # Fallback to key profile facts
+                relevant = self.list_all(limit=8)
 
         if not relevant:
             return ""
 
+        seen = set()
         lines = ["\n[LONG-TERM USER MEMORY & PREFERENCES (MAG)]"]
         for m in relevant:
-            lines.append(f"• [{m['category'].upper()}] {m['content']}")
+            c = m["content"].strip()
+            if c.lower() not in seen:
+                seen.add(c.lower())
+                lines.append(f"• [{m['category'].upper()}] {c}")
 
         return "\n".join(lines) + "\n"
 

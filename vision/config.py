@@ -50,7 +50,7 @@ class VisionConfig:
         # ── Cartesia TTS ─────────────────────────────────────
         self.CARTESIA_API_KEY: Optional[str] = os.getenv("CARTESIA_API_KEY")
         self.CARTESIA_API_KEYS: List[str] = _get_list("CARTESIA_API_KEYS")
-        self.CARTESIA_VOICE_ID: str = os.getenv("CARTESIA_VOICE_ID", "5ee9feff-1265-424a-9d7f-8e4d431a12c7")
+        self.CARTESIA_VOICE_ID: str = os.getenv("CARTESIA_VOICE_ID", "1259b7e3-cb8a-43df-9446-30971a46b8b0")
         self.CARTESIA_SPEED: str = os.getenv("CARTESIA_SPEED", "slow")
 
         # ── OpenRouter Key Pool ──────────────────────────────

@@ -1,10 +1,1 @@
-{
-  "748aa778746d58ec": {
-    "query": "Yeah, now do you know what is her nickname?",
-    "response": "Yes, Purnima's nickname is Pandi.",
-    "category": "qa_general",
-    "created_at": 1786771754.3900225,
-    "expires_at": 1786775354.3900225,
-    "hit_count": 0
-  }
-}
+{}

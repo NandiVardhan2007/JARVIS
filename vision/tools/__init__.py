@@ -18,5 +18,9 @@ import vision.tools.whatsapp_tools
 import vision.tools.window_tools
 import vision.tools.input_tools
 import vision.tools.terminal_tools
+import vision.tools.clipboard_translation_tools
+import vision.tools.browser_navigation_tools
+import vision.tools.power_process_tools
+import vision.tools.archive_tools
 
 __all__ = ["tool", "tool_registry", "ToolRegistry"]

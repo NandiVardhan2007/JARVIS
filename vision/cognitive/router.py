@@ -11,8 +11,8 @@ from vision.logger import logger
 
 DOMAIN_KEYWORD_MAP = {
     "hardware": {
-        "keywords": ["volume", "sound", "audio", "mute", "unmute", "loud", "quiet", "brightness", "dim", "screen brightness", "lock screen", "lock pc"],
-        "tools": ["set_volume", "increase_volume", "decrease_volume", "mute_volume", "unmute_volume", "get_volume_status", "set_brightness", "increase_brightness", "decrease_brightness", "get_brightness_status", "lock_screen"]
+        "keywords": ["volume", "sound", "audio", "mute", "unmute", "loud", "quiet", "brightness", "dim", "screen brightness", "lock", "lock screen", "lock pc", "lock workstation"],
+        "tools": ["set_volume", "increase_volume", "decrease_volume", "mute_volume", "unmute_volume", "get_volume_status", "set_brightness", "increase_brightness", "decrease_brightness", "get_brightness_status", "lock_screen", "lock_workstation"]
     },
     "window": {
         "keywords": ["window", "desktop", "minimize", "maximize", "restore", "snap", "close", "kill", "terminate", "switch to", "running apps", "show desktop"],
@@ -61,6 +61,22 @@ DOMAIN_KEYWORD_MAP = {
     "terminal": {
         "keywords": ["terminal", "command", "cmd", "powershell", "execute", "run command", "git", "python", "pip", "npm", "ipconfig", "ping", "curl", "install", "status", "ssh", "ubuntu", "server", "remote server", "connect to"],
         "tools": ["connect_to_ssh_server", "execute_terminal_command", "run_python_code", "git_status_and_summary"]
+    },
+    "clipboard_translation": {
+        "keywords": ["clipboard", "copied", "paste", "copy to clipboard", "translate", "telugu", "hindi", "tamil", "spanish", "translation", "in telugu", "in hindi", "in english"],
+        "tools": ["read_clipboard", "write_to_clipboard", "translate_text"]
+    },
+    "browser": {
+        "keywords": ["browser", "website", "open site", "github", "leetcode", "youtube", "gmail", "chatgpt", "google search", "search youtube", "download", "download file", "web page"],
+        "tools": ["open_website", "search_youtube_videos", "search_google_web", "download_file_from_url"]
+    },
+    "power_process": {
+        "keywords": ["kill", "terminate", "force close", "kill process", "sleep", "sleep pc", "lock", "lock pc", "lock workstation", "lock screen", "workstation", "shutdown", "restart", "cancel shutdown", "recycle", "recycle bin", "empty bin", "bin", "trash", "clean trash"],
+        "tools": ["kill_process_by_name", "lock_workstation", "lock_screen", "sleep_pc", "empty_recycle_bin", "shutdown_pc", "restart_pc", "cancel_shutdown"]
+    },
+    "archive": {
+        "keywords": ["zip", "unzip", "compress", "extract", "tar", "archive", "compress folder", "extract zip"],
+        "tools": ["compress_to_zip", "extract_zip_archive"]
     }
 }
 

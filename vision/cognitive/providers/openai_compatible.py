@@ -82,6 +82,56 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             tool_calls = None
             if message_obj.tool_calls:
                 tool_calls = [tc.model_dump() for tc in message_obj.tool_calls]
+            elif message_obj.content and "{" in message_obj.content and ("\"name\"" in message_obj.content or "'name'" in message_obj.content):
+                # Fallback: Extract JSON tool call generated in text content
+                raw_c = message_obj.content.strip()
+                try:
+                    import re, uuid, ast
+                    # Strip markdown blocks
+                    clean_c = re.sub(r"^```(?:json)?", "", raw_c).strip()
+                    clean_c = re.sub(r"```$", "", clean_c).strip()
+                    first_brace = clean_c.find("{")
+                    last_brace = clean_c.rfind("}")
+                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                        candidate = clean_c[first_brace:last_brace+1]
+                        parsed = None
+                        try:
+                            parsed = json.loads(candidate)
+                        except Exception:
+                            try:
+                                parsed = ast.literal_eval(candidate)
+                            except Exception:
+                                pass
+
+                        if isinstance(parsed, dict) and "name" in parsed:
+                            fn_name = parsed["name"]
+                            fn_args = parsed.get("parameters") or parsed.get("arguments") or {}
+                            tool_calls = [{
+                                "id": f"call_{uuid.uuid4().hex[:8]}",
+                                "type": "function",
+                                "function": {
+                                    "name": fn_name,
+                                    "arguments": json.dumps(fn_args) if isinstance(fn_args, dict) else str(fn_args)
+                                }
+                            }]
+                            message_obj.content = None
+
+                    if not tool_calls and "type_text_into_application" in raw_c:
+                        # Fallback for unclosed/truncated typing calls
+                        t_match = re.search(r'"text":\s*"([\s\S]+)', raw_c)
+                        if t_match:
+                            extracted_text = t_match.group(1).replace("\\n", "\n").replace('\\"', '"').rstrip('"} \n\r')
+                            tool_calls = [{
+                                "id": f"call_{uuid.uuid4().hex[:8]}",
+                                "type": "function",
+                                "function": {
+                                    "name": "type_text_into_application",
+                                    "arguments": json.dumps({"text": extracted_text, "target_app": "Notepad"})
+                                }
+                            }]
+                            message_obj.content = None
+                except Exception:
+                    pass
 
             return {
                 "role": "assistant",
