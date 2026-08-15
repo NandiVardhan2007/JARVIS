@@ -1,94 +1,30 @@
-# Environment & Secrets
-.env
-.env.*
-!.env.example
-token.pickle
-credentials.json
-*.pem
-*.key
-
-# Python build & Virtual Environments
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+
+# Environments
+.env
+.venv
 venv/
+ENV/
 env/
-.venv/
-xtts_env/
+env_variables.txt
 
-# React & Node.js Frontend (vision_react)
-vision_react/node_modules/
-vision_react/dist/
-vision_react/.vite/
-vision_react/npm-debug.log*
-vision_react/yarn-debug.log*
-vision_react/yarn-error.log*
-vision_react/.env.local
-vision_react/.env.*.local
-
-# ML Models & Heavy Binaries
-models/
-xtts_models/
-pretrained_models/
-espeak-ng-data/
-*.onnx
-*.pth
-*.bin
-*.pt
-*.tflite
-*.safetensors
-*.tar.bz2
-*.zip
-
-# Databases & Runtime State
-*.db
-*.sqlite3
-vision.db
-vision_waha.db
-vision_memory/
-dropped_items.json
-telegram_offset.txt
-
-# Logs & Debug Outputs
+# Logs
 *.log
-vision_bridge.log
-VISION.log
+logs/
 
-# Generated Media & Output Directories
-VISION_OUTPUTS/
-VISION_Screenshots/
-Output/
-output/
-*.wav
-*.mp3
-*.mp4
-*.png
-*.jpg
-*.jpeg
-
-# OS & IDE Noise
-.DS_Store
-Thumbs.db
-ehthumbs.db
-desktop.ini
+# IDE & OS files
 .vscode/
 .idea/
-.gemini/
-.agents/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Output & Cache
+outputs/
+cache/
+tmp/
+*.tmp
