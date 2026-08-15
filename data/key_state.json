@@ -1,37 +1,37 @@
 {
-  "gsk_1ER2...fSBn_f8cbef0e": {
-    "exhausted": true,
-    "cooldown_until": 1786770448.184144,
-    "cooldown_duration_sec": 715.024,
-    "set_at": 1786769733.160144,
-    "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
-  },
-  "gsk_vN7E...spyN_9eedd0e6": {
-    "exhausted": true,
-    "cooldown_until": 1786770448.3236034,
-    "cooldown_duration_sec": 715.024,
-    "set_at": 1786769733.2996035,
-    "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
-  },
   "gsk_mMA0...wz1u_bb8562f6": {
     "exhausted": true,
-    "cooldown_until": 1786771056.4654572,
-    "cooldown_duration_sec": 811.792,
-    "set_at": 1786770244.6734571,
+    "cooldown_until": 1786772009.6562295,
+    "cooldown_duration_sec": 939.664,
+    "set_at": 1786771069.9922295,
     "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
   },
   "gsk_NFsd...QBAo_eb35fb6c": {
     "exhausted": true,
-    "cooldown_until": 1786771174.978837,
-    "cooldown_duration_sec": 930.16,
-    "set_at": 1786770244.818837,
+    "cooldown_until": 1786772475.783151,
+    "cooldown_duration_sec": 1017.696,
+    "set_at": 1786771458.0871508,
     "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
   },
   "gsk_Vnf7...TYdO_fac76bd0": {
     "exhausted": true,
-    "cooldown_until": 1786770967.7604568,
-    "cooldown_duration_sec": 722.8,
-    "set_at": 1786770244.9604568,
+    "cooldown_until": 1786772089.7238486,
+    "cooldown_duration_sec": 631.488,
+    "set_at": 1786771458.2358487,
+    "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
+  },
+  "gsk_1ER2...fSBn_f8cbef0e": {
+    "exhausted": true,
+    "cooldown_until": 1786772120.9993598,
+    "cooldown_duration_sec": 600.0,
+    "set_at": 1786771520.9993598,
+    "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
+  },
+  "gsk_vN7E...spyN_9eedd0e6": {
+    "exhausted": true,
+    "cooldown_until": 1786772121.1276748,
+    "cooldown_duration_sec": 600.0,
+    "set_at": 1786771521.1276748,
     "reason": "Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01k"
   }
 }

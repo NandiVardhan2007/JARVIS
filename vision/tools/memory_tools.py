@@ -21,10 +21,16 @@ def remember_fact(fact: str, category: str = "user_preference") -> str:
     return f"I have saved this to my long-term memory: '{clean_fact}'."
 
 
-@tool(name="recall_memory", description="Query long-term memory for stored facts, preferences, hardware, or past history.")
-def recall_memory(query: str) -> str:
+@tool(name="recall_memory", description="Query long-term memory for stored facts, preferences, hardware, contacts, friends, or past history.")
+def recall_memory(query: str, limit: int = 15) -> str:
     """Search and retrieve relevant stored memories."""
-    results = mag_engine.search_memories(query, limit=5)
+    # Ensure limit is integer
+    try:
+        lim = int(limit) if limit else 15
+    except Exception:
+        lim = 15
+
+    results = mag_engine.search_memories(query, limit=lim)
     if not results:
         return f"I don't have any specific memories stored regarding '{query}'."
 

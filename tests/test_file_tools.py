@@ -56,7 +56,13 @@ def test_file_operations_lifecycle():
         assert "Organized" in org_res
         assert (tmp_path / "Images" / "image.png").exists()
 
-        # 9. Delete file
+        # 9. Create / write file
+        from vision.tools.file_tools import create_or_write_file
+        save_res = create_or_write_file("new_note.txt", "Note content here", folder_path=str(tmp_path))
+        assert "Successfully saved" in save_res
+        assert (tmp_path / "new_note.txt").read_text(encoding="utf-8") == "Note content here"
+
+        # 10. Delete file
         del_res = delete_file(str(tmp_path / "Images" / "image.png"))
         assert "Successfully deleted" in del_res
         assert not (tmp_path / "Images" / "image.png").exists()

@@ -57,7 +57,7 @@ class KeyStateManager:
 
     def parse_retry_duration(self, err_msg: str) -> float:
         """Parse retry duration from Groq / LLM error message (e.g. '1h12m29s' or '21m6s')."""
-        default_seconds = 3600.0  # 1 hour default
+        default_seconds = 1800.0  # 30 min default
         m = re.search(r"try again in\s+(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:([\d\.]+)s)?", err_msg, re.IGNORECASE)
         if m:
             hours = float(m.group(1) or 0)
@@ -65,7 +65,8 @@ class KeyStateManager:
             seconds = float(m.group(3) or 0)
             total = (hours * 3600) + (minutes * 60) + seconds
             if total > 0:
-                return total + 10.0  # 10s buffer
+                # Add 2-minute safety buffer so keys aren't called right at the boundary
+                return max(600.0, total + 120.0)
         return default_seconds
 
     def mark_rate_limited(self, api_key: str, err_msg: str):

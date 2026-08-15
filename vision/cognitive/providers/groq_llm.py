@@ -106,7 +106,10 @@ class GroqLLMProvider(BaseLLMProvider):
                     }
 
             self.failed_requests += 1
-            logger.error(f"[GroqLLM] Completion failed: {e}")
+            if "429" in err_str or "rate_limit" in err_str or "tokens per day" in err_str:
+                logger.debug(f"[GroqLLM] Rate limit encountered on key {self.api_key[:8]}... Yielding to load balancer.")
+            else:
+                logger.error(f"[GroqLLM] Completion failed: {e}")
             raise e
         finally:
             self.active_requests = max(0, self.active_requests - 1)

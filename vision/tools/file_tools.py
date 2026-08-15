@@ -364,3 +364,23 @@ def organize_directory(directory_path: str = "Downloads") -> str:
         return "\n".join(summary_lines)
     except Exception as e:
         return f"Error organizing directory: {e}"
+
+
+@tool(name="create_or_write_file", description="Create a new text file or save written notes/code/documents directly to disk in Downloads, Desktop, Documents, or any folder.")
+def create_or_write_file(file_name: str, content: str, folder_path: str = "Downloads") -> str:
+    """Save content directly to a file on disk."""
+    if not file_name:
+        return "Error: file_name is required."
+
+    dir_p = _resolve_user_path(folder_path, find_existing_file=False)
+    dir_p.mkdir(parents=True, exist_ok=True)
+
+    target_file = dir_p / file_name
+    try:
+        with open(target_file, "w", encoding="utf-8") as f:
+            f.write(content)
+        working_memory.record_file(str(target_file))
+        logger.info(f"[FileTool] Saved file: {target_file}")
+        return f"Successfully saved '{file_name}' to '{dir_p}'."
+    except Exception as e:
+        return f"Failed to save file: {e}"

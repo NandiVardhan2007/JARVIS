@@ -17,5 +17,6 @@ import vision.tools.hardware_tools
 import vision.tools.whatsapp_tools
 import vision.tools.window_tools
 import vision.tools.input_tools
+import vision.tools.terminal_tools
 
 __all__ = ["tool", "tool_registry", "ToolRegistry"]

@@ -19,8 +19,8 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["show_desktop", "minimize_all_windows", "restore_windows", "close_application", "switch_to_window", "maximize_window", "snap_window", "list_running_applications"]
     },
     "input": {
-        "keywords": ["write", "type", "note", "notepad", "draft", "shortcut", "press", "key"],
-        "tools": ["type_text_into_application", "press_keyboard_shortcut", "open_application"]
+        "keywords": ["write", "type", "note", "notepad", "draft", "shortcut", "press", "key", "save", "save note", "save document", "save it"],
+        "tools": ["type_text_into_application", "press_keyboard_shortcut", "save_active_document", "create_or_write_file", "open_application"]
     },
     "whatsapp": {
         "keywords": ["whatsapp", "message", "msg", "chat", "send to", "text to", "contact"],
@@ -31,8 +31,8 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["create_bordered_a4_document", "print_document", "create_and_print_bordered_document"]
     },
     "file": {
-        "keywords": ["file", "folder", "directory", "downloads", "documents", "desktop folder", "delete file", "move file", "rename", "organize"],
-        "tools": ["list_files", "find_files", "open_file", "read_file_content", "rename_file", "move_file", "copy_file", "delete_file", "create_folder", "organize_directory"]
+        "keywords": ["file", "folder", "directory", "downloads", "documents", "desktop folder", "delete file", "move file", "rename", "organize", "save", "save file", "save in downloads", "save to"],
+        "tools": ["create_or_write_file", "list_files", "find_files", "open_file", "read_file_content", "rename_file", "move_file", "copy_file", "delete_file", "create_folder", "organize_directory", "save_active_document"]
     },
     "web": {
         "keywords": ["weather", "temperature", "forecast", "search web", "browse", "internet", "google", "news", "online", "fetch"],
@@ -57,6 +57,10 @@ DOMAIN_KEYWORD_MAP = {
     "mobile": {
         "keywords": ["phone", "mobile", "android", "adb", "unlock phone"],
         "tools": ["connect_phone", "unlock_phone", "launch_mobile_app", "tap_phone_screen"]
+    },
+    "terminal": {
+        "keywords": ["terminal", "command", "cmd", "powershell", "execute", "run command", "git", "python", "pip", "npm", "ipconfig", "ping", "curl", "install", "status", "ssh", "ubuntu", "server", "remote server", "connect to"],
+        "tools": ["connect_to_ssh_server", "execute_terminal_command", "run_python_code", "git_status_and_summary"]
     }
 }
 
