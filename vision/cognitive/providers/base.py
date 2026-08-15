@@ -15,6 +15,14 @@ class BaseLLMProvider(ABC):
         self.failed_requests: int = 0
         self.average_latency_ms: float = 0.0
 
+    def _update_stats(self, latency_ms: float):
+        """Update running metrics."""
+        self.total_requests += 1
+        if self.total_requests == 1:
+            self.average_latency_ms = latency_ms
+        else:
+            self.average_latency_ms = (self.average_latency_ms * 0.8) + (latency_ms * 0.2)
+
     @abstractmethod
     async def chat_completion(
         self,

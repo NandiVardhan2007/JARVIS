@@ -13,6 +13,23 @@ except ImportError:
     AsyncOpenAI = None
 
 
+def _sanitize_messages_for_nim(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    NVIDIA NIM strictness fix: Ensures that assistant tool_calls don't contain multiple
+    tool calls per turn, which causes NIM 500 error 'only supports single tool-calls at once'.
+    """
+    sanitized = []
+    for msg in messages:
+        m = dict(msg)
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            tcs = m["tool_calls"]
+            if isinstance(tcs, list) and len(tcs) > 1:
+                # Keep only the first tool call for strict providers
+                m["tool_calls"] = [tcs[0]]
+        sanitized.append(m)
+    return sanitized
+
+
 class OpenAICompatibleProvider(BaseLLMProvider):
     def __init__(
         self,
@@ -44,9 +61,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         self.active_requests += 1
         start_time = time.time()
         try:
+            clean_messages = _sanitize_messages_for_nim(messages)
             kwargs: Dict[str, Any] = {
                 "model": self.model,
-                "messages": messages,
+                "messages": clean_messages,
                 "temperature": temperature,
             }
             if max_tokens:
@@ -75,10 +93,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             }
         except Exception as e:
             self.failed_requests += 1
-            logger.error(f"[{self.name}] Completion failed: {e}")
+            logger.debug(f"[{self.name}] Provider note: {e}")
             raise e
         finally:
-            self.active_requests = max(0, self.active_requests - 1)
+            self.active_requests -= 1
 
     async def stream_chat_completion(
         self,
@@ -92,24 +110,25 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
         self.active_requests += 1
         try:
+            clean_messages = _sanitize_messages_for_nim(messages)
             kwargs: Dict[str, Any] = {
                 "model": self.model,
-                "messages": messages,
+                "messages": clean_messages,
                 "temperature": temperature,
                 "stream": True
             }
             if max_tokens:
                 kwargs["max_tokens"] = max_tokens
+            if tools:
+                kwargs["tools"] = tools
 
             stream = await self.client.chat.completions.create(**kwargs)
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
+        except Exception as e:
+            self.failed_requests += 1
+            logger.debug(f"[{self.name}] Stream note: {e}")
+            raise e
         finally:
-            self.active_requests = max(0, self.active_requests - 1)
-
-    def _update_stats(self, duration_ms: float):
-        self.total_requests += 1
-        self.average_latency_ms = (
-            (self.average_latency_ms * (self.total_requests - 1) + duration_ms) / self.total_requests
-        )
+            self.active_requests -= 1

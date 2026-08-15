@@ -68,9 +68,12 @@ class ToolRegistry:
     def get_all_schemas(self) -> List[Dict[str, Any]]:
         return list(self._schemas.values())
 
-    async def execute(self, name: str, arguments: Dict[str, Any]) -> Any:
+    async def execute(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
         if name not in self._tools:
             return f"Error: Tool '{name}' is not registered."
+
+        if not isinstance(arguments, dict):
+            arguments = {}
 
         func = self._tools[name]
         try:

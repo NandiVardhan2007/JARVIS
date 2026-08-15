@@ -1,5 +1,6 @@
 """
 Google Gemini LLM Provider Adapter with vision and function calling support.
+Uses active gemini-1.5-flash model.
 """
 
 from typing import List, Dict, Any, AsyncGenerator, Optional
@@ -14,7 +15,7 @@ except ImportError:
 
 
 class GeminiLLMProvider(BaseLLMProvider):
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
         super().__init__(name="Gemini", model=model)
         self.api_key = api_key
         if genai and api_key:

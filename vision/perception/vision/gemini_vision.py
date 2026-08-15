@@ -1,5 +1,6 @@
 """
 Gemini Multimodal Vision Processor for Screen and Camera image analysis.
+Uses the latest supported Gemini models (gemini-flash-latest / gemini-2.5-flash).
 """
 
 from typing import Optional, Dict, Any
@@ -20,11 +21,11 @@ class GeminiVisionAnalyzer:
         self.api_key = api_key or config.GEMINI_API_KEY
         if self.api_key and genai:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+            self.model = genai.GenerativeModel(model_name="gemini-flash-latest")
         else:
             self.model = None
 
-    async def analyze_image(self, image_bytes: bytes, prompt: str = "Describe what you see on this screen or camera feed.") -> str:
+    async def analyze_image(self, image_bytes: bytes, prompt: str = "Describe what you see on this screen or camera feed concisely.") -> str:
         """Send image bytes to Gemini Multimodal Vision API."""
         if not self.model or not Image:
             raise RuntimeError("Gemini API key or PIL not configured for Vision analysis.")

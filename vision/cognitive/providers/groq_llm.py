@@ -1,9 +1,12 @@
 """
-Groq LLM Provider Adapter with token rate limiting and multi-key support.
+Groq LLM Provider Adapter with token rate limiting, multi-key support,
+and self-healing function recovery for malformed tool generations.
 """
 
-from typing import List, Dict, Any, AsyncGenerator, Optional
+import re
+import json
 import time
+from typing import List, Dict, Any, AsyncGenerator, Optional
 from vision.cognitive.providers.base import BaseLLMProvider
 from vision.logger import logger
 
@@ -18,6 +21,30 @@ class GroqLLMProvider(BaseLLMProvider):
         super().__init__(name="Groq", model=model)
         self.api_key = api_key
         self.client = AsyncGroq(api_key=api_key) if AsyncGroq else None
+        self._total_latency_ms = 0.0
+
+    def _recover_failed_tool_call(self, err_msg: str) -> Optional[List[Dict[str, Any]]]:
+        """Recover tool calls from Groq's failed_generation raw XML string."""
+        m = re.search(r"<function=(\w+)[\s\(]*(\{.*?\})[\s\)]*(?:>)?(?:</function>)?", err_msg, re.DOTALL)
+        if m:
+            func_name = m.group(1)
+            raw_args = m.group(2)
+            try:
+                parsed_args = json.loads(raw_args)
+            except Exception:
+                parsed_args = {}
+
+            call_id = f"call_recovered_{int(time.time() * 1000)}"
+            logger.info(f"[GroqLLM] Self-healed malformed tool call -> {func_name}({parsed_args})")
+            return [{
+                "id": call_id,
+                "type": "function",
+                "function": {
+                    "name": func_name,
+                    "arguments": json.dumps(parsed_args)
+                }
+            }]
+        return None
 
     async def chat_completion(
         self,
@@ -62,6 +89,22 @@ class GroqLLMProvider(BaseLLMProvider):
                 "latency_ms": duration_ms
             }
         except Exception as e:
+            err_str = str(e)
+            # Check for self-healing tool call recovery on Groq 400
+            if "failed_generation" in err_str or "tool_use_failed" in err_str:
+                recovered = self._recover_failed_tool_call(err_str)
+                if recovered:
+                    duration_ms = (time.time() - start_time) * 1000
+                    self._update_stats(duration_ms)
+                    return {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": recovered,
+                        "finish_reason": "tool_calls",
+                        "provider": self.name,
+                        "latency_ms": duration_ms
+                    }
+
             self.failed_requests += 1
             logger.error(f"[GroqLLM] Completion failed: {e}")
             raise e
@@ -98,6 +141,5 @@ class GroqLLMProvider(BaseLLMProvider):
 
     def _update_stats(self, duration_ms: float):
         self.total_requests += 1
-        self.average_latency_ms = (
-            (self.average_latency_ms * (self.total_requests - 1) + duration_ms) / self.total_requests
-        )
+        self._total_latency_ms += duration_ms
+        self.average_latency_ms = self._total_latency_ms / max(1, self.total_requests)

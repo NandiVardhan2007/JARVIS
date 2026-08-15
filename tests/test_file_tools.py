@@ -53,7 +53,7 @@ def test_file_operations_lifecycle():
 
         # 8. Organize directory
         org_res = organize_directory(str(tmp_path))
-        assert "Successfully organized" in org_res
+        assert "Organized" in org_res
         assert (tmp_path / "Images" / "image.png").exists()
 
         # 9. Delete file

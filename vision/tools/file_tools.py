@@ -1,235 +1,366 @@
 """
-Advanced File System Operations & Organization Tools for VISION.
-Supports searching, listing, opening, renaming, moving, copying, deleting, creating, and intelligent organizing.
+File management, exploration, and smart organization tools for VISION.
+Supports full CRUD, search, recursive directory sorting, and fuzzy path resolution.
 """
 
 import os
 import shutil
-import subprocess
+import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional, Union
 from vision.tools.registry import tool
+from vision.memory.working_memory import working_memory
 from vision.logger import logger
 
-
-EXTENSION_CATEGORIES = {
-    "Images": [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tiff"],
-    "Documents": [".pdf", ".docx", ".doc", ".txt", ".xlsx", ".xls", ".pptx", ".ppt", ".csv", ".md", ".rtf"],
+# Category definitions for smart organization
+FILE_CATEGORIES: Dict[str, List[str]] = {
+    "Documents": [".pdf", ".docx", ".doc", ".txt", ".rtf", ".odt", ".pptx", ".ppt", ".xlsx", ".xls", ".csv", ".tsv"],
+    "Images": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp", ".tiff", ".ico"],
     "Audio": [".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a", ".wma"],
-    "Videos": [".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm"],
-    "Archives": [".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".iso"],
+    "Video": [".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm"],
+    "Archives": [".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"],
     "Code_and_Scripts": [".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json", ".yaml", ".yml", ".xml", ".sql", ".sh", ".bat", ".ps1", ".cpp", ".c", ".java", ".rs", ".go"],
     "Executables": [".exe", ".msi", ".dmg", ".pkg", ".apk", ".deb"]
 }
 
 
-@tool(name="list_files", description="List files and folders inside a given directory path with optional pattern filtering.")
-def list_files(directory_path: str = ".", pattern: str = "*", recursive: bool = False) -> str:
-    """List directory contents."""
-    p = Path(directory_path).expanduser().resolve()
-    if not p.exists():
-        return f"Error: Directory '{directory_path}' does not exist."
-    if not p.is_dir():
-        return f"Error: Path '{directory_path}' is a file, not a directory."
+def _normalize_name(name: str) -> str:
+    """Normalize string for fuzzy comparison (remove punctuation, lower case)."""
+    return re.sub(r"[^a-zA-Z0-9]", "", name.lower())
+
+
+def _find_fuzzy_match_in_directory(parent_dir: Path, target_name: str, recursive: bool = True) -> Optional[Path]:
+    """Look for an exact or fuzzy matching file in parent_dir, filtering out system/Recent caches."""
+    if not parent_dir.exists() or not parent_dir.is_dir():
+        return None
+
+    target_norm = _normalize_name(target_name)
+    if not target_norm:
+        return None
 
     try:
+        raw_items = list(parent_dir.rglob("*") if recursive else parent_dir.iterdir())
+    except Exception:
+        return None
+
+    # Filter out hidden/AppData/Recent/cache paths
+    items = [
+        item for item in raw_items
+        if "appdata" not in str(item).lower() and not item.name.startswith(".")
+    ]
+
+    # 1. Exact match on full name (prefer real files over .lnk)
+    for item in items:
+        if not item.name.endswith(".lnk") and _normalize_name(item.name) == target_norm:
+            return item
+
+    # 2. Match on stem (ignoring extension)
+    for item in items:
+        if not item.name.endswith(".lnk") and _normalize_name(item.stem) == target_norm:
+            return item
+
+    # 3. Substring match
+    for item in items:
+        stem_norm = _normalize_name(item.stem)
+        if not item.name.endswith(".lnk") and (target_norm in stem_norm or stem_norm in target_norm):
+            return item
+
+    return None
+
+
+def _resolve_user_path(path_str: str, find_existing_file: bool = False) -> Path:
+    """
+    Resolve user-friendly aliases ('Downloads', 'Desktop', 'D:', '~'),
+    clean up hallucinated placeholders like '[Your Username]',
+    and leverage Working Memory and prioritized recursive searching.
+    """
+    user_home = Path.home()
+    clean = path_str.strip().strip("'\"")
+
+    # 1. Check Working Memory first if looking for an existing file
+    if find_existing_file:
+        mem_match = working_memory.lookup_file(clean)
+        if mem_match and Path(mem_match).exists() and not mem_match.endswith(".lnk"):
+            return Path(mem_match)
+
+    # 2. Handle drive letters like "D:" or "d:" or "D drive" -> "D:\"
+    drive_match = re.match(r"^([a-zA-Z]):?(\s*drive)?$", clean, re.IGNORECASE)
+    if drive_match:
+        drive_letter = drive_match.group(1).upper()
+        return Path(f"{drive_letter}:\\")
+
+    # 3. Replace bracketed username placeholders like [Your Username]
+    clean = re.sub(r"\[.*?username.*?\]", user_home.name, clean, flags=re.IGNORECASE)
+    clean = re.sub(r"<.*?username.*?>", user_home.name, clean, flags=re.IGNORECASE)
+
+    clean_lower = clean.lower().replace("\\", "/").strip("/")
+
+    aliases = {
+        "downloads": user_home / "Downloads",
+        "download": user_home / "Downloads",
+        "desktop": user_home / "Desktop",
+        "documents": user_home / "Documents",
+        "document": user_home / "Documents",
+        "pictures": user_home / "Pictures",
+        "music": user_home / "Music",
+        "videos": user_home / "Videos",
+    }
+
+    # Direct alias match (e.g. 'Downloads' -> 'C:\Users\NANDU\Downloads')
+    if clean_lower in aliases:
+        return aliases[clean_lower]
+
+    # Prefix alias matching (e.g. 'Downloads/Experiment_2.pdf' -> 'C:\Users\NANDU\Downloads\Experiment_2.pdf')
+    for alias_name, alias_path in aliases.items():
+        if clean_lower.startswith(f"{alias_name}/") or clean_lower.startswith(f"{alias_name}\\"):
+            relative_part = clean[len(alias_name) + 1:]
+            resolved_parent = alias_path
+            target_candidate = resolved_parent / relative_part
+            if target_candidate.exists() or not find_existing_file:
+                return target_candidate
+            # Recursive fuzzy match inside that alias folder
+            matched = _find_fuzzy_match_in_directory(resolved_parent, relative_part, recursive=True)
+            if matched:
+                return matched
+            return target_candidate
+
+    resolved = Path(clean).expanduser()
+    if not resolved.is_absolute():
+        resolved = (user_home / clean).resolve()
+
+    if (resolved.exists() and not str(resolved).endswith(".lnk")) or not find_existing_file:
+        return resolved
+
+    # Prioritized recursive search across standard user libraries FIRST (Downloads, Documents, Desktop, D:\)
+    for search_dir in [user_home / "Downloads", user_home / "Documents", user_home / "Desktop", Path("D:\\")]:
+        if search_dir.exists():
+            matched = _find_fuzzy_match_in_directory(search_dir, resolved.name, recursive=True)
+            if matched:
+                return matched
+
+    return resolved
+
+
+@tool(name="list_files", description="List files and folders inside a directory (e.g. 'Downloads', 'Desktop', 'D:\\'). Automatically indexes files into working memory.")
+def list_files(directory_path: str = "Downloads", pattern: str = "*", recursive: bool = True) -> str:
+    """List directory contents with automatic Working Memory indexing."""
+    p = _resolve_user_path(directory_path, find_existing_file=False)
+    if not p.exists():
+        return f"Error: Directory '{p}' does not exist."
+    if not p.is_dir():
+        return f"Error: Path '{p}' is a file, not a directory."
+
+    try:
+        working_memory.last_directory = str(p)
         items = list(p.rglob(pattern) if recursive else p.glob(pattern))
         if not items:
             return f"No items found in '{p}' matching pattern '{pattern}'."
 
-        lines = [f"Contents of '{p}' ({len(items)} items):"]
-        for item in sorted(items[:100], key=lambda x: (not x.is_dir(), x.name.lower())):
-            kind = "[DIR] " if item.is_dir() else "[FILE]"
-            size_str = ""
-            if item.is_file():
-                size_kb = item.stat().st_size / 1024
-                size_str = f" ({size_kb:.1f} KB)"
-            lines.append(f"  {kind} {item.name}{size_str}")
+        # Register found files into working memory
+        working_memory.record_files([str(item) for item in items if item.is_file()])
 
-        if len(items) > 100:
-            lines.append(f"  ... and {len(items) - 100} more items.")
+        lines = [f"Contents of {p} ({len(items)} items):"]
+        for item in items[:50]:
+            kind = "[DIR] " if item.is_dir() else "[FILE]"
+            size = f"({item.stat().st_size} bytes)" if item.is_file() else ""
+            lines.append(f"  {kind} {item.relative_to(p)} {size}")
+        if len(items) > 50:
+            lines.append(f"  ... and {len(items) - 50} more items.")
         return "\n".join(lines)
     except Exception as e:
         return f"Error listing directory: {e}"
 
 
-@tool(name="find_files", description="Search for files across the system matching a keyword or name.")
-def find_files(query: str, search_root: str = ".") -> str:
-    """Search for files containing query string."""
-    root = Path(search_root).expanduser().resolve()
-    if not root.exists():
-        return f"Error: Root path '{search_root}' does not exist."
+@tool(name="find_files", description="Search for files by name or extension in a directory (e.g. name='report', directory='Downloads').")
+def find_files(name_query: str, directory: str = "Downloads") -> str:
+    """Search for files matching name_query and register them into Working Memory."""
+    p = _resolve_user_path(directory, find_existing_file=False)
+    if not p.exists() or not p.is_dir():
+        return f"Error: Directory '{p}' does not exist."
 
+    clean_query = _normalize_name(name_query)
     matches = []
+
     try:
-        for p in root.rglob(f"*{query}*"):
-            matches.append(str(p))
-            if len(matches) >= 50:
-                break
+        for item in p.rglob("*"):
+            if item.is_file():
+                if clean_query in _normalize_name(item.name) or clean_query in _normalize_name(item.stem):
+                    matches.append(item)
+
         if not matches:
-            return f"No files or folders found matching '{query}' under '{root}'."
-        return f"Found {len(matches)} matches for '{query}':\n" + "\n".join(f"- {m}" for m in matches)
+            return f"No files found matching '{name_query}' in '{p}'."
+
+        # Register found files into working memory
+        working_memory.record_files([str(m) for m in matches])
+
+        lines = [f"Found {len(matches)} matching files:"]
+        for m in matches[:25]:
+            lines.append(f"  - {m}")
+        return "\n".join(lines)
     except Exception as e:
         return f"Error searching files: {e}"
 
 
-@tool(name="open_file", description="Open any file or folder using the OS default application.")
+@tool(name="open_file", description="Open any file or folder with its default Windows application (e.g. 'Experiment_2.pdf' or 'Downloads').")
 def open_file(file_path: str) -> str:
-    """Launch or open file with default handler."""
-    p = Path(file_path).expanduser().resolve()
+    """Open a file or folder using the default OS application."""
+    p = _resolve_user_path(file_path, find_existing_file=True)
     if not p.exists():
-        return f"Error: File '{file_path}' does not exist."
+        return f"Error: File or folder '{p}' does not exist."
 
     try:
-        if os.name == "nt":
-            os.startfile(str(p))
-        else:
-            subprocess.Popen(["xdg-open" if os.name == "posix" else "open", str(p)])
-        return f"Successfully opened '{p.name}' with default system application."
+        os.startfile(str(p))
+        working_memory.record_file(str(p))
+        logger.info(f"[FileTool] Opened file: {p}")
+        return f"Successfully opened '{p.name}' ({p})."
     except Exception as e:
-        return f"Failed to open '{file_path}': {e}"
+        return f"Failed to open '{p}': {e}"
 
 
-@tool(name="read_file_content", description="Read the text content of a file.")
-def read_file_content(file_path: str, max_lines: int = 100) -> str:
-    """Read file content."""
-    p = Path(file_path).expanduser().resolve()
-    if not p.exists():
-        return f"Error: File '{file_path}' does not exist."
-    if p.is_dir():
-        return f"Error: '{file_path}' is a directory. Use list_files instead."
+@tool(name="read_file_content", description="Read text contents of a file (e.g. .txt, .py, .json, .md, .csv).")
+def read_file_content(file_path: str, max_chars: int = 4000) -> str:
+    """Read the content of a readable text file."""
+    p = _resolve_user_path(file_path, find_existing_file=True)
+    if not p.exists() or not p.is_file():
+        return f"Error: File '{p}' does not exist."
 
     try:
-        with open(p, "r", encoding="utf-8", errors="replace") as f:
-            lines = [f.readline() for _ in range(max_lines)]
-        content = "".join(lines)
-        return f"Content of '{p.name}' (first {len(lines)} lines):\n\n{content}"
+        with open(p, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read(max_chars)
+        working_memory.record_file(str(p))
+        return f"Content of '{p.name}':\n{content}"
     except Exception as e:
-        return f"Error reading file '{file_path}': {e}"
+        return f"Failed to read '{p}': {e}"
 
 
-@tool(name="rename_file", description="Rename a file or directory.")
+@tool(name="rename_file", description="Rename an existing file or directory.")
 def rename_file(source_path: str, new_name: str) -> str:
     """Rename a file or folder."""
-    src = Path(source_path).expanduser().resolve()
+    src = _resolve_user_path(source_path, find_existing_file=True)
     if not src.exists():
-        return f"Error: Source '{source_path}' does not exist."
+        return f"Error: Source file '{src}' does not exist."
 
-    dst = src.parent / new_name if not os.path.isabs(new_name) else Path(new_name).expanduser().resolve()
+    dst = src.parent / new_name
     try:
         src.rename(dst)
-        return f"Successfully renamed '{src.name}' to '{dst.name}'."
+        working_memory.record_file(str(dst))
+        logger.info(f"[FileTool] Renamed {src} -> {dst}")
+        return f"Successfully renamed '{src.name}' to '{new_name}' at '{dst}'."
     except Exception as e:
-        return f"Error renaming file: {e}"
+        return f"Failed to rename '{src}': {e}"
 
 
-@tool(name="move_file", description="Move a file or directory to a new target directory or path.")
+@tool(name="move_file", description="Move a file or folder from source to destination directory (e.g. 'Downloads/report.pdf' to 'D:\\').")
 def move_file(source_path: str, destination_dir: str) -> str:
-    """Move file or folder."""
-    src = Path(source_path).expanduser().resolve()
-    dst = Path(destination_dir).expanduser().resolve()
+    """Move a file to a new directory."""
+    src = _resolve_user_path(source_path, find_existing_file=True)
+    dst_dir = _resolve_user_path(destination_dir, find_existing_file=False)
 
     if not src.exists():
-        return f"Error: Source '{source_path}' does not exist."
+        return f"Error: Source '{src}' does not exist."
+
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    dst = dst_dir / src.name
 
     try:
-        dst.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
-        return f"Successfully moved '{src.name}' to '{dst}'."
+        working_memory.record_file(str(dst))
+        logger.info(f"[FileTool] Moved {src} -> {dst}")
+        return f"Successfully moved '{src.name}' to '{dst_dir}'."
     except Exception as e:
-        return f"Error moving file: {e}"
+        return f"Failed to move '{src}': {e}"
 
 
-@tool(name="copy_file", description="Copy a file or directory to a destination path.")
-def copy_file(source_path: str, destination_path: str) -> str:
-    """Copy file or folder."""
-    src = Path(source_path).expanduser().resolve()
-    dst = Path(destination_path).expanduser().resolve()
+@tool(name="copy_file", description="Copy a file or directory to a destination folder.")
+def copy_file(source_path: str, destination_dir: str) -> str:
+    """Copy a file or folder to a destination."""
+    src = _resolve_user_path(source_path, find_existing_file=True)
+    dst_dir = _resolve_user_path(destination_dir, find_existing_file=False)
 
     if not src.exists():
-        return f"Error: Source '{source_path}' does not exist."
+        return f"Error: Source '{src}' does not exist."
+
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    dst = dst_dir / src.name
 
     try:
         if src.is_dir():
             shutil.copytree(str(src), str(dst), dirs_exist_ok=True)
         else:
-            if dst.is_dir():
-                shutil.copy2(str(src), str(dst))
-            else:
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(str(src), str(dst))
-        return f"Successfully copied '{src.name}' to '{dst}'."
+            shutil.copy2(str(src), str(dst))
+        working_memory.record_file(str(dst))
+        logger.info(f"[FileTool] Copied {src} -> {dst}")
+        return f"Successfully copied '{src.name}' to '{dst_dir}'."
     except Exception as e:
-        return f"Error copying file: {e}"
+        return f"Failed to copy '{src}': {e}"
 
 
-@tool(name="delete_file", description="Delete a file or empty folder.")
+@tool(name="delete_file", description="Permanently delete a file or directory.")
 def delete_file(file_path: str) -> str:
-    """Delete a file or directory."""
-    p = Path(file_path).expanduser().resolve()
+    """Delete a file or folder."""
+    p = _resolve_user_path(file_path, find_existing_file=True)
     if not p.exists():
-        return f"Error: File '{file_path}' does not exist."
+        return f"Error: File or directory '{p}' does not exist."
 
     try:
         if p.is_dir():
             shutil.rmtree(str(p))
-            return f"Successfully deleted directory '{p.name}' and all contents."
         else:
             p.unlink()
-            return f"Successfully deleted file '{p.name}'."
+        logger.info(f"[FileTool] Deleted: {p}")
+        return f"Successfully deleted '{p.name}'."
     except Exception as e:
-        return f"Error deleting file: {e}"
+        return f"Failed to delete '{p}': {e}"
 
 
-@tool(name="create_folder", description="Create a new folder / directory structure.")
+@tool(name="create_folder", description="Create a new folder at the specified directory path.")
 def create_folder(folder_path: str) -> str:
-    """Create directory."""
-    p = Path(folder_path).expanduser().resolve()
+    """Create a new folder."""
+    p = _resolve_user_path(folder_path, find_existing_file=False)
     try:
         p.mkdir(parents=True, exist_ok=True)
+        logger.info(f"[FileTool] Created folder: {p}")
         return f"Successfully created folder '{p}'."
     except Exception as e:
-        return f"Error creating folder: {e}"
+        return f"Failed to create folder '{p}': {e}"
 
 
-@tool(name="organize_directory", description="Intelligently sort and organize all files in a directory into category subfolders (Images, Documents, Videos, Archives, Code, etc.).")
-def organize_directory(directory_path: str) -> str:
-    """Auto-organize loose files in a folder into tidy category subfolders."""
-    target_dir = Path(directory_path).expanduser().resolve()
-    if not target_dir.exists() or not target_dir.is_dir():
-        return f"Error: Directory '{directory_path}' does not exist or is not a directory."
+@tool(name="organize_directory", description="Automatically sort and organize all unorganized files in a directory into category subfolders (Documents, Images, Audio, Video, Archives, Code).")
+def organize_directory(directory_path: str = "Downloads") -> str:
+    """Sort all unorganized files in directory_path into category folders."""
+    p = _resolve_user_path(directory_path, find_existing_file=False)
+    if not p.exists() or not p.is_dir():
+        return f"Error: Directory '{p}' does not exist."
+
+    ext_to_category: Dict[str, str] = {}
+    for cat, exts in FILE_CATEGORIES.items():
+        for ext in exts:
+            ext_to_category[ext.lower()] = cat
 
     moved_counts: Dict[str, int] = {}
     total_moved = 0
 
     try:
-        for item in list(target_dir.iterdir()):
-            if item.is_file():
+        for item in list(p.iterdir()):
+            if item.is_file() and not item.name.startswith("."):
                 ext = item.suffix.lower()
-                target_category = "Other"
+                category = ext_to_category.get(ext, "Others")
 
-                for category, extensions in EXTENSION_CATEGORIES.items():
-                    if ext in extensions:
-                        target_category = category
-                        break
+                cat_folder = p / category
+                cat_folder.mkdir(parents=True, exist_ok=True)
+                dest = cat_folder / item.name
 
-                category_folder = target_dir / target_category
-                category_folder.mkdir(exist_ok=True)
-
-                dest_file = category_folder / item.name
-                if dest_file.exists():
-                    dest_file = category_folder / f"{item.stem}_copy{item.suffix}"
-
-                shutil.move(str(item), str(dest_file))
-                moved_counts[target_category] = moved_counts.get(target_category, 0) + 1
+                shutil.move(str(item), str(dest))
+                working_memory.record_file(str(dest))
+                moved_counts[category] = moved_counts.get(category, 0) + 1
                 total_moved += 1
 
         if total_moved == 0:
-            return f"No loose files needed organizing in '{target_dir}'."
+            return f"Directory '{p}' is already organized. No files to sort."
 
-        summary = [f"Successfully organized {total_moved} files in '{target_dir.name}':"]
-        for cat, count in moved_counts.items():
-            summary.append(f"  - {cat}: {count} files")
-        return "\n".join(summary)
+        summary_lines = [f"Organized {total_moved} files in '{p}':"]
+        for cat, cnt in moved_counts.items():
+            summary_lines.append(f"  - {cat}: {cnt} files")
+        return "\n".join(summary_lines)
     except Exception as e:
-        return f"Error during organization: {e}"
+        return f"Error organizing directory: {e}"

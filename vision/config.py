@@ -51,6 +51,7 @@ class VisionConfig:
         self.CARTESIA_API_KEY: Optional[str] = os.getenv("CARTESIA_API_KEY")
         self.CARTESIA_API_KEYS: List[str] = _get_list("CARTESIA_API_KEYS")
         self.CARTESIA_VOICE_ID: str = os.getenv("CARTESIA_VOICE_ID", "5ee9feff-1265-424a-9d7f-8e4d431a12c7")
+        self.CARTESIA_SPEED: str = os.getenv("CARTESIA_SPEED", "slow")
 
         # ── OpenRouter Key Pool ──────────────────────────────
         self.OPENROUTER_API_KEYS: List[str] = _get_list("OPENROUTER_API_KEYS")
@@ -58,42 +59,31 @@ class VisionConfig:
         self.VISION_LOAD_BALANCER_STRATEGY: str = os.getenv("VISION_LOAD_BALANCER_STRATEGY", "least_busy")
 
         # ── Models & Engines ─────────────────────────────────
+        self.VISION_LLM_PROVIDER: str = os.getenv("VISION_LLM_PROVIDER", "groq")
         self.VISION_LLM_MODEL: str = os.getenv("VISION_LLM_MODEL", "llama-3.3-70b-versatile")
         self.VISION_NIM_LLM_MODEL: str = os.getenv("VISION_NIM_LLM_MODEL", "meta/llama-3.1-8b-instruct")
+        self.VISION_STT_ENGINE: str = os.getenv("VISION_STT_ENGINE", "groq")
         self.VISION_STT_MODEL: str = os.getenv("VISION_STT_MODEL", "whisper-large-v3-turbo")
-        self.VISION_TTS_ENGINE: str = os.getenv("VISION_TTS_ENGINE", "piper")
-        self.VISION_TTS_VOICE: str = os.getenv("VISION_TTS_VOICE", "austin")
 
-        # ── Email Integration ────────────────────────────────
-        self.VISION_EMAIL: Optional[str] = os.getenv("VISION_EMAIL")
-        self.VISION_EMAIL_PASSWORD: Optional[str] = os.getenv("VISION_EMAIL_PASSWORD")
-
-        # ── Google Gemini & Cloud Vision ─────────────────────
+        # ── Multimodal Vision & Gemini ───────────────────────
         self.GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
-        self.GOOGLE_CLOUD_VISION_API_KEY: Optional[str] = os.getenv("GOOGLE_CLOUD_VISION_API_KEY")
+        self.GEMINI_API_KEYS: List[str] = _get_list("GEMINI_API_KEYS")
 
-        # ── GitHub Token ─────────────────────────────────────
-        self.GITHUB_TOKEN: Optional[str] = os.getenv("GITHUB_TOKEN")
-
-        # ── Dedicated Sub-Agent Keys (NVIDIA NIM) ────────────
-        self.EMAIL_AGENT_LLM_API: Optional[str] = os.getenv("EMAIL_AGENT_LLM_API")
-        self.SCRAPER_AGENT_LLM_API: Optional[str] = os.getenv("SCRAPER_AGENT_LLM_API")
-
-        # ── Mobile Control (ADB) ─────────────────────────────
+        # ── Mobile & ADB Integration ─────────────────────────
         self.VISION_PHONE_IP: str = os.getenv("VISION_PHONE_IP", "192.168.1.3")
         self.VISION_PHONE_PORT: int = int(os.getenv("VISION_PHONE_PORT", "42381"))
-        self.VISION_PHONE_PATTERN: str = os.getenv("VISION_PHONE_PATTERN", "257368419")
-        self.ADB_PATH: str = os.getenv("ADB_PATH", "adb")
+        self.VISION_PHONE_PASSWORD: str = os.getenv("VISION_PHONE_PASSWORD", "1234")
 
-        # ── Voice Authentication ─────────────────────────────
-        self.VISION_VOICE_AUTH_ENABLED: bool = os.getenv("VISION_VOICE_AUTH_ENABLED", "false").lower() == "true"
-        self.VISION_VOICE_AUTH_THRESHOLD: float = float(os.getenv("VISION_VOICE_AUTH_THRESHOLD", "0.75"))
+        # ── Media & System ───────────────────────────────────
+        self.YOUTUBE_API_KEY: Optional[str] = os.getenv("YOUTUBE_API_KEY")
+        self.EMAIL_SENDER: Optional[str] = os.getenv("EMAIL_SENDER")
+        self.EMAIL_PASSWORD: Optional[str] = os.getenv("EMAIL_PASSWORD")
 
-        # ── App & Gateway Server Settings ────────────────────
+        # ── Server & Security ────────────────────────────────
         self.HOST: str = os.getenv("HOST", "0.0.0.0")
         self.PORT: int = int(os.getenv("PORT", "8000"))
-        self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+        self.DEBUG: bool = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+        self.SECRET_KEY: str = os.getenv("SECRET_KEY", "vision-default-secret-key-change-me")
 
 
-# Global singleton configuration instance
 config = VisionConfig()

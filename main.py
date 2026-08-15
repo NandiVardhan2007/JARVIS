@@ -1,9 +1,14 @@
 """
 VISION — Standalone Autonomous AI Multimodal Operating System.
-Main entry point supporting CLI mode, Web Gateway mode, and Full Autonomous Daemon mode.
+Supports real-time Voice Mode (Mic listening -> Groq STT -> LLM -> Tools -> Cartesia TTS playback),
+Interactive CLI Mode (with real-time speech output), and Web Gateway mode.
 """
 
 import sys
+import os
+import warnings
+warnings.filterwarnings("ignore")
+
 import asyncio
 import argparse
 import uvicorn
@@ -11,14 +16,17 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
-from loguru import logger
 
 from vision.config import config
 from vision.core.engine import vision_engine
 from vision.cognitive.load_balancer import load_balancer
 from vision.tools.registry import tool_registry
+from vision.perception.audio_stream import audio_stream
+from vision.perception.stt.groq_stt import GroqSTT
+from vision.logger import logger
 
 console = Console()
+stt = GroqSTT()
 
 
 def print_banner():
@@ -31,16 +39,16 @@ def print_banner():
    ╚═══╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝
     Autonomous Multimodal AI Operating System
     """, style="bold cyan")
-    console.print(Panel(banner, border_style="cyan", subtitle="v1.0.0 Standalone Engine"))
+    console.print(Panel(banner, border_style="cyan", subtitle="v1.0.0 Real-Time Voice & OS Engine"))
 
     table = Table(title="System Endpoints & Active Engine Config", border_style="blue")
     table.add_column("Component", style="cyan", no_wrap=True)
     table.add_column("Configuration / Status", style="green")
 
     table.add_row("LLM Load Balancer", f"{len(load_balancer.providers)} endpoints ({config.VISION_LOAD_BALANCER_STRATEGY})")
-    table.add_row("Primary Model", f"Groq ({config.VISION_LLM_MODEL})")
+    table.add_row("Primary LLM", f"Groq ({config.VISION_LLM_MODEL})")
     table.add_row("Fallback / Sub-Agents", f"NVIDIA NIM ({config.VISION_NIM_LLM_MODEL})")
-    table.add_row("TTS Engine", f"Cartesia / Piper ({config.VISION_TTS_VOICE})")
+    table.add_row("TTS Engine", "Cartesia Neural TTS (sonic-2)")
     table.add_row("STT Engine", f"Groq Whisper ({config.VISION_STT_MODEL})")
     table.add_row("Registered Tools", f"{len(tool_registry.get_all_schemas())} tools active")
     table.add_row("Mobile Control", f"ADB -> {config.VISION_PHONE_IP}:{config.VISION_PHONE_PORT}")
@@ -49,10 +57,90 @@ def print_banner():
     console.print(table)
 
 
-async def run_cli_mode():
-    """Interactive CLI chat loop with real-time tool execution."""
+async def run_voice_mode():
+    """Continuous real-time voice interaction loop: Listen -> STT -> LLM -> Tools -> Speak."""
     await vision_engine.initialize()
-    console.print("\n[bold green]VISION CLI Online.[/bold green] Type 'exit' or 'quit' to close.\n")
+    console.print("\n[bold green]VISION Live Voice Mode Active![/bold green]")
+    console.print("[cyan]Speak into your microphone. VISION will listen, execute actions, and speak back.[/cyan]")
+    console.print("[dim]Press Ctrl+C to switch or exit.[/dim]\n")
+
+    session_id = "voice_session"
+
+    # Initial greeting speech
+    greeting = "VISION is online and ready. How can I assist you?"
+    console.print(f"[bold cyan]VISION:[/bold cyan] {greeting}\n")
+    try:
+        if vision_engine.tts:
+            audio_bytes = await vision_engine.tts.synthesize(greeting)
+            from vision.synthesis.player import audio_player
+            audio_player.play_wav_bytes(audio_bytes)
+    except Exception as e:
+        logger.error(f"[Voice] Greeting synthesis error: {e}")
+
+    loop = asyncio.get_event_loop()
+    consecutive_mic_failures = 0
+
+    while True:
+        try:
+            # 1. Record voice phrase on microphone in executor thread
+            with console.status("[bold green]Listening for speech... (speak now)[/bold green]", spinner="dots"):
+                wav_bytes = await loop.run_in_executor(None, audio_stream.record_phrase)
+
+            if not wav_bytes:
+                consecutive_mic_failures += 1
+                if consecutive_mic_failures >= 3:
+                    console.print("\n[yellow][!] Microphone input is unavailable or restricted by Windows permissions.[/yellow]")
+                    console.print("[cyan]To enable: Go to Windows Settings > Privacy & security > Microphone and turn ON 'Let desktop apps access your microphone'.[/cyan]")
+                    console.print("[green]Switching to Interactive CLI (with full spoken voice output)...[/green]\n")
+                    await run_cli_mode()
+                    return
+                await asyncio.sleep(0.5)
+                continue
+
+            consecutive_mic_failures = 0
+
+            # 2. Transcribe using Groq Whisper STT
+            with console.status("[bold yellow]Transcribing speech (Groq Whisper)...[/bold yellow]", spinner="dots"):
+                user_text = await stt.transcribe(wav_bytes)
+
+            if not user_text or len(user_text.strip()) < 2:
+                continue
+
+            console.print(f"[bold yellow]You (Spoken) > [/bold yellow]{user_text}")
+
+            if user_text.lower().strip() in ["exit", "quit", "goodbye", "bye"]:
+                farewell = "Goodbye! Shutting down VISION."
+                console.print(f"[bold cyan]VISION:[/bold cyan] {farewell}")
+                if vision_engine.tts:
+                    audio_bytes = await vision_engine.tts.synthesize(farewell)
+                    from vision.synthesis.player import audio_player
+                    audio_player.play_wav_bytes(audio_bytes)
+                break
+
+            # 3. Process query through LLM, execute tools, synthesize and speak back!
+            with console.status("[bold cyan]VISION is thinking & orchestrating...[/bold cyan]", spinner="dots"):
+                result = await vision_engine.process_user_input(
+                    user_text=user_text,
+                    session_id=session_id,
+                    channel="voice",
+                    synthesize_voice=True
+                )
+
+            console.print(f"[bold cyan]VISION ({result.get('provider', 'AI')} - {result.get('latency_ms', 0):.0f}ms):[/bold cyan]\n{result.get('response')}\n")
+
+        except KeyboardInterrupt:
+            console.print("\n[bold red]Stopping Voice Mode...[/bold red]")
+            break
+        except Exception as e:
+            console.print(f"[bold red]Voice loop error: {e}[/bold red]\n")
+            await asyncio.sleep(1.0)
+
+
+async def run_cli_mode():
+    """Interactive CLI text chat loop with voice output speech."""
+    if not vision_engine.is_running:
+        await vision_engine.initialize()
+    console.print("\n[bold green]VISION CLI Online.[/bold green] Type your message or type 'exit' to quit.\n")
 
     session_id = "cli_session"
     while True:
@@ -69,7 +157,7 @@ async def run_cli_mode():
                     user_text=user_input,
                     session_id=session_id,
                     channel="cli",
-                    synthesize_voice=False
+                    synthesize_voice=True # Speaks response aloud through speakers
                 )
 
             console.print(f"[bold cyan]VISION ({result.get('provider', 'AI')} - {result.get('latency_ms', 0):.0f}ms):[/bold cyan]\n{result.get('response')}\n")
@@ -91,15 +179,17 @@ def run_web_mode():
 
 def main():
     parser = argparse.ArgumentParser(description="VISION Autonomous AI System")
-    parser.add_argument("--mode", choices=["cli", "web", "all"], default="cli", help="Operating mode")
+    parser.add_argument("--mode", choices=["voice", "cli", "web"], default="voice", help="Operating mode (default: voice)")
     args = parser.parse_args()
 
     print_banner()
 
     if args.mode == "web":
         run_web_mode()
-    else:
+    elif args.mode == "cli":
         asyncio.run(run_cli_mode())
+    else:
+        asyncio.run(run_voice_mode())
 
 
 if __name__ == "__main__":

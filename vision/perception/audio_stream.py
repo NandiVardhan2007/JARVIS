@@ -1,11 +1,12 @@
 """
-Audio Stream Capture from local microphone using sounddevice with graceful fallback.
+Audio Stream Capture & Voice Listener from local microphone with Voice Activity Detection.
+Supports adaptive device selection, PortAudio fallback, and graceful error handling.
 """
 
-import asyncio
+import io
+import time
+import wave
 from typing import Optional
-from vision.core.event_bus import event_bus
-from vision.constants import VisionEvents
 from vision.logger import logger
 
 try:
@@ -21,46 +22,88 @@ class AudioStreamManager:
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk_size = chunk_size
-        self._stream = None
-        self.is_recording = False
+        self._mic_error_logged = False
 
-    def _audio_callback(self, indata, frames, time_info, status):
-        if status:
-            logger.warning(f"[AudioStream] Status: {status}")
-        if self.is_recording and np is not None:
-            audio_bytes = (indata * 32767).astype(np.int16).tobytes()
-            asyncio.run_coroutine_threadsafe(
-                event_bus.publish(VisionEvents.AUDIO_CHUNK_RECORDED, audio_bytes),
-                asyncio.get_event_loop()
-            )
-
-    def start(self):
-        if sd is None:
-            logger.warning("[AudioStream] sounddevice is not installed.")
-            return
-        if self.is_recording:
-            return
+    def is_mic_available(self) -> bool:
+        if sd is None or np is None:
+            return False
         try:
-            self._stream = sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype="float32",
-                blocksize=self.chunk_size,
-                callback=self._audio_callback
-            )
-            self._stream.start()
-            self.is_recording = True
-            logger.info("[AudioStream] Microphone capture stream started.")
-        except Exception as e:
-            logger.error(f"[AudioStream] Failed to start microphone stream: {e}")
+            dev = sd.query_devices(kind='input')
+            return dev is not None
+        except Exception:
+            return False
 
-    def stop(self):
-        if self._stream and sd is not None:
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
-        self.is_recording = False
-        logger.info("[AudioStream] Microphone capture stream stopped.")
+    def record_phrase(
+        self,
+        energy_threshold: float = 0.012,
+        silence_timeout: float = 1.2,
+        max_duration: float = 25.0
+    ) -> Optional[bytes]:
+        """
+        Listen on the microphone until speech is detected, record the utterance,
+        and stop after silence_timeout seconds of silence. Returns WAV bytes.
+        """
+        if sd is None or np is None:
+            return None
+
+        frames = []
+        is_speaking = False
+        silence_start_time = None
+        start_time = time.time()
+
+        try:
+            # Query default input device parameters
+            dev_info = sd.query_devices(kind='input')
+            native_rate = int(dev_info.get('default_samplerate', self.sample_rate))
+            native_channels = min(self.channels, dev_info.get('max_input_channels', 1))
+
+            with sd.InputStream(
+                samplerate=native_rate,
+                channels=native_channels,
+                dtype="float32",
+                blocksize=self.chunk_size
+            ) as stream:
+                self._mic_error_logged = False
+                while True:
+                    if time.time() - start_time > max_duration:
+                        break
+
+                    data, _ = stream.read(self.chunk_size)
+                    rms = np.sqrt(np.mean(data**2))
+
+                    if rms > energy_threshold:
+                        if not is_speaking:
+                            is_speaking = True
+                        frames.append(data.copy())
+                        silence_start_time = None
+                    else:
+                        if is_speaking:
+                            frames.append(data.copy())
+                            if silence_start_time is None:
+                                silence_start_time = time.time()
+                            elif time.time() - silence_start_time >= silence_timeout:
+                                break
+
+            if not frames or not is_speaking:
+                return None
+
+            audio_array = np.concatenate(frames, axis=0)
+            int16_data = (audio_array * 32767).clip(-32768, 32767).astype(np.int16)
+
+            wav_buffer = io.BytesIO()
+            with wave.open(wav_buffer, "wb") as wf:
+                wf.setnchannels(native_channels)
+                wf.setsampwidth(2)
+                wf.setframerate(native_rate)
+                wf.writeframes(int16_data.tobytes())
+
+            return wav_buffer.getvalue()
+
+        except Exception as e:
+            if not self._mic_error_logged:
+                logger.warning(f"[AudioStream] Microphone capture unavailable ({e}). Please ensure Windows Microphone permissions are enabled.")
+                self._mic_error_logged = True
+            return None
 
 
 audio_stream = AudioStreamManager()

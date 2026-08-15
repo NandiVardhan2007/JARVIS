@@ -1,5 +1,5 @@
 @echo off
-title VISION Autonomous AI System
+title VISION Autonomous AI Voice & OS System
 cls
 
 echo ===================================================
@@ -16,11 +16,12 @@ if exist ".venv\Scripts\python.exe" (
     echo [!] .venv not detected. Using system Python.
 )
 
-:: Check if mode parameter was passed
-set "MODE=cli"
+:: Default to voice mode if no argument passed
+set "MODE=voice"
 if not "%~1"=="" set "MODE=%~1"
 
 echo [*] Starting VISION in mode: %MODE%
+echo [*] Tip: Run 'start.bat cli' for Text mode, or 'start.bat web' for Web mode.
 echo.
 
 "%PYTHON_EXE%" main.py --mode %MODE%

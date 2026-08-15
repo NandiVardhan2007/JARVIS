@@ -3,8 +3,6 @@ Low-latency audio playback engine for synthesized speech chunks.
 """
 
 from io import BytesIO
-from vision.core.event_bus import event_bus
-from vision.constants import VisionEvents
 from vision.logger import logger
 
 try:

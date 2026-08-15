@@ -1,34 +1,37 @@
 """
-Multi-Provider LLM Load Balancer & Dynamic Key Pool using Groq and NVIDIA NIM.
+Autonomous Cognitive Load Balancer orchestrating 20+ LLM endpoints,
+persistent key health tracking across restarts, and instant failover.
 """
 
+import time
 from typing import List, Dict, Any, AsyncGenerator, Optional
 from vision.config import config
+from vision.logger import logger
 from vision.cognitive.providers.base import BaseLLMProvider
 from vision.cognitive.providers.groq_llm import GroqLLMProvider
 from vision.cognitive.providers.openai_compatible import OpenAICompatibleProvider
 from vision.cognitive.providers.gemini_llm import GeminiLLMProvider
-from vision.logger import logger
+from vision.cognitive.key_manager import key_manager
 
 
-class LLMLoadBalancer:
-    def __init__(self):
+class LoadBalancer:
+    def __init__(self, strategy: str = "least_busy"):
+        self.strategy = strategy
         self.providers: List[BaseLLMProvider] = []
         self._round_robin_idx = 0
-        self.strategy = config.VISION_LOAD_BALANCER_STRATEGY or "least_busy"
         self._initialize_providers()
 
     def _initialize_providers(self):
-        """Register all active Groq, NVIDIA NIM, and Cloud Fallback providers."""
-        # 1. Primary: Groq Keys (Llama 3.3 70B)
-        groq_keys = list(set([k for k in [config.GROQ_API_KEY] + config.GROQ_API_KEYS if k]))
+        """Initialize all provider instances across all configured API keys."""
+        # 1. Primary: Groq Multi-Key Cluster
+        groq_keys = ([config.GROQ_API_KEY] if config.GROQ_API_KEY else []) + config.GROQ_API_KEYS
         for idx, key in enumerate(groq_keys):
             self.providers.append(
                 GroqLLMProvider(api_key=key, model=config.VISION_LLM_MODEL)
             )
 
-        # 2. NVIDIA NIM Keys (Llama 3.1 / 3.3)
-        nvidia_keys = list(set([k for k in [config.NVIDIA_API_KEY] + config.NVIDIA_API_KEYS if k]))
+        # 2. NVIDIA NIM Cluster
+        nvidia_keys = ([config.NVIDIA_API_KEY] if config.NVIDIA_API_KEY else []) + config.NVIDIA_API_KEYS
         for idx, key in enumerate(nvidia_keys):
             self.providers.append(
                 OpenAICompatibleProvider(
@@ -39,9 +42,8 @@ class LLMLoadBalancer:
                 )
             )
 
-        # 3. OpenRouter Key Pool (Cloud Fallback)
-        openrouter_keys = list(set([k for k in config.OPENROUTER_API_KEYS if k]))
-        for idx, key in enumerate(openrouter_keys):
+        # 3. OpenRouter Failover
+        for idx, key in enumerate(config.OPENROUTER_API_KEYS):
             self.providers.append(
                 OpenAICompatibleProvider(
                     name=f"OpenRouter-{idx+1}",
@@ -60,22 +62,38 @@ class LLMLoadBalancer:
 
         logger.info(f"[LoadBalancer] Initialized {len(self.providers)} endpoints with strategy '{self.strategy}'.")
 
+    def _is_on_cooldown(self, provider: BaseLLMProvider) -> bool:
+        """Check if provider key is in rate-limit cooldown via persistent key_manager."""
+        api_key = getattr(provider, "api_key", None)
+        if api_key:
+            return not key_manager.is_available(api_key)
+        return False
+
     def _select_provider_order(self) -> List[BaseLLMProvider]:
-        """Return a ranked list of providers according to current strategy."""
+        """Return a ranked list of available providers, prioritizing healthy active keys."""
         if not self.providers:
             raise RuntimeError("No LLM providers configured.")
 
+        # Separate healthy active vs rate-limited providers
+        active = [p for p in self.providers if not self._is_on_cooldown(p)]
+
+        if not active:
+            # If all are in cooldown, use least recently cooled
+            active = sorted(self.providers, key=lambda p: key_manager.get_remaining_cooldown(getattr(p, 'api_key', '')))
+
         if self.strategy == "least_busy":
-            return sorted(self.providers, key=lambda p: (p.active_requests, p.failed_requests))
+            ordered_active = sorted(active, key=lambda p: (p.active_requests, p.failed_requests))
         elif self.strategy == "latency_based":
-            return sorted(self.providers, key=lambda p: (p.average_latency_ms, p.failed_requests))
+            ordered_active = sorted(active, key=lambda p: (p.average_latency_ms, p.failed_requests))
         elif self.strategy == "round_robin":
-            n = len(self.providers)
-            idx = self._round_robin_idx % n
+            n = len(active)
+            idx = self._round_robin_idx % max(1, n)
             self._round_robin_idx += 1
-            return self.providers[idx:] + self.providers[:idx]
-        else: # priority_fallback (default order)
-            return list(self.providers)
+            ordered_active = active[idx:] + active[:idx]
+        else:
+            ordered_active = list(active)
+
+        return ordered_active
 
     async def chat_completion(
         self,
@@ -89,6 +107,10 @@ class LLMLoadBalancer:
         last_error = None
 
         for provider in ranked_providers:
+            # Check availability immediately before dispatch
+            if self._is_on_cooldown(provider):
+                continue
+
             try:
                 logger.debug(f"[LoadBalancer] Routing to '{provider.name}' ({provider.model})")
                 return await provider.chat_completion(
@@ -98,7 +120,15 @@ class LLMLoadBalancer:
                     max_tokens=max_tokens
                 )
             except Exception as e:
-                logger.warning(f"[LoadBalancer] Provider '{provider.name}' failed: {e}. Failing over.")
+                err_str = str(e)
+                # Persist rate limit to disk so next query immediately skips this key
+                if "429" in err_str or "rate_limit" in err_str or "tokens per day" in err_str:
+                    api_key = getattr(provider, "api_key", None)
+                    if api_key:
+                        key_manager.mark_rate_limited(api_key, err_str)
+                    logger.info(f"[LoadBalancer] Key rate-limited on '{provider.name}'. Instantly routing to next provider...")
+                else:
+                    logger.warning(f"[LoadBalancer] Provider '{provider.name}' failed: {e}. Failing over.")
                 last_error = e
 
         raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
@@ -113,8 +143,9 @@ class LLMLoadBalancer:
         """Stream tokens with failover on initial connection."""
         ranked_providers = self._select_provider_order()
         for provider in ranked_providers:
+            if self._is_on_cooldown(provider):
+                continue
             try:
-                logger.debug(f"[LoadBalancer] Streaming from '{provider.name}'")
                 async for chunk in provider.stream_chat_completion(
                     messages=messages,
                     tools=tools,
@@ -124,8 +155,14 @@ class LLMLoadBalancer:
                     yield chunk
                 return
             except Exception as e:
-                logger.warning(f"[LoadBalancer] Stream provider '{provider.name}' failed: {e}. Attempting failover.")
+                err_str = str(e)
+                if "429" in err_str or "rate_limit" in err_str or "tokens per day" in err_str:
+                    api_key = getattr(provider, "api_key", None)
+                    if api_key:
+                        key_manager.mark_rate_limited(api_key, err_str)
+                logger.warning(f"[LoadBalancer] Stream provider '{provider.name}' failed: {e}. Failing over.")
 
 
-# Singleton Load Balancer instance
-load_balancer = LLMLoadBalancer()
+# Global Load Balancer Singleton
+load_balancer = LoadBalancer(strategy=config.VISION_LOAD_BALANCER_STRATEGY)
+LLMLoadBalancer = LoadBalancer
