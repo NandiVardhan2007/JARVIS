@@ -1,1 +1,0 @@
-"""VISION Modular Tools Package."""
