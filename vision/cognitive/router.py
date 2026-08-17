@@ -71,8 +71,21 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["read_clipboard", "write_to_clipboard", "translate_text"]
     },
     "browser": {
-        "keywords": ["browser", "website", "open site", "github", "leetcode", "youtube", "gmail", "chatgpt", "google search", "search youtube", "download", "download file", "web page"],
-        "tools": ["open_website", "search_youtube_videos", "search_google_web", "download_file_from_url"]
+        "keywords": [
+            "browser", "website", "open site", "github", "leetcode", "youtube", "gmail",
+            "chatgpt", "google search", "search youtube", "download", "download file",
+            "web page", "click", "click on", "fill form", "type on", "type in", "press enter",
+            "scroll", "scroll down", "scroll up", "interactive elements", "inspect page",
+            "browser screenshot", "page screenshot", "web browser", "browse", "navigate to",
+            "close browser", "back", "forward", "webpage content"
+        ],
+        "tools": [
+            "browser_fill_form_and_login", "browser_open", "browser_navigate", "browser_click",
+            "browser_type", "browser_press_key", "browser_scroll", "browser_get_page_content",
+            "browser_get_interactive_elements", "browser_take_screenshot",
+            "browser_back", "browser_forward", "browser_close",
+            "open_website", "search_youtube_videos", "search_google_web", "download_file_from_url"
+        ]
     },
     "power_process": {
         "keywords": ["kill", "terminate", "force close", "kill process", "sleep", "sleep pc", "lock", "lock pc", "lock workstation", "lock screen", "workstation", "shutdown", "restart", "cancel shutdown", "recycle", "recycle bin", "empty bin", "bin", "trash", "clean trash"],
