@@ -105,6 +105,10 @@ DOMAIN_KEYWORD_MAP = {
     "interview": {
         "keywords": ["interview", "mock interview", "interview prep", "prepare for interview", "interview question", "interview practice", "evaluate answer", "end interview", "technical interview", "hr interview", "mock interview session"],
         "tools": ["start_mock_interview", "evaluate_interview_answer", "end_mock_interview"]
+    },
+    "multi_agent": {
+        "keywords": ["autonomous goal", "multi-step", "decompose", "swarm", "research and write", "research and save", "research and email", "multi agent", "plan and execute", "plan task", "complex workflow", "execute goal"],
+        "tools": ["execute_autonomous_multi_agent_goal", "get_autonomous_goal_status"]
     }
 }
 

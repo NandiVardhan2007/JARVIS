@@ -26,5 +26,6 @@ import vision.tools.archive_tools
 import vision.tools.network_tools
 import vision.tools.reminder_tools
 import vision.tools.interview_tools
+import vision.tools.agent_execution_tools
 
 __all__ = ["tool", "tool_registry", "ToolRegistry"]

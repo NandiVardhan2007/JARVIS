@@ -28,6 +28,10 @@ You don't just execute commands — you talk and interact like a genuine, suppor
 - WhatsApp routing: When messaging Nandu himself, use '7337419275'. For family (Amma) or college friends, look up their details and send directly.
 """
 
+DEFAULT_SUBAGENT_SYSTEM_PROMPT = """You are an autonomous specialized sub-agent for the VISION Multimodal AI Operating System.
+Execute the assigned sub-task thoroughly and accurately. If tools are available, invoke them as needed, analyze observations, and provide a clear, concise result.
+"""
+
 
 class VisionEvents:
     # Perception Events
@@ -41,6 +45,14 @@ class VisionEvents:
     TOOL_EXECUTION_COMPLETED = "cognition.tool.done"
     LLM_RESPONSE_DONE = "cognition.llm.done"
     LLM_STREAM_CHUNK = "cognition.llm.stream_chunk"
+
+    # Multi-Agent Swarm Events
+    AGENT_PLAN_CREATED = "agent.plan.created"
+    AGENT_STEP_STARTED = "agent.step.started"
+    AGENT_STEP_PROGRESS = "agent.step.progress"
+    AGENT_STEP_COMPLETED = "agent.step.completed"
+    AGENT_STEP_FAILED = "agent.step.failed"
+    AGENT_GOAL_FINISHED = "agent.goal.finished"
 
     # Gateway / Web Events
     WEB_CLIENT_CONNECTED = "gateway.web.connected"
