@@ -15,7 +15,8 @@ from vision.logger import logger
 class MAGEngine:
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            data_dir = Path("data")
+            project_root = Path(__file__).resolve().parent.parent.parent
+            data_dir = project_root / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
             self.db_path = str(data_dir / "memory.db")
         else:
@@ -120,18 +121,31 @@ class MAGEngine:
             return mem_id
 
     def forget(self, query: str) -> int:
-        """Delete memories matching query or keyword."""
+        """Delete memories matching query, keyword, or semantic token overlap."""
         clean = query.strip()
         if not clean:
             return 0
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            # 1. Direct substring match
             cursor.execute(
                 "DELETE FROM semantic_memories WHERE content LIKE ? OR tags LIKE ?",
                 (f"%{clean}%", f"%{clean}%")
             )
             deleted = cursor.rowcount
+
+            # 2. If nothing deleted and query has multiple words, match on significant keywords (>3 chars)
+            if deleted == 0:
+                words = [w.strip(".,'\"") for w in clean.split() if len(w.strip(".,'\"")) >= 4 and w.lower() not in {"from", "your", "that", "this", "only", "about", "with", "game", "rules"}]
+                if words:
+                    conditions = " OR ".join(["content LIKE ? OR tags LIKE ?" for _ in words])
+                    params = []
+                    for w in words:
+                        params.extend([f"%{w}%", f"%{w}%"])
+                    cursor.execute(f"DELETE FROM semantic_memories WHERE {conditions}", params)
+                    deleted = cursor.rowcount
+
             conn.commit()
             logger.info(f"[MAG] Deleted {deleted} memories matching '{clean}'")
             return deleted

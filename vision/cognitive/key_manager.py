@@ -14,7 +14,10 @@ from vision.logger import logger
 
 
 class KeyStateManager:
-    def __init__(self, state_file: str = "data/key_state.json"):
+    def __init__(self, state_file: str = None):
+        if state_file is None:
+            project_root = Path(__file__).resolve().parent.parent.parent
+            state_file = str(project_root / "data" / "key_state.json")
         self.state_file = Path(state_file)
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         # {key_id: {"exhausted": True, "cooldown_until": timestamp, "error_msg": str}}

@@ -1,7 +1,7 @@
 """
 VISION — Standalone Autonomous AI Multimodal Operating System.
-Supports real-time Voice Mode (Mic listening -> Groq STT -> LLM -> Tools -> Cartesia TTS playback),
-Interactive CLI Mode (with real-time speech output), and Web Gateway mode.
+Supports Interactive CLI Mode (with real-time speech output) and
+continuous real-time Voice Mode (Mic listening -> Groq STT -> LLM -> Tools -> Cartesia TTS playback).
 """
 
 import sys
@@ -11,7 +11,6 @@ warnings.filterwarnings("ignore")
 
 import asyncio
 import argparse
-import uvicorn
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -39,7 +38,7 @@ def print_banner():
    ╚═══╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝
     Autonomous Multimodal AI Operating System
     """, style="bold cyan")
-    console.print(Panel(banner, border_style="cyan", subtitle="v1.0.0 Real-Time Voice & OS Engine"))
+    console.print(Panel(banner, border_style="cyan", subtitle="v1.0.0 Real-Time CLI & Voice OS Engine"))
 
     table = Table(title="System Endpoints & Active Engine Config", border_style="blue")
     table.add_column("Component", style="cyan", no_wrap=True)
@@ -52,7 +51,7 @@ def print_banner():
     table.add_row("STT Engine", f"Groq Whisper ({config.VISION_STT_MODEL})")
     table.add_row("Registered Tools", f"{len(tool_registry.get_all_schemas())} tools active")
     table.add_row("Mobile Control", f"ADB -> {config.VISION_PHONE_IP}:{config.VISION_PHONE_PORT}")
-    table.add_row("Web Server Host", f"http://{config.HOST}:{config.PORT}")
+    table.add_row("Active Interface", "Interactive Terminal CLI & Voice Mode")
 
     console.print(table)
 
@@ -77,7 +76,7 @@ async def run_voice_mode():
     except Exception as e:
         logger.error(f"[Voice] Greeting synthesis error: {e}")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     consecutive_mic_failures = 0
 
     while True:
@@ -167,26 +166,14 @@ async def run_cli_mode():
             console.print(f"[bold red]Error: {e}[/bold red]\n")
 
 
-def run_web_mode():
-    """Launch FastAPI Web Server & WebSocket gateway."""
-    uvicorn.run(
-        "vision.gateways.web.server:app",
-        host=config.HOST,
-        port=config.PORT,
-        reload=config.DEBUG
-    )
-
-
 def main():
     parser = argparse.ArgumentParser(description="VISION Autonomous AI System")
-    parser.add_argument("--mode", choices=["voice", "cli", "web"], default="voice", help="Operating mode (default: voice)")
+    parser.add_argument("--mode", choices=["voice", "cli"], default="voice", help="Operating mode (default: voice)")
     args = parser.parse_args()
 
     print_banner()
 
-    if args.mode == "web":
-        run_web_mode()
-    elif args.mode == "cli":
+    if args.mode == "cli":
         asyncio.run(run_cli_mode())
     else:
         asyncio.run(run_voice_mode())

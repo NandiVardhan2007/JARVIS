@@ -19,6 +19,9 @@ def _load_env_file(filepath: str = ".env"):
                 continue
             k, v = line.split("=", 1)
             k, v = k.strip(), v.strip()
+            # Strip surrounding quotes from values
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+                v = v[1:-1]
             if k and k not in os.environ:
                 os.environ[k] = v
 
@@ -48,10 +51,18 @@ class VisionConfig:
         self.NVIDIA_API_KEYS: List[str] = _get_list("NVIDIA_API_KEYS")
 
         # ── Cartesia TTS ─────────────────────────────────────
-        self.CARTESIA_API_KEY: Optional[str] = os.getenv("CARTESIA_API_KEY")
-        self.CARTESIA_API_KEYS: List[str] = _get_list("CARTESIA_API_KEYS")
+        cart_keys = []
+        if os.getenv("CARTESIA_API_KEY"):
+            cart_keys.append(os.getenv("CARTESIA_API_KEY"))
+        cart_keys.extend(_get_list("CARTESIA_API_KEYS"))
+        for k, v in os.environ.items():
+            if k.startswith("CARTESIA_API_KEY_") and v:
+                cart_keys.append(v)
+        self.CARTESIA_API_KEYS: List[str] = list(dict.fromkeys([k for k in cart_keys if k]))
+        self.CARTESIA_API_KEY: Optional[str] = self.CARTESIA_API_KEYS[0] if self.CARTESIA_API_KEYS else None
         self.CARTESIA_VOICE_ID: str = os.getenv("CARTESIA_VOICE_ID", "1259b7e3-cb8a-43df-9446-30971a46b8b0")
-        self.CARTESIA_SPEED: str = os.getenv("CARTESIA_SPEED", "slow")
+        self.CARTESIA_SPEED: str = os.getenv("CARTESIA_SPEED", "normal")
+        self.CARTESIA_EMOTION: List[str] = ["positivity:high"]
 
         # ── OpenRouter Key Pool ──────────────────────────────
         self.OPENROUTER_API_KEYS: List[str] = _get_list("OPENROUTER_API_KEYS")
@@ -71,7 +82,10 @@ class VisionConfig:
 
         # ── Mobile & ADB Integration ─────────────────────────
         self.VISION_PHONE_IP: str = os.getenv("VISION_PHONE_IP", "192.168.1.3")
-        self.VISION_PHONE_PORT: int = int(os.getenv("VISION_PHONE_PORT", "42381"))
+        try:
+            self.VISION_PHONE_PORT: int = int(os.getenv("VISION_PHONE_PORT", "42381"))
+        except (ValueError, TypeError):
+            self.VISION_PHONE_PORT: int = 42381
         self.VISION_PHONE_PASSWORD: str = os.getenv("VISION_PHONE_PASSWORD", "1234")
 
         # ── Media & System ───────────────────────────────────
@@ -81,7 +95,10 @@ class VisionConfig:
 
         # ── Server & Security ────────────────────────────────
         self.HOST: str = os.getenv("HOST", "0.0.0.0")
-        self.PORT: int = int(os.getenv("PORT", "8000"))
+        try:
+            self.PORT: int = int(os.getenv("PORT", "8000"))
+        except (ValueError, TypeError):
+            self.PORT: int = 8000
         self.DEBUG: bool = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
         self.SECRET_KEY: str = os.getenv("SECRET_KEY", "vision-default-secret-key-change-me")
 

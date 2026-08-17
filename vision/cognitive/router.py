@@ -11,8 +11,12 @@ from vision.logger import logger
 
 DOMAIN_KEYWORD_MAP = {
     "hardware": {
-        "keywords": ["volume", "sound", "audio", "mute", "unmute", "loud", "quiet", "brightness", "dim", "screen brightness", "lock", "lock screen", "lock pc", "lock workstation"],
-        "tools": ["set_volume", "increase_volume", "decrease_volume", "mute_volume", "unmute_volume", "get_volume_status", "set_brightness", "increase_brightness", "decrease_brightness", "get_brightness_status", "lock_screen", "lock_workstation"]
+        "keywords": ["volume", "sound", "audio", "mute", "unmute", "loud", "quiet", "brightness", "dim", "screen brightness", "lock", "lock screen", "lock pc", "lock workstation", "battery", "charge", "charging", "battery percentage", "power state", "hardware", "cpu usage", "ram usage", "system health", "hardware health", "disk usage", "free space"],
+        "tools": ["set_volume", "increase_volume", "decrease_volume", "mute_volume", "unmute_volume", "get_volume_status", "set_brightness", "increase_brightness", "decrease_brightness", "get_brightness_status", "lock_screen", "lock_workstation", "get_battery_status", "get_hardware_health", "get_system_stats"]
+    },
+    "network": {
+        "keywords": ["speedtest", "speed test", "internet speed", "download speed", "upload speed", "wifi", "wi-fi", "network", "signal", "ssid", "ping", "latency", "dns", "gateway", "ip address", "public ip", "connection speed"],
+        "tools": ["test_internet_speed", "get_network_diagnostics", "ping_host"]
     },
     "window": {
         "keywords": ["window", "desktop", "minimize", "maximize", "restore", "snap", "close", "kill", "terminate", "switch to", "running apps", "show desktop"],
@@ -31,8 +35,8 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["create_bordered_a4_document", "print_document", "create_and_print_bordered_document"]
     },
     "file": {
-        "keywords": ["file", "folder", "directory", "downloads", "documents", "desktop folder", "delete file", "move file", "rename", "organize", "save", "save file", "save in downloads", "save to"],
-        "tools": ["create_or_write_file", "list_files", "find_files", "open_file", "read_file_content", "rename_file", "move_file", "copy_file", "delete_file", "create_folder", "organize_directory", "save_active_document"]
+        "keywords": ["file", "folder", "directory", "downloads", "documents", "desktop", "desktop folder", "delete file", "move file", "rename", "organize", "organize downloads", "clean downloads", "organize desktop", "clean desktop", "tidy", "sort files", "save", "save file", "save in downloads", "save to"],
+        "tools": ["organize_downloads", "organize_desktop", "organize_directory", "clean_empty_directories", "create_or_write_file", "list_files", "find_files", "open_file", "read_file_content", "rename_file", "move_file", "copy_file", "delete_file", "create_folder", "save_active_document"]
     },
     "web": {
         "keywords": ["weather", "temperature", "forecast", "search web", "browse", "internet", "google", "news", "online", "fetch"],
@@ -40,10 +44,10 @@ DOMAIN_KEYWORD_MAP = {
     },
     "system": {
         "keywords": ["open", "launch", "start", "time", "date", "clock", "cpu", "ram", "battery", "stats", "screen", "screenshot"],
-        "tools": ["open_application", "get_current_time_and_date", "get_system_stats", "read_screen"]
+        "tools": ["open_application", "get_current_time_and_date", "get_system_stats", "read_screen", "get_battery_status", "get_hardware_health"]
     },
     "memory": {
-        "keywords": ["remember", "memory", "recall", "forget", "know about me", "details", "age", "born", "who am i", "my name", "college", "cache", "stats"],
+        "keywords": ["remember", "memory", "memories", "recall", "forget", "know about me", "details", "my details", "about me", "age", "born", "birthday", "who am i", "my name", "college", "address", "my address", "mother", "father", "friends", "cache", "stats", "list memories", "clear cache"],
         "tools": ["remember_fact", "recall_memory", "forget_memory", "list_all_memories", "get_cache_stats", "clear_system_cache"]
     },
     "media": {
@@ -59,7 +63,7 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["connect_phone", "unlock_phone", "launch_mobile_app", "tap_phone_screen"]
     },
     "terminal": {
-        "keywords": ["terminal", "command", "cmd", "powershell", "execute", "run command", "git", "python", "pip", "npm", "ipconfig", "ping", "curl", "install", "status", "ssh", "ubuntu", "server", "remote server", "connect to"],
+        "keywords": ["terminal", "command prompt", "cmd", "powershell", "execute command", "run command", "run terminal", "run script", "git status", "pip install", "npm install", "ssh to", "ssh server", "connect to server", "connect to ssh", "remote server"],
         "tools": ["connect_to_ssh_server", "execute_terminal_command", "run_python_code", "git_status_and_summary"]
     },
     "clipboard_translation": {
@@ -77,13 +81,21 @@ DOMAIN_KEYWORD_MAP = {
     "archive": {
         "keywords": ["zip", "unzip", "compress", "extract", "tar", "archive", "compress folder", "extract zip"],
         "tools": ["compress_to_zip", "extract_zip_archive"]
+    },
+    "reminder": {
+        "keywords": ["remind", "reminder", "remind me", "timer", "alarm", "countdown", "set timer", "set reminder", "cancel reminder", "cancel timer", "my reminders", "active reminders"],
+        "tools": ["set_voice_reminder", "set_timer", "list_active_reminders", "cancel_reminder", "get_current_time_and_date"]
+    },
+    "interview": {
+        "keywords": ["interview", "mock interview", "interview prep", "prepare for interview", "interview question", "interview practice", "evaluate answer", "end interview", "technical interview", "hr interview", "mock interview session"],
+        "tools": ["start_mock_interview", "evaluate_interview_answer", "end_mock_interview"]
     }
 }
 
 # Core fallback tools when intent is ambiguous
 CORE_DEFAULT_TOOLS = [
     "open_application", "get_current_time_and_date", "get_system_stats",
-    "recall_memory", "remember_fact", "search_web", "show_desktop", "close_application"
+    "search_web", "show_desktop", "close_application"
 ]
 
 

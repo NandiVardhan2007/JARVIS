@@ -2,14 +2,18 @@
 FastAPI Server and WebSocket Gateway for real-time bidirectional communication.
 """
 
+import json
+from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
 from vision.gateways.web.routes import router as api_router
 from vision.core.engine import vision_engine
 from vision.core.event_bus import event_bus
 from vision.constants import VisionEvents
 from vision.logger import logger
-import json
 
 app = FastAPI(title="VISION Autonomous OS", version="1.0.0")
 
@@ -63,8 +67,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     synthesize_voice=synth
                 )
                 await websocket.send_text(json.dumps({"type": "chat_response", "data": response}))
+            elif action == "ping":
+                await websocket.send_text(json.dumps({"type": "pong", "time": json.dumps(str(raw_data))}))
     except WebSocketDisconnect:
         logger.info("[WebSocket] Client disconnected.")
-        await event_bus.publish(VisionEvents.WEB_CLIENT_DISCONNECTED)
     except Exception as e:
         logger.error(f"[WebSocket] Error: {e}")
+    finally:
+        event_bus.unsubscribe(VisionEvents.LLM_STREAM_CHUNK, push_event)
+        event_bus.unsubscribe(VisionEvents.TOOL_CALL_DETECTED, push_event)
+        event_bus.unsubscribe(VisionEvents.TOOL_EXECUTION_COMPLETED, push_event)
+        await event_bus.publish(VisionEvents.WEB_CLIENT_DISCONNECTED)
+
+
+
+
+

@@ -60,10 +60,10 @@ class SessionManager:
         self._sessions: Dict[str, Session] = {}
 
     def get_or_create(self, session_id: Optional[str] = None, channel: str = "web", user_id: str = "default_user") -> Session:
-        if not session_id or session_id not in self._sessions:
-            s_id = session_id or str(uuid.uuid4())
+        s_id = session_id or str(uuid.uuid4())
+        if s_id not in self._sessions:
             self._sessions[s_id] = Session(session_id=s_id, channel=channel, user_id=user_id)
-        return self._sessions[session_id or s_id]
+        return self._sessions[s_id]
 
     def get(self, session_id: str) -> Optional[Session]:
         return self._sessions.get(session_id)

@@ -103,7 +103,11 @@ def send_whatsapp_message(contact_or_number: str, message: str) -> str:
 
     # Check if target is a phone number (e.g. 9505864289, +919505864289)
     clean_digits = re.sub(r"[^\d]", "", resolved_target)
-    is_phone_number = len(clean_digits) >= 10 and (resolved_target.startswith("+") or clean_digits == resolved_target)
+    is_phone_number = len(clean_digits) >= 10 and (
+        resolved_target.startswith("+")
+        or clean_digits == resolved_target
+        or bool(re.match(r"^[\+\d\s\-\(\)]+$", resolved_target.strip()))
+    )
 
     # Direct 100% Precision Phone Protocol Dispatch
     if is_phone_number:

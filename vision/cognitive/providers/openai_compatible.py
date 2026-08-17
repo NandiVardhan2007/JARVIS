@@ -2,6 +2,8 @@
 Generic OpenAI-Compatible Provider for NVIDIA NIM, OpenRouter, and custom endpoints.
 """
 
+import json
+import uuid
 from typing import List, Dict, Any, AsyncGenerator, Optional
 import time
 from vision.cognitive.providers.base import BaseLLMProvider
@@ -146,7 +148,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             logger.debug(f"[{self.name}] Provider note: {e}")
             raise e
         finally:
-            self.active_requests -= 1
+            self.active_requests = max(0, self.active_requests - 1)
 
     async def stream_chat_completion(
         self,
@@ -181,4 +183,4 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             logger.debug(f"[{self.name}] Stream note: {e}")
             raise e
         finally:
-            self.active_requests -= 1
+            self.active_requests = max(0, self.active_requests - 1)

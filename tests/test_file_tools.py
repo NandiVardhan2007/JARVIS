@@ -53,7 +53,7 @@ def test_file_operations_lifecycle():
 
         # 8. Organize directory
         org_res = organize_directory(str(tmp_path))
-        assert "Organized" in org_res
+        assert "organized" in org_res.lower()
         assert (tmp_path / "Images" / "image.png").exists()
 
         # 9. Create / write file

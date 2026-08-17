@@ -39,8 +39,22 @@ class GeminiLLMProvider(BaseLLMProvider):
         try:
             contents = []
             for msg in messages:
-                role = "user" if msg.get("role") in ["user", "system"] else "model"
-                contents.append({"role": role, "parts": [msg.get("content", "")]})
+                msg_role = msg.get("role", "user")
+                content = msg.get("content", "")
+
+                # Skip assistant messages that are purely tool_calls with no text
+                if msg_role == "assistant" and msg.get("tool_calls") and not content:
+                    continue
+
+                # Convert tool result messages to user messages
+                if msg_role == "tool":
+                    tool_name = msg.get("name", "tool")
+                    content = f"[Tool Result from {tool_name}]: {content}"
+                    msg_role = "user"
+
+                role = "user" if msg_role in ["user", "system", "tool"] else "model"
+                if content:
+                    contents.append({"role": role, "parts": [content]})
 
             response = await self.client.generate_content_async(
                 contents,

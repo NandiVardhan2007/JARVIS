@@ -22,5 +22,8 @@ import vision.tools.clipboard_translation_tools
 import vision.tools.browser_navigation_tools
 import vision.tools.power_process_tools
 import vision.tools.archive_tools
+import vision.tools.network_tools
+import vision.tools.reminder_tools
+import vision.tools.interview_tools
 
 __all__ = ["tool", "tool_registry", "ToolRegistry"]

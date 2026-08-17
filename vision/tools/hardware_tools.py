@@ -9,9 +9,12 @@ from vision.tools.registry import tool
 from vision.logger import logger
 
 try:
-    from pycaw.pycaw import AudioUtilities
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    from comtypes import CLSCTX_ALL
 except ImportError:
     AudioUtilities = None
+    IAudioEndpointVolume = None
+    CLSCTX_ALL = None
 
 try:
     import screen_brightness_control as sbc
@@ -21,10 +24,12 @@ except ImportError:
 
 def _get_audio_endpoint():
     """Helper to retrieve active default audio endpoint volume interface."""
-    if not AudioUtilities:
+    if not AudioUtilities or not IAudioEndpointVolume:
         return None
     try:
-        return AudioUtilities.GetSpeakers().EndpointVolume
+        speakers = AudioUtilities.GetSpeakers()
+        interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        return interface.QueryInterface(IAudioEndpointVolume)
     except Exception as e:
         logger.error(f"[HardwareTools] Failed to get audio endpoint: {e}")
         return None
@@ -197,3 +202,113 @@ def lock_screen() -> str:
         return "Windows workstation locked."
     except Exception as e:
         return f"Failed to lock workstation: {e}"
+
+
+# ---------------- Battery & Hardware Health Monitors ----------------
+
+@tool(name="get_battery_status", description="Get the PC / laptop battery charge percentage, charging status, and remaining runtime.")
+def get_battery_status() -> str:
+    """Check battery level, AC power plugged status, and estimated battery runtime."""
+    try:
+        import psutil
+        battery = psutil.sensors_battery()
+        if not battery:
+            return "Battery Status: Desktop PC (No battery detected / Running on continuous AC power)."
+
+        pct = battery.percent
+        plugged = battery.power_plugged
+        secs_left = battery.secsleft
+
+        status_text = "Charging / Plugged in (AC)" if plugged else "Discharging on Battery"
+        
+        time_info = ""
+        if not plugged and secs_left > 0 and secs_left != psutil.POWER_TIME_UNLIMITED:
+            hours = secs_left // 3600
+            mins = (secs_left % 3600) // 60
+            time_info = f" (~{hours}h {mins}m remaining)"
+        elif plugged and pct == 100:
+            time_info = " (Fully Charged)"
+
+        # Health tip
+        tip = ""
+        if pct <= 20 and not plugged:
+            tip = "\n⚠️ Low Battery Alert! Please connect your charger."
+
+        summary = (
+            f"Battery Health & Status:\n"
+            f"• Level: {pct}%\n"
+            f"• Power State: {status_text}{time_info}"
+            f"{tip}"
+        )
+        logger.info(f"[HardwareTools] Battery status: {pct}%, plugged={plugged}")
+        return summary
+    except Exception as e:
+        logger.error(f"[HardwareTools] Failed to get battery status: {e}")
+        return f"Error reading battery status: {e}"
+
+
+@tool(name="get_hardware_health", description="Get comprehensive hardware health: CPU load per core, RAM utilization, drive space, and top active processes.")
+def get_hardware_health() -> str:
+    """
+    Returns real-time hardware telemetry:
+    - Overall CPU % and per-core utilization
+    - RAM total, used, free, and percentage
+    - Storage partitions (C: and D: drive)
+    - Top resource-consuming processes
+    """
+    try:
+        import psutil
+        lines = ["Hardware & System Health Telemetry:"]
+
+        # 1. CPU
+        cpu_overall = psutil.cpu_percent(interval=0.2)
+        cores = psutil.cpu_percent(interval=0.1, percpu=True)
+        cpu_freq = psutil.cpu_freq()
+        freq_str = f" @ {round(cpu_freq.current / 1000, 2)} GHz" if cpu_freq else ""
+        lines.append(f"• CPU Utilization: {cpu_overall}% ({len(cores)} logical cores{freq_str})")
+
+        # 2. RAM
+        vmem = psutil.virtual_memory()
+        ram_total_gb = round(vmem.total / (1024**3), 1)
+        ram_used_gb = round(vmem.used / (1024**3), 1)
+        ram_free_gb = round(vmem.available / (1024**3), 1)
+        lines.append(f"• RAM Usage: {vmem.percent}% ({ram_used_gb} GB used / {ram_total_gb} GB total, {ram_free_gb} GB free)")
+
+        # 3. Storage Disks
+        disk_lines = []
+        for drive in ["C:\\", "D:\\"]:
+            try:
+                du = psutil.disk_usage(drive)
+                d_total_gb = round(du.total / (1024**3), 1)
+                d_free_gb = round(du.free / (1024**3), 1)
+                disk_lines.append(f"{drive[0]}: {du.percent}% ({d_free_gb} GB free / {d_total_gb} GB)")
+            except Exception:
+                pass
+        if disk_lines:
+            lines.append(f"• Storage: {', '.join(disk_lines)}")
+
+        # 4. Battery
+        bat = psutil.sensors_battery()
+        if bat:
+            p_state = "Plugged In" if bat.power_plugged else "Battery"
+            lines.append(f"• Battery: {bat.percent}% ({p_state})")
+
+        # 5. Top 3 Processes by Memory
+        try:
+            procs = []
+            for p in psutil.process_iter(['name', 'cpu_percent', 'memory_info']):
+                try:
+                    mem_mb = round(p.info['memory_info'].rss / (1024 * 1024), 1)
+                    procs.append((p.info['name'], p.info['cpu_percent'], mem_mb))
+                except Exception:
+                    pass
+            procs.sort(key=lambda x: x[2], reverse=True)
+            top_procs = [f"{p[0]} ({p[2]} MB)" for p in procs[:3]]
+            lines.append(f"• Top Memory Apps: {', '.join(top_procs)}")
+        except Exception:
+            pass
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"[HardwareTools] Failed to get hardware telemetry: {e}")
+        return f"Error reading hardware health: {e}"

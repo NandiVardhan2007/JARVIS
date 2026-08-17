@@ -325,7 +325,7 @@ def create_folder(folder_path: str) -> str:
         return f"Failed to create folder '{p}': {e}"
 
 
-@tool(name="organize_directory", description="Automatically sort and organize all unorganized files in a directory into category subfolders (Documents, Images, Audio, Video, Archives, Code).")
+@tool(name="organize_directory", description="Automatically sort and organize all unorganized files in a directory into category subfolders (Documents, Images, Audio, Video, Archives, Code, Executables).")
 def organize_directory(directory_path: str = "Downloads") -> str:
     """Sort all unorganized files in directory_path into category folders."""
     p = _resolve_user_path(directory_path, find_existing_file=False)
@@ -342,7 +342,8 @@ def organize_directory(directory_path: str = "Downloads") -> str:
 
     try:
         for item in list(p.iterdir()):
-            if item.is_file() and not item.name.startswith("."):
+            # Skip hidden files, system files, and shortcuts on desktop
+            if item.is_file() and not item.name.startswith(".") and item.suffix.lower() not in [".ini", ".lnk"]:
                 ext = item.suffix.lower()
                 category = ext_to_category.get(ext, "Others")
 
@@ -356,14 +357,98 @@ def organize_directory(directory_path: str = "Downloads") -> str:
                 total_moved += 1
 
         if total_moved == 0:
-            return f"Directory '{p}' is already organized. No files to sort."
+            return f"Directory '{p.name}' is already organized. No loose files to sort."
 
-        summary_lines = [f"Organized {total_moved} files in '{p}':"]
-        for cat, cnt in moved_counts.items():
-            summary_lines.append(f"  - {cat}: {cnt} files")
+        summary_lines = [f"Successfully organized {total_moved} files in '{p.name}':"]
+        for cat, cnt in sorted(moved_counts.items(), key=lambda x: x[1], reverse=True):
+            summary_lines.append(f"  • {cat}: {cnt} file(s)")
         return "\n".join(summary_lines)
     except Exception as e:
         return f"Error organizing directory: {e}"
+
+
+@tool(name="organize_downloads", description="Automatically sort and tidy all loose files in the Downloads folder into neat categorized subfolders (Documents, Images, Archives, Executables, Code).")
+def organize_downloads(clean_empty_folders: bool = True) -> str:
+    """Smart Downloads organizer that sorts loose files into structured categories."""
+    downloads_path = Path.home() / "Downloads"
+    res = organize_directory(str(downloads_path))
+    if clean_empty_folders:
+        clean_empty_directories(str(downloads_path))
+    return res
+
+
+@tool(name="organize_desktop", description="Automatically tidy the Desktop by sorting loose files into organized categories while preserving app shortcuts and links.")
+def organize_desktop(preserve_shortcuts: bool = True) -> str:
+    """Cleans up the Windows Desktop, sorting loose media, documents, and code into Desktop/Organized/."""
+    desktop_path = Path.home() / "Desktop"
+    if not desktop_path.exists():
+        return "Error: Desktop folder not found."
+
+    target_org_dir = desktop_path / "Organized"
+    target_org_dir.mkdir(parents=True, exist_ok=True)
+
+    ext_to_category: Dict[str, str] = {}
+    for cat, exts in FILE_CATEGORIES.items():
+        for ext in exts:
+            ext_to_category[ext.lower()] = cat
+
+    moved_counts: Dict[str, int] = {}
+    total_moved = 0
+
+    try:
+        for item in list(desktop_path.iterdir()):
+            if item.is_file() and not item.name.startswith("."):
+                # Preserve desktop shortcuts and Windows desktop.ini
+                if preserve_shortcuts and item.suffix.lower() in [".lnk", ".url", ".ini"]:
+                    continue
+
+                ext = item.suffix.lower()
+                category = ext_to_category.get(ext, "Others")
+                cat_folder = target_org_dir / category
+                cat_folder.mkdir(parents=True, exist_ok=True)
+
+                dest = cat_folder / item.name
+                shutil.move(str(item), str(dest))
+                working_memory.record_file(str(dest))
+                moved_counts[category] = moved_counts.get(category, 0) + 1
+                total_moved += 1
+
+        if total_moved == 0:
+            return "Desktop is already clean and organized! No loose files found."
+
+        summary_lines = [f"Successfully organized {total_moved} loose file(s) on your Desktop into 'Desktop/Organized/':"]
+        for cat, cnt in sorted(moved_counts.items(), key=lambda x: x[1], reverse=True):
+            summary_lines.append(f"  • {cat}: {cnt} file(s)")
+        summary_lines.append("App shortcuts and icons were preserved.")
+        return "\n".join(summary_lines)
+    except Exception as e:
+        return f"Error organizing Desktop: {e}"
+
+
+@tool(name="clean_empty_directories", description="Scan a folder (like Downloads or Desktop) and safely remove empty, orphaned subfolders.")
+def clean_empty_directories(target_directory: str = "Downloads") -> str:
+    """Removes empty subdirectories."""
+    p = _resolve_user_path(target_directory, find_existing_file=False)
+    if not p.exists() or not p.is_dir():
+        return f"Directory '{p}' does not exist."
+
+    removed = []
+    try:
+        for root, dirs, files in os.walk(str(p), topdown=False):
+            for d in dirs:
+                dir_full = Path(root) / d
+                try:
+                    if dir_full.exists() and not any(dir_full.iterdir()):
+                        dir_full.rmdir()
+                        removed.append(d)
+                except Exception:
+                    pass
+
+        if not removed:
+            return f"No empty folders found in '{p.name}'."
+        return f"Cleaned up {len(removed)} empty folder(s) in '{p.name}': {', '.join(removed[:5])}."
+    except Exception as e:
+        return f"Error cleaning empty folders: {e}"
 
 
 @tool(name="create_or_write_file", description="Create a new text file or save written notes/code/documents directly to disk in Downloads, Desktop, Documents, or any folder.")

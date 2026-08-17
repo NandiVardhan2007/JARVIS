@@ -77,11 +77,31 @@ class ToolRegistry:
 
         func = self._tools[name]
         try:
-            logger.info(f"[ToolRegistry] Executing tool '{name}' with args {arguments}")
+            # Auto-coerce parameter types (e.g. string "true"/"false" to bool, string digits to int)
+            sig = inspect.signature(func)
+            cleaned_args = {}
+            for k, v in arguments.items():
+                if k in sig.parameters:
+                    param = sig.parameters[k]
+                    if param.annotation == bool and isinstance(v, str):
+                        cleaned_args[k] = v.strip().lower() in ["true", "1", "yes"]
+                    elif param.annotation == int and isinstance(v, str) and v.isdigit():
+                        cleaned_args[k] = int(v)
+                    elif param.annotation == float and isinstance(v, str):
+                        try:
+                            cleaned_args[k] = float(v)
+                        except ValueError:
+                            cleaned_args[k] = v
+                    else:
+                        cleaned_args[k] = v
+                else:
+                    cleaned_args[k] = v
+
+            logger.info(f"[ToolRegistry] Executing tool '{name}' with args {cleaned_args}")
             if inspect.iscoroutinefunction(func):
-                return await func(**arguments)
+                return await func(**cleaned_args)
             else:
-                return func(**arguments)
+                return func(**cleaned_args)
         except Exception as e:
             logger.error(f"[ToolRegistry] Tool '{name}' execution failed: {e}")
             return f"Error executing tool '{name}': {str(e)}"

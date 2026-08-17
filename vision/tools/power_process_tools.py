@@ -6,7 +6,12 @@ Allows VISION to safely terminate frozen processes, sleep/lock the PC, schedule 
 import os
 import subprocess
 import time
-import psutil
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 from typing import Optional
 from vision.tools.registry import tool
 from vision.logger import logger

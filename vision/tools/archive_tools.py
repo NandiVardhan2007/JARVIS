@@ -81,7 +81,15 @@ def extract_zip_archive(zip_path: str, extract_to_folder: Optional[str] = None) 
             return f"Successfully extracted {extracted_count} items from '{arc.name}' to '{out_dir}'."
         elif tarfile.is_tarfile(arc):
             with tarfile.open(arc, 'r:*') as tarf:
-                tarf.extractall(out_dir)
+                # Validate members to prevent path traversal attacks
+                safe_members = []
+                for member in tarf.getmembers():
+                    member_path = os.path.normpath(member.name)
+                    if member_path.startswith('..') or os.path.isabs(member_path):
+                        logger.warning(f"[ArchiveTool] Skipping unsafe tar member: {member.name}")
+                        continue
+                    safe_members.append(member)
+                tarf.extractall(out_dir, members=safe_members)
             extracted_count = len(list(out_dir.rglob("*")))
             return f"Successfully extracted {extracted_count} items from TAR archive to '{out_dir}'."
         else:

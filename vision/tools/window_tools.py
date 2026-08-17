@@ -6,7 +6,12 @@ Provides control over desktop windows, minimizing, maximizing, snapping, switchi
 import time
 import subprocess
 from typing import Optional, List
-import psutil
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 from vision.tools.registry import tool
 from vision.logger import logger
 

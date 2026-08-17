@@ -28,7 +28,8 @@ CACHE_BYPASS_PATTERNS = [
 class CAGEngine:
     def __init__(self, cache_dir: Optional[str] = None):
         if cache_dir is None:
-            self.cache_dir = Path("data/cache")
+            project_root = Path(__file__).resolve().parent.parent.parent
+            self.cache_dir = project_root / "data" / "cache"
         else:
             self.cache_dir = Path(cache_dir)
 

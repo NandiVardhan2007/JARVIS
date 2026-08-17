@@ -25,14 +25,23 @@ class GroqLLMProvider(BaseLLMProvider):
 
     def _recover_failed_tool_call(self, err_msg: str) -> Optional[List[Dict[str, Any]]]:
         """Recover tool calls from Groq's failed_generation raw XML string."""
-        m = re.search(r"<function=(\w+)[\s\(]*(\{.*?\})[\s\)]*(?:>)?(?:</function>)?", err_msg, re.DOTALL)
+        m = re.search(r"<function=(\w+)>(.*?)(?:</function>|$)", err_msg, re.DOTALL)
+        if not m:
+            m = re.search(r"<function=(\w+)[\s\(]*(\{.*?\})[\s\)]*(?:>)?(?:</function>)?", err_msg, re.DOTALL)
         if m:
             func_name = m.group(1)
-            raw_args = m.group(2)
+            raw_args = m.group(2).strip()
+            parsed_args = {}
             try:
                 parsed_args = json.loads(raw_args)
             except Exception:
-                parsed_args = {}
+                start = raw_args.find("{")
+                end = raw_args.rfind("}")
+                if start != -1 and end != -1:
+                    try:
+                        parsed_args = json.loads(raw_args[start:end+1])
+                    except Exception:
+                        pass
 
             call_id = f"call_recovered_{int(time.time() * 1000)}"
             logger.info(f"[GroqLLM] Self-healed malformed tool call -> {func_name}({parsed_args})")

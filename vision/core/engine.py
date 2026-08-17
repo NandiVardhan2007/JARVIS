@@ -2,7 +2,9 @@
 Central VISION Autonomous Engine orchestrating perception, cognition, tools, memory (Working + MAG + CAG), and TTS synthesis.
 """
 
+import asyncio
 import json
+import re
 import time
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -21,6 +23,9 @@ from vision.config import config
 from vision.logger import logger
 
 
+from vision.core.reminder_daemon import reminder_manager
+
+
 class VisionEngine:
     def __init__(self):
         self.tts = CartesiaTTS() if config.CARTESIA_API_KEY else None
@@ -30,6 +35,18 @@ class VisionEngine:
         """Initialize engine components and background listeners."""
         self.is_running = True
         logger.info("[VisionEngine] Initialized successfully with MAG + CAG memory subsystems.")
+        
+        # Launch Autonomous Spoken Reminder Daemon
+        async def _reminder_speaker(alert_text: str):
+            logger.info(f"[VisionEngine] 🗣️ Speaking proactive reminder: '{alert_text}'")
+            if self.tts:
+                try:
+                    audio_bytes = await self.tts.synthesize(alert_text)
+                    audio_player.play_wav_bytes(audio_bytes)
+                except Exception as e:
+                    logger.error(f"[VisionEngine] Reminder voice synthesis error: {e}")
+
+        asyncio.create_task(reminder_manager.start_daemon(speech_callback=_reminder_speaker))
         await event_bus.publish(VisionEvents.SYSTEM_STARTED)
 
     async def process_user_input(
@@ -165,10 +182,14 @@ class VisionEngine:
             spoken_text = final_text.strip()
             # If model returned raw JSON tool call as content
             if spoken_text.startswith("{") and ("\"name\"" in spoken_text or "'name'" in spoken_text):
-                spoken_text = "Done! I have finished typing the details."
-            elif len(spoken_text) > 250 and has_executed_tools:
-                # Keep spoken response concise when tools have performed the work
-                spoken_text = "I have written all your information into Notepad."
+                spoken_text = "Action completed successfully, Nandu!"
+            elif len(spoken_text) > 400:
+                # Keep spoken response punchy and natural for long text (e.g. take first 2 clean sentences)
+                sentences = re.split(r'(?<=[.!?])\s+', spoken_text)
+                if len(sentences) >= 2:
+                    spoken_text = f"{sentences[0]} {sentences[1]}"
+                else:
+                    spoken_text = spoken_text[:300].rstrip() + "..."
 
             try:
                 audio_bytes = await self.tts.synthesize(spoken_text)

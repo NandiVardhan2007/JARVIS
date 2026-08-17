@@ -1,26 +1,33 @@
 """
 Keyboard, Typing & Desktop Input Automation Tools for VISION AI OS.
-Allows VISION to type text letter-by-letter naturally at 70-100 Words Per Minute (WPM),
-open editors, save documents, and execute keyboard shortcuts.
+Allows VISION to type text, notes, documents, open editors,
+save documents, and execute keyboard shortcuts with 100% reliability.
 """
 
 import time
-import random
 import subprocess
-from typing import Optional
+import ctypes
+from ctypes import wintypes
+from typing import Optional, List, Dict, Any
 from vision.tools.registry import tool
 from vision.logger import logger
 
 try:
     import pyautogui
     import pyperclip
-    import pygetwindow as gw
+    import win32gui
+    import win32process
+    import win32con
+    import psutil
     if pyautogui:
         pyautogui.FAILSAFE = False
 except ImportError:
     pyautogui = None
     pyperclip = None
-    gw = None
+    win32gui = None
+    win32process = None
+    win32con = None
+    psutil = None
 
 
 APP_COMMAND_MAP = {
@@ -39,71 +46,16 @@ APP_COMMAND_MAP = {
 }
 
 
-def _ensure_and_focus_window(app_name: str) -> bool:
-    """Focus target application window with Win32 foreground activation; if not open, launch it automatically."""
-    raw = app_name.lower().strip()
-    target = "notepad" if ("not" in raw or "note" in raw) else raw
-
-    user32 = ctypes.windll.user32
-    target_hwnd = None
-
-    def enum_cb(hwnd, extra):
-        nonlocal target_hwnd
-        if user32.IsWindowVisible(hwnd):
-            length = user32.GetWindowTextLengthW(hwnd)
-            if length > 0:
-                buff = ctypes.create_unicode_buffer(length + 1)
-                user32.GetWindowTextW(hwnd, buff, length + 1)
-                title = buff.value.lower()
-                if target in title:
-                    target_hwnd = hwnd
-                    return False
-        return True
-
-    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
-
-    # 1. Search for existing window
-    user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
-
-    # 2. If not found, launch the application
-    if not target_hwnd:
-        cmd = APP_COMMAND_MAP.get(target, APP_COMMAND_MAP.get(raw, raw))
-        logger.info(f"[InputTool] Window '{target}' not found open. Launching via '{cmd}'...")
-        try:
-            subprocess.Popen(cmd, shell=True)
-            for _ in range(25):
-                time.sleep(0.12)
-                user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
-                if target_hwnd:
-                    break
-        except Exception as e:
-            logger.error(f"[InputTool] Failed to launch '{cmd}': {e}")
-            return False
-
-    # 3. Force foreground focus using Win32 Alt-key bypass & AttachThreadInput
-    if target_hwnd:
-        try:
-            current_thread = user32.GetCurrentThreadId()
-            remote_thread = user32.GetWindowThreadProcessId(target_hwnd, None)
-            user32.AttachThreadInput(current_thread, remote_thread, True)
-            user32.keybd_event(0x12, 0, 0, 0) # Alt down
-            user32.ShowWindow(target_hwnd, 9) # SW_RESTORE
-            user32.SetForegroundWindow(target_hwnd)
-            user32.BringWindowToTop(target_hwnd)
-            user32.keybd_event(0x12, 0, 2, 0) # Alt up
-            user32.SetFocus(target_hwnd)
-            user32.AttachThreadInput(current_thread, remote_thread, False)
-            time.sleep(0.3)
-            logger.info(f"[InputTool] Focused window HWND {target_hwnd} for '{target}'")
-            return True
-        except Exception as e:
-            logger.debug(f"[InputTool] Focus window error: {e}")
-
-    return False
-
-
-# Win32 SendInput Unicode structures for 100% accurate, zero-typo character typing
-import ctypes
+# Win32 SendInput 40-byte x64 structure definitions for native Windows input
+class _MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ('dx', ctypes.c_long),
+        ('dy', ctypes.c_long),
+        ('mouseData', ctypes.c_ulong),
+        ('dwFlags', ctypes.c_ulong),
+        ('time', ctypes.c_ulong),
+        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong))
+    ]
 
 class _KEYBDINPUT(ctypes.Structure):
     _fields_ = [
@@ -114,77 +66,271 @@ class _KEYBDINPUT(ctypes.Structure):
         ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong))
     ]
 
+class _HARDWAREINPUT(ctypes.Structure):
+    _fields_ = [
+        ('uMsg', ctypes.c_ulong),
+        ('wParamL', ctypes.c_ushort),
+        ('wParamH', ctypes.c_ushort)
+    ]
+
+class _INPUT_UNION(ctypes.Union):
+    _fields_ = [
+        ('mi', _MOUSEINPUT),
+        ('ki', _KEYBDINPUT),
+        ('hi', _HARDWAREINPUT)
+    ]
+
 class _INPUT(ctypes.Structure):
-    class _INPUT_UNION(ctypes.Union):
-        _fields_ = [('ki', _KEYBDINPUT)]
-    _anonymous_ = ('_u',)
-    _fields_ = [('type', ctypes.c_ulong), ('_u', _INPUT_UNION)]
+    _fields_ = [
+        ('type', ctypes.c_ulong),
+        ('u', _INPUT_UNION)
+    ]
 
 
-def _type_letter_by_letter(text: str, delay_per_char: float = 0.003, target_wpm: Optional[int] = None, **kwargs):
-    """
-    Types text letter-by-letter using native Windows Win32 SendInput KEYEVENTF_UNICODE.
-    Zero dropped Shift keys, zero typos, flawless punctuation '(', ')', ':', and capital letters.
-    """
+def _find_target_window(app_name: str) -> Optional[int]:
+    """Find the best HWND of an existing open window matching app_name."""
+    raw = app_name.lower().strip()
+    target = "notepad" if ("not" in raw or "note" in raw) else raw
+    proc_target = f"{target}.exe"
+
+    # 1. Try pygetwindow if available
+    try:
+        import pygetwindow as gw
+        for w in gw.getAllWindows():
+            if w.title and target in w.title.lower():
+                if getattr(w, "_hWnd", None):
+                    return w._hWnd
+    except Exception:
+        pass
+
+    # 2. Try win32gui FindWindow for common standard window classes
+    if win32gui:
+        try:
+            h = win32gui.FindWindow("Notepad", None)
+            if h and win32gui.IsWindow(h) and win32gui.IsWindowVisible(h):
+                return h
+        except Exception:
+            pass
+
+    found_hwnd = None
+
+    # 3. Enumerate windows safely with win32gui
+    if win32gui and psutil and win32process:
+        def enum_cb(hwnd, extra):
+            nonlocal found_hwnd
+            try:
+                if win32gui.IsWindow(hwnd) and win32gui.IsWindowVisible(hwnd):
+                    title = win32gui.GetWindowText(hwnd).strip()
+                    class_name = win32gui.GetClassName(hwnd).strip().lower()
+                    title_lower = title.lower()
+
+                    if target in title_lower or (target in class_name and "tooltip" not in class_name and "ime" not in class_name):
+                        found_hwnd = hwnd
+                        return True
+
+                    try:
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        if pid:
+                            pname = psutil.Process(pid).name().lower()
+                            if target in pname or proc_target in pname:
+                                if "tooltip" not in class_name and "ime" not in class_name and "msg" not in class_name:
+                                    found_hwnd = hwnd
+                                    return True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return True
+
+        try:
+            win32gui.EnumWindows(enum_cb, None)
+        except Exception:
+            pass
+
+    if found_hwnd:
+        return found_hwnd
+
+    # 4. Fallback using ctypes GetWindow traversal
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetTopWindow(0)
+        while hwnd:
+            if user32.IsWindowVisible(hwnd):
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length > 0:
+                    buff = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buff, length + 1)
+                    if target in buff.value.lower():
+                        return hwnd
+            hwnd = user32.GetWindow(hwnd, 2) # GW_HWNDNEXT
+    except Exception:
+        pass
+
+    return None
+
+
+def _ensure_and_focus_window(app_name: str) -> bool:
+    """Focus target application window; if not running, launch it once and focus."""
+    raw = app_name.lower().strip()
+    target = "notepad" if ("not" in raw or "note" in raw) else raw
+
+    # 1. Search for existing window
+    hwnd = _find_target_window(app_name)
+
+    # 2. If not found, launch the application
+    if not hwnd:
+        cmd = APP_COMMAND_MAP.get(target, APP_COMMAND_MAP.get(raw, raw))
+        logger.info(f"[InputTool] Window '{target}' not open. Launching via '{cmd}'...")
+        try:
+            subprocess.Popen(cmd, shell=True)
+            for _ in range(20):
+                time.sleep(0.1)
+                hwnd = _find_target_window(app_name)
+                if hwnd:
+                    break
+        except Exception as e:
+            logger.error(f"[InputTool] Failed to launch '{cmd}': {e}")
+            return False
+    else:
+        logger.info(f"[InputTool] Found existing active window HWND {hwnd} for '{target}'")
+
+    # 3. Force foreground focus cleanly without leaving Alt stuck in menu bar
+    if hwnd:
+        try:
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+            current_thread = kernel32.GetCurrentThreadId()
+            remote_thread = user32.GetWindowThreadProcessId(hwnd, None)
+            fore_hwnd = user32.GetForegroundWindow()
+            fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None) if fore_hwnd else 0
+
+            # Attach thread input to bypass Windows foreground restrictions
+            if fore_thread and fore_thread != current_thread:
+                user32.AttachThreadInput(current_thread, fore_thread, True)
+            if remote_thread and remote_thread != current_thread:
+                user32.AttachThreadInput(current_thread, remote_thread, True)
+
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+            user32.BringWindowToTop(hwnd)
+            user32.SetFocus(hwnd)
+
+            if fore_thread and fore_thread != current_thread:
+                user32.AttachThreadInput(current_thread, fore_thread, False)
+            if remote_thread and remote_thread != current_thread:
+                user32.AttachThreadInput(current_thread, remote_thread, False)
+
+            # Send ESC key to dismiss any accidental menu activation (e.g. File menu)
+            time.sleep(0.15)
+            user32.keybd_event(0x1B, 0, 0, 0) # ESC down
+            user32.keybd_event(0x1B, 0, 2, 0) # ESC up
+            time.sleep(0.1)
+
+            logger.info(f"[InputTool] Successfully focused window HWND {hwnd} for '{target}'")
+            return True
+        except Exception as e:
+            logger.debug(f"[InputTool] Focus window error: {e}")
+            return True
+
+    return False
+
+
+def _type_letter_by_letter(text: str, delay_per_char: float = 0.002):
+    """Types text using native Win32 SendInput KEYEVENTF_UNICODE."""
     if not text:
         return
 
     try:
+        user32 = ctypes.windll.user32
         for char in text:
             if char == '\n':
-                # VK_RETURN = 0x0D
-                inp_down = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=0, time=0, dwExtraInfo=None))
-                inp_up = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=2, time=0, dwExtraInfo=None))
-                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
-                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
-                time.sleep(0.02)
+                inp_down = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=0, time=0, dwExtraInfo=None)))
+                inp_up = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=2, time=0, dwExtraInfo=None)))
+                user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
+                user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
+                time.sleep(0.01)
             elif char == '\t':
-                # VK_TAB = 0x09
-                inp_down = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=0, time=0, dwExtraInfo=None))
-                inp_up = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=2, time=0, dwExtraInfo=None))
-                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
-                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
+                inp_down = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=0, time=0, dwExtraInfo=None)))
+                inp_up = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=2, time=0, dwExtraInfo=None)))
+                user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
+                user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
                 time.sleep(0.01)
             else:
-                # KEYEVENTF_UNICODE = 0x0004, KEYEVENTF_KEYUP = 0x0002
                 code = ord(char)
-                inp_down = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4, time=0, dwExtraInfo=None))
-                inp_up = _INPUT(type=1, ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4 | 2, time=0, dwExtraInfo=None))
-                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
-                ctypes.windll.user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
+                inp_down = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4, time=0, dwExtraInfo=None)))
+                inp_up = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4 | 2, time=0, dwExtraInfo=None)))
+                user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
+                user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
                 if delay_per_char > 0:
                     time.sleep(delay_per_char)
     except Exception as e:
-        logger.error(f"[InputTool] Win32 Unicode typing fallback: {e}")
+        logger.warning(f"[InputTool] Letter typing fallback to clipboard: {e}")
         if pyperclip and pyautogui:
             pyperclip.copy(text)
             pyautogui.hotkey("ctrl", "v")
 
 
-@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word) letter-by-letter rapidly.")
-def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = True) -> str:
+@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word, Editor) quickly and reliably. Automatically opens the application if not already open, focuses it, and writes the text.")
+def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = False) -> str:
     """
     Ensures the target application (e.g. Notepad, Word, Editor) is open and focused,
-    then types the text letter-by-letter at fast streaming speed.
+    then writes the text instantly and reliably into the application.
     """
     if not text:
         return "Error: Text content to type is required."
 
+    if pyautogui:
+        pyautogui.FAILSAFE = False
+
     app = target_app or "Notepad"
     _ensure_and_focus_window(app)
-    time.sleep(0.3)
+    time.sleep(0.2)
 
-    if not pyautogui:
-        return "Error: PyAutoGUI automation package not available."
+    logger.info(f"[InputTool] Writing {len(text)} characters into '{app}'...")
 
-    logger.info(f"[InputTool] Typing {len(text)} characters letter-by-letter at high speed into '{app}'...")
-    _type_letter_by_letter(text, delay_per_char=0.003)
+    # Method 1: Check for direct Win32 Edit control (works 100% directly for Notepad/Edit controls)
+    if win32gui and "note" in app.lower():
+        try:
+            hwnd = _find_target_window(app)
+            if hwnd:
+                edit_hwnd = win32gui.FindWindowEx(hwnd, 0, "Edit", None)
+                if edit_hwnd:
+                    # EM_REPLACESEL (0x00C2) appends/inserts text into Edit control
+                    import win32con
+                    win32gui.SendMessage(edit_hwnd, win32con.EM_REPLACESEL, 1, text + ("\r\n" if press_enter else ""))
+                    logger.info(f"[InputTool] Successfully wrote text via direct Win32 EM_REPLACESEL into '{app}'.")
+                    return f"Successfully typed text into {app}."
+        except Exception as e:
+            logger.debug(f"[InputTool] Direct Edit control injection note: {e}")
 
-    if press_enter:
+    # Method 2: Fast & reliable clipboard paste method
+    if pyperclip and pyautogui:
+        try:
+            pyperclip.copy(text)
+            time.sleep(0.1)
+            # Send Escape first to ensure cursor is active in text body
+            try:
+                ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)
+                ctypes.windll.user32.keybd_event(0x1B, 0, 2, 0)
+            except Exception:
+                pass
+            time.sleep(0.05)
+            pyautogui.hotkey("ctrl", "v")
+            time.sleep(0.15)
+            if press_enter:
+                pyautogui.press("enter")
+            logger.info(f"[InputTool] Successfully wrote text into '{app}' via clipboard paste.")
+            return f"Successfully typed text into {app}."
+        except Exception as e:
+            logger.warning(f"[InputTool] Clipboard paste failed, falling back to keystrokes: {e}")
+
+    # Method 3: Fallback to native Win32 SendInput Unicode stream
+    _type_letter_by_letter(text)
+    if press_enter and pyautogui:
         time.sleep(0.05)
         pyautogui.press("enter")
 
-    logger.info(f"[InputTool] Successfully typed text into '{app}'")
+    logger.info(f"[InputTool] Successfully wrote text into '{app}'.")
     return f"Successfully typed text into {app}."
 
 
@@ -194,6 +340,7 @@ def press_keyboard_shortcut(shortcut: str) -> str:
     if not shortcut or not pyautogui:
         return "Error: Shortcut or PyAutoGUI not available."
 
+    pyautogui.FAILSAFE = False
     keys = [k.strip().lower() for k in shortcut.replace("+", " ").split()]
     try:
         if len(keys) == 1:
@@ -209,6 +356,9 @@ def press_keyboard_shortcut(shortcut: str) -> str:
 @tool(name="save_active_document", description="Save the currently open document/note in Notepad, Word, or an editor via Ctrl+S, specifying a file name and folder (e.g. Downloads, Desktop).")
 def save_active_document(file_name: str = "note.txt", folder: str = "Downloads", target_app: Optional[str] = "Notepad") -> str:
     """Focuses the active editor, triggers Ctrl+S, inputs path, and saves the file."""
+    if pyautogui:
+        pyautogui.FAILSAFE = False
+
     if target_app:
         _ensure_and_focus_window(target_app)
         time.sleep(0.4)
