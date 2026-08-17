@@ -93,6 +93,17 @@ class VisionConfig:
         self.EMAIL_SENDER: Optional[str] = os.getenv("EMAIL_SENDER")
         self.EMAIL_PASSWORD: Optional[str] = os.getenv("EMAIL_PASSWORD")
 
+        # ── Remote Ubuntu Server & KPR Watchdog ──────────────
+        self.UBUNTU_SERVER_HOST: str = os.getenv("UBUNTU_SERVER_HOST", "100.93.70.63")
+        try:
+            self.UBUNTU_SERVER_PORT: int = int(os.getenv("UBUNTU_SERVER_PORT", "22"))
+        except (ValueError, TypeError):
+            self.UBUNTU_SERVER_PORT: int = 22
+        self.UBUNTU_SERVER_USER: str = os.getenv("UBUNTU_SERVER_USER", "nandu")
+        self.UBUNTU_SERVER_PASSWORD: str = os.getenv("UBUNTU_SERVER_PASSWORD", "1234567890")
+        self.KPR_PRINT_SERVER_PATH: str = os.getenv("KPR_PRINT_SERVER_PATH", "/home/nandu/print-server")
+        self.KPR_LOG_PATH: str = os.getenv("KPR_LOG_PATH", "/home/nandu/print-server/kpr_print.log")
+
         # ── Server & Security ────────────────────────────────
         self.HOST: str = os.getenv("HOST", "0.0.0.0")
         try:

@@ -1,1 +1,10 @@
-{}
+{
+  "6177321eac992341": {
+    "query": "Andy?",
+    "response": "I think you meant to say \"Nandu\", bro! Anyway, what's up? Need anything else?",
+    "category": "qa_general",
+    "created_at": 1786950951.5927496,
+    "expires_at": 1786954551.5927496,
+    "hit_count": 0
+  }
+}

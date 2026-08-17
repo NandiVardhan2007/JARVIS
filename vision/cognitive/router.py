@@ -107,8 +107,22 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["start_mock_interview", "evaluate_interview_answer", "end_mock_interview"]
     },
     "multi_agent": {
-        "keywords": ["autonomous goal", "multi-step", "decompose", "swarm", "research and write", "research and save", "research and email", "multi agent", "plan and execute", "plan task", "complex workflow", "execute goal"],
+        "keywords": ["autonomous goal", "multi-step", "decompose", "swarm", "research and write", "research and save", "research and email", "multi agent", "plan and execute", "plan task", "complex workflow", "execute goal", "upgrades", "new upgrades", "new features", "what can you do", "your capabilities", "what are your features"],
         "tools": ["execute_autonomous_multi_agent_goal", "get_autonomous_goal_status"]
+    },
+    "remote_server": {
+        "keywords": [
+            "server", "ubuntu", "ubuntu server", "hyderabad server", "kpr", "parking",
+            "parking logs", "parking print", "kpr print", "server health", "check server",
+            "clear logs", "clear parking logs", "restart kpr", "restart print server",
+            "restart parking", "print server", "ssh", "ssh command", "remote command",
+            "100.93.70.63", "kpr_print.log"
+        ],
+        "tools": [
+            "check_ubuntu_server_health", "check_parking_logs", "clear_parking_logs",
+            "restart_kpr_print_system", "ssh_execute_command", "open_interactive_ssh_terminal",
+            "open_parking_logs_terminal"
+        ]
     }
 }
 

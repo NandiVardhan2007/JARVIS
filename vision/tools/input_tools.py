@@ -270,11 +270,17 @@ def _type_letter_by_letter(text: str, delay_per_char: float = 0.002):
             pyautogui.hotkey("ctrl", "v")
 
 
-@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word, Editor) quickly and reliably. Automatically opens the application if not already open, focuses it, and writes the text.")
-def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = False) -> str:
+@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word, Editor) character-by-character or via fast paste. Automatically opens the application if not already open, focuses it, and types the text.")
+def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = False, typing_mode: str = "type") -> str:
     """
     Ensures the target application (e.g. Notepad, Word, Editor) is open and focused,
-    then writes the text instantly and reliably into the application.
+    then types the text into the application.
+    
+    Args:
+        text: The text content to type.
+        target_app: Target application name (default: 'Notepad').
+        press_enter: Whether to press Enter after typing.
+        typing_mode: 'type' (realistic character-by-character typing) or 'paste' (instant clipboard paste).
     """
     if not text:
         return "Error: Text content to type is required."
@@ -284,53 +290,35 @@ def type_text_into_application(text: str, target_app: Optional[str] = "Notepad",
 
     app = target_app or "Notepad"
     _ensure_and_focus_window(app)
-    time.sleep(0.2)
+    time.sleep(0.3)
 
-    logger.info(f"[InputTool] Writing {len(text)} characters into '{app}'...")
+    logger.info(f"[InputTool] Typing {len(text)} characters into '{app}' (mode: {typing_mode})...")
 
-    # Method 1: Check for direct Win32 Edit control (works 100% directly for Notepad/Edit controls)
-    if win32gui and "note" in app.lower():
-        try:
-            hwnd = _find_target_window(app)
-            if hwnd:
-                edit_hwnd = win32gui.FindWindowEx(hwnd, 0, "Edit", None)
-                if edit_hwnd:
-                    # EM_REPLACESEL (0x00C2) appends/inserts text into Edit control
-                    import win32con
-                    win32gui.SendMessage(edit_hwnd, win32con.EM_REPLACESEL, 1, text + ("\r\n" if press_enter else ""))
-                    logger.info(f"[InputTool] Successfully wrote text via direct Win32 EM_REPLACESEL into '{app}'.")
-                    return f"Successfully typed text into {app}."
-        except Exception as e:
-            logger.debug(f"[InputTool] Direct Edit control injection note: {e}")
-
-    # Method 2: Fast & reliable clipboard paste method
-    if pyperclip and pyautogui:
-        try:
-            pyperclip.copy(text)
-            time.sleep(0.1)
-            # Send Escape first to ensure cursor is active in text body
+    # If explicitly requested 'paste' or text is huge (> 8000 chars)
+    if typing_mode == "paste" or len(text) > 8000:
+        if pyperclip and pyautogui:
             try:
-                ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)
-                ctypes.windll.user32.keybd_event(0x1B, 0, 2, 0)
-            except Exception:
-                pass
-            time.sleep(0.05)
-            pyautogui.hotkey("ctrl", "v")
-            time.sleep(0.15)
-            if press_enter:
-                pyautogui.press("enter")
-            logger.info(f"[InputTool] Successfully wrote text into '{app}' via clipboard paste.")
-            return f"Successfully typed text into {app}."
-        except Exception as e:
-            logger.warning(f"[InputTool] Clipboard paste failed, falling back to keystrokes: {e}")
+                pyperclip.copy(text)
+                time.sleep(0.05)
+                pyautogui.hotkey("ctrl", "v")
+                time.sleep(0.1)
+                if press_enter:
+                    pyautogui.press("enter")
+                logger.info(f"[InputTool] Successfully pasted text into '{app}'.")
+                return f"Successfully typed text into {app}."
+            except Exception as e:
+                logger.warning(f"[InputTool] Paste failed, falling back to keystroke typing: {e}")
 
-    # Method 3: Fallback to native Win32 SendInput Unicode stream
-    _type_letter_by_letter(text)
+    # Standard character-by-character simulated typing
+    # Adaptive delay: fast for longer texts, natural for shorter notes
+    delay = 0.001 if len(text) > 500 else 0.003
+    _type_letter_by_letter(text, delay_per_char=delay)
+    
     if press_enter and pyautogui:
         time.sleep(0.05)
         pyautogui.press("enter")
 
-    logger.info(f"[InputTool] Successfully wrote text into '{app}'.")
+    logger.info(f"[InputTool] Successfully typed {len(text)} characters into '{app}'.")
     return f"Successfully typed text into {app}."
 
 
@@ -353,35 +341,104 @@ def press_keyboard_shortcut(shortcut: str) -> str:
         return f"Failed to press shortcut '{shortcut}': {e}"
 
 
-@tool(name="save_active_document", description="Save the currently open document/note in Notepad, Word, or an editor via Ctrl+S, specifying a file name and folder (e.g. Downloads, Desktop).")
+def _find_save_dialog_hwnd(parent_hwnd: Optional[int] = None) -> Optional[int]:
+    """Search for open Save As / Common File Dialog (#32770)."""
+    dialog_hwnd = None
+    if not win32gui:
+        return None
+
+    def enum_cb(hwnd, extra):
+        nonlocal dialog_hwnd
+        if win32gui.IsWindowVisible(hwnd):
+            cls_name = win32gui.GetClassName(hwnd)
+            win_title = win32gui.GetWindowText(hwnd).lower()
+            if cls_name == "#32770" and ("save" in win_title or "save as" in win_title or "open" in win_title or not win_title):
+                dialog_hwnd = hwnd
+
+    try:
+        win32gui.EnumWindows(enum_cb, None)
+    except Exception:
+        pass
+    return dialog_hwnd
+
+
+@tool(name="save_active_document", description="Save the currently open document/note in Notepad, Word, or an editor, specifying a file name and folder (e.g. Downloads, Desktop).")
 def save_active_document(file_name: str = "note.txt", folder: str = "Downloads", target_app: Optional[str] = "Notepad") -> str:
-    """Focuses the active editor, triggers Ctrl+S, inputs path, and saves the file."""
+    """
+    Saves the document in the target application and guarantees file creation in the destination folder.
+    """
     if pyautogui:
         pyautogui.FAILSAFE = False
 
-    if target_app:
-        _ensure_and_focus_window(target_app)
-        time.sleep(0.4)
+    app = target_app or "Notepad"
+    _ensure_and_focus_window(app)
+    time.sleep(0.3)
 
-    if not pyautogui or not pyperclip:
-        return "Error: PyAutoGUI/Pyperclip not available."
-
-    # Build full destination path
+    # Resolve destination path
     from vision.tools.file_tools import _resolve_user_path
     dest_dir = _resolve_user_path(folder, find_existing_file=False)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    full_path = str(dest_dir / file_name)
+    
+    clean_name = file_name if ("." in file_name) else f"{file_name}.txt"
+    full_path = str(dest_dir / clean_name)
 
-    # 1. Trigger Save shortcut
-    pyautogui.hotkey("ctrl", "s")
-    time.sleep(0.8)
+    # 1. First, extract text from editor via Ctrl+A -> Ctrl+C (or direct Win32) to ensure we have a direct file backup
+    doc_content = ""
+    if pyperclip and pyautogui:
+        try:
+            old_clip = pyperclip.paste()
+            pyautogui.hotkey("ctrl", "a")
+            time.sleep(0.1)
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.1)
+            doc_content = pyperclip.paste()
+            # Deselect / move cursor to end
+            pyautogui.press("right")
+            time.sleep(0.1)
+        except Exception:
+            pass
 
-    # 2. In case a 'Save As' dialog opened, paste destination path and press Enter
-    pyperclip.copy(full_path)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.4)
-    pyautogui.press("enter")
-    time.sleep(0.5)
+    # 2. Trigger Save shortcut (Ctrl+S)
+    if pyautogui:
+        pyautogui.hotkey("ctrl", "s")
+        time.sleep(0.6)
+
+    # 3. Check if Save As dialog (#32770) appeared
+    dialog_hwnd = _find_save_dialog_hwnd()
+    if not dialog_hwnd:
+        # Try Ctrl+Shift+S (explicit Save As in modern Notepad)
+        if pyautogui:
+            pyautogui.hotkey("ctrl", "shift", "s")
+            time.sleep(0.6)
+            dialog_hwnd = _find_save_dialog_hwnd()
+
+    if dialog_hwnd and win32gui:
+        logger.info(f"[InputTool] Detected Save As dialog HWND {dialog_hwnd}. Injecting destination path...")
+        try:
+            user32 = ctypes.windll.user32
+            user32.SetForegroundWindow(dialog_hwnd)
+            time.sleep(0.2)
+            # Type path directly into focused dialog input
+            if pyperclip and pyautogui:
+                pyperclip.copy(full_path)
+                time.sleep(0.05)
+                pyautogui.hotkey("ctrl", "v")
+                time.sleep(0.3)
+                pyautogui.press("enter")
+                time.sleep(0.4)
+        except Exception as e:
+            logger.warning(f"[InputTool] Save As dialog interaction failed: {e}")
+    else:
+        logger.info("[InputTool] Save As dialog not active. Writing document content directly to destination file.")
+
+    # 4. Guarantee document is written to destination file
+    if doc_content:
+        try:
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(doc_content)
+            logger.info(f"[InputTool] Directly wrote {len(doc_content)} chars to '{full_path}'")
+        except Exception as e:
+            logger.warning(f"[InputTool] Direct file save error: {e}")
 
     logger.info(f"[InputTool] Saved active document as '{full_path}'")
     return f"Successfully saved active document to '{full_path}'."

@@ -160,7 +160,7 @@ class VisionEngine:
                 messages=updated_messages,
                 tools=None,
                 temperature=0.6,
-                max_tokens=150
+                max_tokens=800
             )
 
         final_text = response.get("content", "")
