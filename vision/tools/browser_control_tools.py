@@ -1,13 +1,16 @@
 """
-Playwright-based Interactive Web Browser Control for VISION AI OS.
-Provides autonomous browser automation (navigation, element clicking, form filling,
-text extraction, DOM element inspection, and screenshot capture) in a visible browser window.
+Antigravity-Grade Autonomous Web Browser Agent & Control System for VISION AI OS.
+Provides full interactive control (clicking by index/selector, form filling, typing,
+hovering, dropdown selection, multi-tab handling, DOM accessibility tree scanning,
+visual screenshot capture, and autonomous goal-driven subagent execution) with a visible browser window.
 """
 
 import os
+import json
 import asyncio
+import re
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from vision.tools.registry import tool
 from vision.logger import logger
 
@@ -15,17 +18,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 
 try:
-    from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext, Page
+    from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext, Page, Dialog
 except ImportError:
     async_playwright = None
     Playwright = None
     Browser = None
     BrowserContext = None
     Page = None
+    Dialog = None
 
 
 class BrowserController:
-    """Singleton controller managing the live Playwright browser session."""
+    """Singleton controller managing the live Playwright browser session with Antigravity-grade features."""
     _instance: Optional["BrowserController"] = None
 
     def __init__(self):
@@ -33,6 +37,8 @@ class BrowserController:
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
+        self._pages: List[Page] = []
+        self._element_cache: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self._screenshots_dir = DATA_DIR / "screenshots"
         self._screenshots_dir.mkdir(parents=True, exist_ok=True)
@@ -43,13 +49,28 @@ class BrowserController:
             cls._instance = BrowserController()
         return cls._instance
 
+    async def _on_dialog(self, dialog: Dialog):
+        """Auto-accept JavaScript alert/confirm/prompt dialogs to prevent browser hangs."""
+        try:
+            logger.info(f"[BrowserController] Auto-accepting dialog: '{dialog.message}' (type={dialog.type})")
+            await dialog.accept()
+        except Exception as e:
+            logger.warning(f"[BrowserController] Dialog handling note: {e}")
+
+    def _on_new_page(self, page: Page):
+        """Track newly opened tabs/popups."""
+        logger.info(f"[BrowserController] New browser tab detected.")
+        if page not in self._pages:
+            self._pages.append(page)
+        self._page = page
+
     async def ensure_page(self, headless: bool = False) -> Page:
-        """Ensure an active Playwright browser page is running and return it."""
+        """Ensure an active Playwright browser page is running and return it with stealth settings."""
         if async_playwright is None:
-            raise RuntimeError("Playwright is not installed. Please install with 'pip install playwright' and 'playwright install chromium'.")
+            raise RuntimeError("Playwright is not installed. Please run 'pip install playwright' and 'playwright install chromium'.")
 
         async with self._lock:
-            # Check if page is alive and not closed
+            # Check if active page is still alive
             if self._page is not None and not self._page.is_closed() and self._browser is not None and self._browser.is_connected():
                 return self._page
 
@@ -62,26 +83,67 @@ class BrowserController:
                 args=[
                     "--start-maximized",
                     "--disable-blink-features=AutomationControlled",
-                    "--no-default-browser-check"
+                    "--no-default-browser-check",
+                    "--disable-infobars",
+                    "--no-sandbox"
                 ]
             )
 
             self._context = await self._browser.new_context(
                 viewport=None,  # Match window size
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                locale="en-US",
+                timezone_id="Asia/Kolkata",
+                permissions=["geolocation", "notifications"]
             )
 
+            # Apply stealth scripts to evade bot detection
+            await self._context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            """)
+
+            # Attach multi-tab tracker
+            self._context.on("page", self._on_new_page)
+
             self._page = await self._context.new_page()
+            self._page.on("dialog", lambda d: asyncio.create_task(self._on_dialog(d)))
             self._page.set_default_timeout(15000)
+            self._pages = [self._page]
             return self._page
 
     async def get_current_page(self) -> Optional[Page]:
         if self._page is not None and not self._page.is_closed():
             return self._page
+        # Fallback to any remaining active tab
+        for p in self._pages:
+            if not p.is_closed():
+                self._page = p
+                return self._page
         return None
 
+    def store_element_cache(self, elements: List[Dict[str, Any]]):
+        """Store numbered element cache for index-based targeting."""
+        self._element_cache.clear()
+        for el in elements:
+            idx = str(el.get("index", ""))
+            if idx:
+                self._element_cache[idx] = el
+
+    def resolve_target(self, target: str) -> str:
+        """Resolve numeric element index (e.g. '1', '2') or raw selector into valid selector."""
+        target_str = str(target).strip()
+        if target_str in self._element_cache:
+            resolved = self._element_cache[target_str].get("selector")
+            if resolved:
+                logger.debug(f"[BrowserController] Resolved index [{target_str}] -> '{resolved}'")
+                return resolved
+        return target_str
+
     async def close(self) -> str:
-        """Close active browser session and cleanup resources."""
+        """Close active browser session and release resources."""
         async with self._lock:
             try:
                 if self._context:
@@ -94,9 +156,11 @@ class BrowserController:
                 logger.warning(f"[BrowserController] Cleanup note: {e}")
             finally:
                 self._page = None
+                self._pages.clear()
                 self._context = None
                 self._browser = None
                 self._pw = None
+                self._element_cache.clear()
             logger.info("[BrowserController] Browser session closed.")
             return "Browser closed successfully."
 
@@ -113,7 +177,7 @@ async def browser_open(url: str = "https://www.google.com") -> str:
 
         page = await controller.ensure_page(headless=False)
         logger.info(f"[BrowserControl] Navigating to '{url}'...")
-        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
         title = await page.title()
         return f"Browser opened successfully to '{url}'. Page Title: '{title}'."
     except Exception as e:
@@ -130,7 +194,7 @@ async def browser_navigate(url: str) -> str:
 
         page = await controller.ensure_page(headless=False)
         logger.info(f"[BrowserControl] Navigating active tab to '{url}'...")
-        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
         title = await page.title()
         return f"Navigated to '{url}'. Page Title: '{title}'."
     except Exception as e:
@@ -138,37 +202,38 @@ async def browser_navigate(url: str) -> str:
         return f"Error navigating to '{url}': {e}"
 
 
-@tool(name="browser_click", description="Click on an element in the active web browser page using a CSS selector, button/link text (e.g. text='Sign in'), or role.")
-async def browser_click(selector: str) -> str:
-    """Click on a webpage element matching the selector or text."""
+@tool(name="browser_click", description="Click on an element using its index number (e.g. '1', '2' from interactive elements list), CSS selector, or button text.")
+async def browser_click(target: str) -> str:
+    """Click on a webpage element matching the index, selector, or text."""
     try:
         page = await controller.get_current_page()
         if not page:
             return "Error: No active browser window is open. Use 'browser_open' first."
 
-        logger.info(f"[BrowserControl] Clicking element: '{selector}'")
+        selector = controller.resolve_target(target)
+        logger.info(f"[BrowserControl] Clicking element: target='{target}', resolved='{selector}'")
         
-        # Try direct selector / text matching
         loc = page.locator(selector).first
         await loc.wait_for(state="visible", timeout=8000)
         await loc.click()
-        await page.wait_for_timeout(1000)  # Brief settle time
+        await page.wait_for_timeout(1000)
         title = await page.title()
-        return f"Successfully clicked on '{selector}'. Current Page Title: '{title}', URL: {page.url}"
+        return f"Successfully clicked on '{target}' (`{selector}`). Current Page Title: '{title}', URL: {page.url}"
     except Exception as e:
         logger.error(f"[BrowserControl] browser_click failed: {e}")
-        return f"Error clicking element '{selector}': {e}. Try inspecting interactive elements using 'browser_get_interactive_elements'."
+        return f"Error clicking element '{target}': {e}. Try inspecting interactive elements using 'browser_get_interactive_elements'."
 
 
-@tool(name="browser_type", description="Type text into an input field, search box, or textarea on the active web page.")
-async def browser_type(selector: str, text: str, press_enter: bool = False, clear_first: bool = True) -> str:
+@tool(name="browser_type", description="Type text into an input field, search box, or textarea using its index number (e.g. '1', '2') or CSS selector.")
+async def browser_type(target: str, text: str, press_enter: bool = False, clear_first: bool = True) -> str:
     """Fill or type text into a designated element."""
     try:
         page = await controller.get_current_page()
         if not page:
             return "Error: No active browser window is open. Use 'browser_open' first."
 
-        logger.info(f"[BrowserControl] Typing into '{selector}': '{text}' (press_enter={press_enter})")
+        selector = controller.resolve_target(target)
+        logger.info(f"[BrowserControl] Typing into target='{target}' ('{selector}'): '{text}' (press_enter={press_enter})")
         loc = page.locator(selector).first
         await loc.wait_for(state="visible", timeout=8000)
         
@@ -176,16 +241,57 @@ async def browser_type(selector: str, text: str, press_enter: bool = False, clea
             await loc.fill("")
             await loc.fill(text)
         else:
-            await loc.type(text, delay=50)
+            await loc.type(text, delay=40)
 
         if press_enter:
             await page.keyboard.press("Enter")
             await page.wait_for_timeout(1500)
 
-        return f"Successfully typed '{text}' into '{selector}'." + (" (Pressed Enter)" if press_enter else "")
+        return f"Successfully typed '{text}' into '{target}' (`{selector}`)." + (" (Pressed Enter)" if press_enter else "")
     except Exception as e:
         logger.error(f"[BrowserControl] browser_type failed: {e}")
-        return f"Error typing into '{selector}': {e}"
+        return f"Error typing into '{target}': {e}"
+
+
+@tool(name="browser_hover", description="Hover mouse over an element by index number or selector to trigger dropdown menus or tooltips.")
+async def browser_hover(target: str) -> str:
+    """Hover over an element."""
+    try:
+        page = await controller.get_current_page()
+        if not page:
+            return "Error: No active browser window is open."
+
+        selector = controller.resolve_target(target)
+        loc = page.locator(selector).first
+        await loc.wait_for(state="visible", timeout=8000)
+        await loc.hover()
+        await page.wait_for_timeout(500)
+        return f"Hovered over '{target}' (`{selector}`)."
+    except Exception as e:
+        return f"Error hovering over '{target}': {e}"
+
+
+@tool(name="browser_select_option", description="Select an option from a <select> dropdown by index number/selector and the option value or label text.")
+async def browser_select_option(target: str, value_or_label: str) -> str:
+    """Select dropdown option."""
+    try:
+        page = await controller.get_current_page()
+        if not page:
+            return "Error: No active browser window is open."
+
+        selector = controller.resolve_target(target)
+        loc = page.locator(selector).first
+        await loc.wait_for(state="visible", timeout=8000)
+        await loc.select_option(label=value_or_label)
+        return f"Selected option '{value_or_label}' in '{target}'."
+    except Exception as e:
+        # Fallback to value
+        try:
+            loc = page.locator(controller.resolve_target(target)).first
+            await loc.select_option(value=value_or_label)
+            return f"Selected option value '{value_or_label}' in '{target}'."
+        except Exception as e2:
+            return f"Error selecting option '{value_or_label}' in '{target}': {e2}"
 
 
 @tool(name="browser_press_key", description="Press a keyboard key (e.g. Enter, Tab, Escape, ArrowDown, ArrowUp, Space, Backspace) on the active page.")
@@ -260,9 +366,9 @@ async def browser_get_page_content(max_chars: int = 4000) -> str:
         return f"Error extracting page text: {e}"
 
 
-@tool(name="browser_get_interactive_elements", description="Scan the active page and list clickable buttons, inputs, links, and forms with their CSS selectors and labels.")
+@tool(name="browser_get_interactive_elements", description="Scan the active page and list clickable buttons, inputs, links, and forms with assigned [index] numbers for instant targeting.")
 async def browser_get_interactive_elements() -> str:
-    """Inspect and return interactive elements from the current page."""
+    """Inspect and return interactive elements from the current page with index numbers."""
     try:
         page = await controller.get_current_page()
         if not page:
@@ -270,7 +376,7 @@ async def browser_get_interactive_elements() -> str:
 
         elements_data = await page.evaluate("""() => {
             const results = [];
-            const interactive = document.querySelectorAll('button, a, input, textarea, select, [role="button"], [role="link"], [role="textbox"]');
+            const interactive = document.querySelectorAll('button, a, input, textarea, select, [role="button"], [role="link"], [role="textbox"], [role="combobox"]');
             let idx = 1;
             for (const el of interactive) {
                 if (idx > 40) break; // limit to top 40 interactive elements
@@ -313,9 +419,13 @@ async def browser_get_interactive_elements() -> str:
         if not elements_data:
             return "No interactive elements found on the current page."
 
-        output_lines = [f"Interactive Elements on '{page.url}':\n"]
+        # Cache elements for index resolution
+        controller.store_element_cache(elements_data)
+
+        output_lines = [f"Interactive Elements on '{page.url}' (You can target elements by [index] e.g. browser_click('1') or browser_type('2', 'text')):\n"]
         for el in elements_data:
-            line = f"[{el['index']}] <{el['tag']}> {('Text: ' + el['text']) if el['text'] else ''} | Selector: `{el['selector']}`"
+            type_str = f"({el['type']})" if el['type'] else ""
+            line = f"[{el['index']}] <{el['tag']}{type_str}> {('Label/Text: ' + el['text']) if el['text'] else ''} | Selector: `{el['selector']}`"
             output_lines.append(line)
 
         return "\n".join(output_lines)
@@ -348,41 +458,6 @@ async def browser_take_screenshot(filename: Optional[str] = None) -> str:
         return f"Error taking screenshot: {e}"
 
 
-@tool(name="browser_back", description="Go back to the previous page in browser history.")
-async def browser_back() -> str:
-    """Navigate backwards in history."""
-    try:
-        page = await controller.get_current_page()
-        if not page:
-            return "Error: No active browser window is open."
-        await page.go_back()
-        return f"Navigated back. Current URL: {page.url}"
-    except Exception as e:
-        return f"Error navigating back: {e}"
-
-
-@tool(name="browser_forward", description="Go forward in browser history.")
-async def browser_forward() -> str:
-    """Navigate forward in history."""
-    try:
-        page = await controller.get_current_page()
-        if not page:
-            return "Error: No active browser window is open."
-        await page.go_forward()
-        return f"Navigated forward. Current URL: {page.url}"
-    except Exception as e:
-        return f"Error navigating forward: {e}"
-
-
-@tool(name="browser_close", description="Close the visible web browser window and release resources.")
-async def browser_close() -> str:
-    """Close active browser session."""
-    try:
-        return await controller.close()
-    except Exception as e:
-        return f"Error closing browser: {e}"
-
-
 @tool(name="browser_fill_form_and_login", description="Automatically detect username/email and password fields on a webpage, fill in credentials, and click the Login/Sign-In button.")
 async def browser_fill_form_and_login(
     username_or_email: str,
@@ -397,7 +472,7 @@ async def browser_fill_form_and_login(
             if not url.startswith("http://") and not url.startswith("https://"):
                 url = "https://" + url
             logger.info(f"[BrowserControl] Navigating to login URL: '{url}'...")
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
             await page.wait_for_timeout(1000)
 
         # 1. Locate Username / Email input field
@@ -414,6 +489,7 @@ async def browser_fill_form_and_login(
             'input[placeholder*="user" i]',
             'input[placeholder*="email" i]',
             'input[placeholder*="phone" i]',
+            'input[placeholder*="roll" i]',
             'input[type="text"]'
         ]
 
@@ -486,15 +562,187 @@ async def browser_fill_form_and_login(
         if submit_btn:
             await submit_btn.click()
         elif pass_input:
-            # Fallback: Press Enter in the password field
             await pass_input.press("Enter")
         else:
             await user_input.press("Enter")
 
-        # Wait for page transition / network settle
         await page.wait_for_timeout(3000)
         new_title = await page.title()
         return f"Login credentials submitted for '{username_or_email}'.\nNew Page Title: '{new_title}'\nActive URL: {page.url}"
     except Exception as e:
         logger.error(f"[BrowserControl] browser_fill_form_and_login failed: {e}")
         return f"Error during automated login: {e}"
+
+
+@tool(name="browser_list_tabs", description="List all open browser tabs/pages with their titles and URLs.")
+async def browser_list_tabs() -> str:
+    """List open tabs."""
+    try:
+        if not controller._pages:
+            return "No open browser tabs."
+        output = ["Open Browser Tabs:"]
+        for idx, p in enumerate(controller._pages, 1):
+            if not p.is_closed():
+                title = await p.title()
+                output.append(f"[{idx}] {title} | {p.url}" + (" (Active)" if p == controller._page else ""))
+        return "\n".join(output)
+    except Exception as e:
+        return f"Error listing tabs: {e}"
+
+
+@tool(name="browser_switch_tab", description="Switch the active focus to a specific open tab by tab index (1, 2, ...).")
+async def browser_switch_tab(tab_index: int) -> str:
+    """Switch active tab."""
+    try:
+        active_pages = [p for p in controller._pages if not p.is_closed()]
+        if 1 <= tab_index <= len(active_pages):
+            controller._page = active_pages[tab_index - 1]
+            await controller._page.bring_to_front()
+            title = await controller._page.title()
+            return f"Switched to Tab [{tab_index}]: '{title}' ({controller._page.url})"
+        return f"Error: Tab index {tab_index} out of range (1 to {len(active_pages)})."
+    except Exception as e:
+        return f"Error switching tab: {e}"
+
+
+@tool(name="browser_back", description="Go back to the previous page in browser history.")
+async def browser_back() -> str:
+    """Navigate backwards in history."""
+    try:
+        page = await controller.get_current_page()
+        if not page:
+            return "Error: No active browser window is open."
+        await page.go_back()
+        return f"Navigated back. Current URL: {page.url}"
+    except Exception as e:
+        return f"Error navigating back: {e}"
+
+
+@tool(name="browser_forward", description="Go forward in browser history.")
+async def browser_forward() -> str:
+    """Navigate forward in history."""
+    try:
+        page = await controller.get_current_page()
+        if not page:
+            return "Error: No active browser window is open."
+        await page.go_forward()
+        return f"Navigated forward. Current URL: {page.url}"
+    except Exception as e:
+        return f"Error navigating forward: {e}"
+
+
+@tool(name="browser_close", description="Close the visible web browser window and release resources.")
+async def browser_close() -> str:
+    """Close active browser session."""
+    try:
+        return await controller.close()
+    except Exception as e:
+        return f"Error closing browser: {e}"
+
+
+@tool(name="browser_autonomous_task", description="Execute an autonomous, multi-step web browsing task end-to-end (like Antigravity's browser agent) given a user goal.")
+async def browser_autonomous_task(goal: str, start_url: Optional[str] = None, max_steps: int = 6) -> str:
+    """Autonomous goal-driven browser subagent loop."""
+    from vision.cognitive.load_balancer import load_balancer
+    
+    logger.info(f"[BrowserAgent] Starting autonomous browser task: '{goal}' (start_url={start_url})")
+    
+    # 1. Initialize start page
+    if start_url:
+        await browser_open(start_url)
+    else:
+        page = await controller.get_current_page()
+        if not page:
+            await browser_open("https://www.google.com")
+
+    history: List[str] = []
+    
+    for step in range(1, max_steps + 1):
+        page = await controller.get_current_page()
+        if not page:
+            break
+
+        current_url = page.url
+        page_title = await page.title()
+        interactive_elements_text = await browser_get_interactive_elements()
+        content_sample = await browser_get_page_content(max_chars=1200)
+
+        prompt = f"""You are an Antigravity Autonomous Web Browser SubAgent.
+Goal: {goal}
+Current Step: {step}/{max_steps}
+Active Page: "{page_title}" ({current_url})
+
+Interactive Elements on Page:
+{interactive_elements_text}
+
+Visible Content:
+{content_sample}
+
+Previous Actions Taken:
+{chr(10).join(history) if history else 'None'}
+
+Decide the next single action to take to achieve the user's goal.
+Respond ONLY with a JSON object in this exact schema:
+{{
+    "thought": "Reasoning for the next step",
+    "action": "click" | "type" | "press_key" | "scroll" | "navigate" | "done",
+    "target": "Element index number like '1' or selector or URL (if navigate)",
+    "text": "Text to type (if action is 'type')",
+    "press_enter": true | false,
+    "final_answer": "Final summary if action is 'done'"
+}}
+"""
+        try:
+            llm_resp = await load_balancer.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1
+            )
+            raw_content = llm_resp.get("content", "").strip()
+            
+            # Extract JSON block
+            json_match = re.search(r"\{.*\}", raw_content, re.DOTALL)
+            if not json_match:
+                history.append(f"Step {step}: Failed to parse JSON response.")
+                continue
+
+            action_data = json.loads(json_match.group(0))
+            action = action_data.get("action", "").lower()
+            thought = action_data.get("thought", "")
+            target = str(action_data.get("target", ""))
+            text = action_data.get("text", "")
+            press_enter = action_data.get("press_enter", False)
+            final_answer = action_data.get("final_answer", "")
+
+            logger.info(f"[BrowserAgent] Step {step}: Action={action}, Target={target}, Thought={thought}")
+            history.append(f"Step {step}: {action} (Target: {target}) -> {thought}")
+
+            if action == "done":
+                return f"Task Completed Successfully!\n\nGoal: {goal}\n\nResult:\n{final_answer or content_sample}"
+
+            elif action == "click":
+                await browser_click(target)
+                await asyncio.sleep(2)
+
+            elif action == "type":
+                await browser_type(target, text, press_enter=press_enter)
+                await asyncio.sleep(2)
+
+            elif action == "navigate":
+                await browser_navigate(target)
+                await asyncio.sleep(2)
+
+            elif action == "scroll":
+                await browser_scroll("down", 600)
+                await asyncio.sleep(1)
+
+            elif action == "press_key":
+                await browser_press_key(target or "Enter")
+                await asyncio.sleep(2)
+
+        except Exception as e:
+            logger.error(f"[BrowserAgent] Step {step} error: {e}")
+            history.append(f"Step {step} Error: {e}")
+
+    # Fallback return after max steps
+    final_content = await browser_get_page_content(max_chars=2000)
+    return f"Autonomous browsing session finished ({max_steps} steps executed).\n\nGoal: {goal}\n\nAction History:\n" + "\n".join(history) + f"\n\nLatest Page Content:\n{final_content}"

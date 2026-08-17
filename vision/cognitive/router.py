@@ -77,12 +77,15 @@ DOMAIN_KEYWORD_MAP = {
             "web page", "click", "click on", "fill form", "type on", "type in", "press enter",
             "scroll", "scroll down", "scroll up", "interactive elements", "inspect page",
             "browser screenshot", "page screenshot", "web browser", "browse", "navigate to",
-            "close browser", "back", "forward", "webpage content"
+            "close browser", "back", "forward", "webpage content", "hover", "select dropdown",
+            "browser tabs", "switch tab", "browser task", "autonomous browse", "web agent"
         ],
         "tools": [
-            "browser_fill_form_and_login", "browser_open", "browser_navigate", "browser_click",
-            "browser_type", "browser_press_key", "browser_scroll", "browser_get_page_content",
-            "browser_get_interactive_elements", "browser_take_screenshot",
+            "browser_autonomous_task", "browser_fill_form_and_login", "browser_open",
+            "browser_navigate", "browser_click", "browser_type", "browser_hover",
+            "browser_select_option", "browser_press_key", "browser_scroll",
+            "browser_get_page_content", "browser_get_interactive_elements",
+            "browser_take_screenshot", "browser_list_tabs", "browser_switch_tab",
             "browser_back", "browser_forward", "browser_close",
             "open_website", "search_youtube_videos", "search_google_web", "download_file_from_url"
         ]
