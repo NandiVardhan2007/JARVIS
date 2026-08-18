@@ -6,5 +6,29 @@
     "created_at": 1787015552.4447215,
     "expires_at": 1787019152.4447215,
     "hit_count": 0
+  },
+  "8f434346648f6b96": {
+    "query": "hi",
+    "response": "Hey Nandu! What\u2019s up, bro? Ready to tackle anything today or just chilling? \ud83d\ude04",
+    "category": "qa_general",
+    "created_at": 1787015728.8842866,
+    "expires_at": 1787019328.8842866,
+    "hit_count": 0
+  },
+  "6b27e662e139ea8c": {
+    "query": "Now Vision, what do you know about my family?",
+    "response": "Hey bro, here\u2019s the low\u2011down on the awesome crew you\u2019ve told me about:\n\n**Parents & Siblings**  \n- **Dad:**\u202fKovvuri\u202fVijaya\u202fBhaskara\u202fReddy \u2013 you lost him on August\u202f1st, 2026.  \n- **Mom:**\u202fKovvuri\u202fDhana\u202fLakshmi \u2013 a hardworking, dedicated lady.  \n- **Big sis:**\u202f**Nandini** (aka \u201cPandi\u201d) \u2013 born\u202fDecember\u202f4\u202f2002. She\u2019s your elder sister and the daughter of Peddananna (Palla\u202fReddy) and Peddamma (Nagamani).  \n\n**Extended fam**  \n- **Peddananna (Palla\u202fReddy)** \u2013 your dad\u2019s elder brother (the \u201cbig father\u201d). He\u2019s got two numbers:\u202f964\u2011001\u20119275 (primary/WhatsApp) and\u202f888\u2011551\u20119275.  \n- **Peddamma (Nagamani)** \u2013 your mother\u2019s elder sister (the \u201cbig mother\u201d/maternal aunt).  \n\n**Contact quick\u2011list**  \n- **Nandini (sister):**\u202fWhatsApp\u202f910\u2011021\u20119275  \n- **Peddananna (uncle):**\u202f964\u2011001\u20119275 /\u202f888\u2011551\u20119275  \n- **Mom (Amma):**\u202f950\u2011586\u20114289  \n- **Your primary mobile:**\u202f733\u2011741\u20119275  \n- **Primary email:**\u202fkovvurinandivardhanreddy2007@gmail.com  \n- **Secondary email:**\u202fkovvurinandivardhanreddy7@gmail.com  \n\nAnything else you want to pull up or a quick message to send to any of them? Just say the word, bro!",
+    "category": "qa_general",
+    "created_at": 1787015782.2411227,
+    "expires_at": 1787019382.2411227,
+    "hit_count": 0
+  },
+  "766bcb3704174c9f": {
+    "query": "I sent a message to Amma that I am very hungry, I want to eat something.",
+    "response": "Got it, Nandu! Hope Amma gets back soon with something tasty. \ud83c\udf72\n\nWhat are you craving right now? Anything specific you\u2019ve got in mind\u2014maybe some biryani, a quick sandwich, or a hearty bowl of ramen? If you need help ordering or figuring out a spot nearby, just holler and I\u2019ll sort it out for you, bro!",
+    "category": "qa_general",
+    "created_at": 1787015954.2742584,
+    "expires_at": 1787019554.2742584,
+    "hit_count": 0
   }
 }

@@ -21,7 +21,7 @@ CACHE_BYPASS_PATTERNS = [
     r"\b(?:open|launch|start|run|kill|close|terminate)\b",
     r"\b(?:move|copy|delete|rename|create folder|organize)\b",
     r"\b(?:print|send email|unlock phone|tap)\b",
-    r"\b(?:remember|forget)\b",
+    r"\b(?:remember|forget|memory|memories|family|sister|father|mother|peddananna|peddamma|friend|friends|who is|about me|know about me|my details|profile)\b",
 ]
 
 
