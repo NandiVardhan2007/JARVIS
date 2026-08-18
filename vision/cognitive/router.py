@@ -27,8 +27,16 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["type_text_into_application", "press_keyboard_shortcut", "save_active_document", "create_or_write_file", "open_application"]
     },
     "whatsapp": {
-        "keywords": ["whatsapp", "message", "msg", "chat", "send to", "text to", "contact"],
-        "tools": ["send_whatsapp_message", "save_whatsapp_contact_alias"]
+        "keywords": [
+            "whatsapp", "message", "msg", "chat", "send to", "text to", "contact",
+            "send whatsapp", "draft message", "confirm send", "confirm message",
+            "whatsapp templates", "send text"
+        ],
+        "tools": [
+            "prepare_whatsapp_message", "confirm_and_send_whatsapp_draft",
+            "get_pending_whatsapp_draft", "send_whatsapp_message",
+            "get_quick_whatsapp_templates", "save_whatsapp_contact_alias"
+        ]
     },
     "printer": {
         "keywords": ["print", "printer", "paper", "a4", "margin", "border", "copy", "copies", "pdf"],

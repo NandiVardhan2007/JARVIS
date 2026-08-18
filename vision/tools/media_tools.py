@@ -64,22 +64,47 @@ def _open_url_in_comet_or_browser(url: str) -> bool:
     return False
 
 
+def _extract_top_youtube_video_id(query: str) -> Optional[str]:
+    """Scrape YouTube search results HTML to extract the top video ID for direct autoplay."""
+    try:
+        import urllib.request
+        encoded = urllib.parse.quote(query)
+        search_url = f"https://www.youtube.com/results?search_query={encoded}"
+        req = urllib.request.Request(search_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+            vids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+            if vids:
+                return vids[0]
+    except Exception as e:
+        logger.debug(f"[MediaTools] Top YouTube video extraction note: {e}")
+    return None
+
+
 @tool(
     name="play_youtube_video",
-    description="Search and play a video, song, music track, or tutorial on YouTube using the Comet Browser. Can automatically play the top result and toggle full-screen."
+    description="Search and play a video, song, music track, or tutorial on YouTube using the Comet Browser. Automatically resolves top video and launches direct autoplay playback."
 )
 def play_youtube_video(query: str, fullscreen: bool = False) -> str:
     """
-    Searches YouTube and launches playback in Comet Browser.
+    Searches YouTube and launches playback directly in Comet Browser.
     """
     if not query or not query.strip():
         return "Error: Please specify what song, video, or topic to play on YouTube."
 
     clean_query = query.strip()
-    encoded = urllib.parse.quote(clean_query)
-    search_url = f"https://www.youtube.com/results?search_query={encoded}"
+    if clean_query.lower() in ("youtube", "open youtube", "home", "homepage"):
+        play_url = "https://www.youtube.com"
+    else:
+        top_vid = _extract_top_youtube_video_id(clean_query)
+        if top_vid:
+            play_url = f"https://www.youtube.com/watch?v={top_vid}&autoplay=1"
+            logger.info(f"[MediaTools] Found top video ID '{top_vid}' -> playing '{play_url}' directly in Comet Browser.")
+        else:
+            encoded = urllib.parse.quote(clean_query)
+            play_url = f"https://www.youtube.com/results?search_query={encoded}"
 
-    _open_url_in_comet_or_browser(search_url)
+    _open_url_in_comet_or_browser(play_url)
 
     # If full screen is requested immediately upon playback
     if fullscreen and pyautogui:

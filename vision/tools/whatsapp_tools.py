@@ -1,14 +1,14 @@
 """
 WhatsApp & Instant Messaging Automation Tools for VISION AI OS.
-Supports opening WhatsApp, automatic contact & phone resolution from MAG memory,
-direct phone number URI dispatching, and fallback search automation.
+Supports interactive voice message drafting with confirmation, automatic contact & phone resolution
+from MAG memory, quick reply templates, direct phone URI dispatching, and fallback search automation.
 """
 
 import time
 import urllib.parse
 import webbrowser
 import re
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from vision.tools.registry import tool
 from vision.memory.mag_engine import mag_engine
 from vision.logger import logger
@@ -24,6 +24,20 @@ except ImportError:
     pyautogui = None
     pyperclip = None
     gw = None
+
+
+# In-memory storage for pending unconfirmed WhatsApp message drafts
+_PENDING_WHATSAPP_DRAFT: Optional[Dict[str, str]] = None
+
+
+QUICK_WHATSAPP_TEMPLATES = {
+    "leaving_college": "I am starting from college now, will reach home in a bit.",
+    "in_class": "I am in class right now, will call you back as soon as it's over.",
+    "dsa_training": "Currently in THUB Placement / DSA training session, will get back to you shortly.",
+    "reaching_soon": "On the way, reaching in about 15-20 minutes.",
+    "need_notes": "Hey, could you please share today's class notes / assignment details?",
+    "running_late": "Running slightly late due to traffic, will reach soon.",
+}
 
 
 def _focus_whatsapp_window() -> bool:
@@ -59,7 +73,7 @@ def _resolve_contact_from_memory(target: str) -> str:
         logger.info(f"[WhatsAppTool] Resolved '{clean_target}' to phone number '{phone_num}' from MAG memory.")
         return phone_num
 
-    # 2. Check for contact alias in memory (e.g. "WhatsApp contact for Bro is Brother (College)")
+    # 2. Check for contact alias in memory
     try:
         alias_mems = mag_engine.search_memories(f"whatsapp contact {clean_target}", limit=3)
         for m in alias_mems:
@@ -75,7 +89,85 @@ def _resolve_contact_from_memory(target: str) -> str:
     return clean_target
 
 
-@tool(name="send_whatsapp_message", description="Send a WhatsApp message by contact name (auto-resolved from memory) or direct phone number.")
+@tool(
+    name="prepare_whatsapp_message",
+    description="Draft and preview a WhatsApp message to a contact (Amma, Sister, Friends) with voice confirmation before sending."
+)
+def prepare_whatsapp_message(contact_or_number: str, message: str, require_confirmation: bool = True) -> str:
+    """
+    Drafts a WhatsApp message and presents a clear confirmation prompt before sending.
+    """
+    global _PENDING_WHATSAPP_DRAFT
+    if not contact_or_number or not message:
+        return "Error: Contact name/number and message text are required."
+
+    raw_contact = contact_or_number.strip()
+    msg = message.strip()
+
+    # Check if user requested a template key (e.g. template="leaving_college")
+    if msg.lower() in QUICK_WHATSAPP_TEMPLATES:
+        msg = QUICK_WHATSAPP_TEMPLATES[msg.lower()]
+
+    resolved = _resolve_contact_from_memory(raw_contact)
+    is_num = bool(re.search(r"\d{8,}", resolved))
+
+    _PENDING_WHATSAPP_DRAFT = {
+        "contact": raw_contact,
+        "resolved_target": resolved,
+        "is_phone_number": is_num,
+        "message": msg,
+        "timestamp": time.time()
+    }
+
+    logger.info(f"[WhatsAppTool] Prepared pending draft for '{raw_contact}' ({resolved}): '{msg}'")
+
+    if not require_confirmation:
+        return send_whatsapp_message(contact_or_number=raw_contact, message=msg)
+
+    target_display = f"{raw_contact} ({resolved})" if is_num and raw_contact != resolved else raw_contact
+    return (
+        f"📝 WhatsApp Message Draft for {target_display}:\n"
+        f"💬 \"{msg}\"\n\n"
+        f"👉 Shall I send this message now, Nandu? (Say 'Yes, send it' or 'Confirm' to dispatch)."
+    )
+
+
+@tool(
+    name="confirm_and_send_whatsapp_draft",
+    description="Confirm and immediately send the currently pending WhatsApp message draft."
+)
+def confirm_and_send_whatsapp_draft() -> str:
+    """Dispatches the pending WhatsApp draft."""
+    global _PENDING_WHATSAPP_DRAFT
+    if not _PENDING_WHATSAPP_DRAFT:
+        return "There is no pending WhatsApp message draft to send. Please specify a message first."
+
+    draft = _PENDING_WHATSAPP_DRAFT
+    _PENDING_WHATSAPP_DRAFT = None
+
+    return send_whatsapp_message(
+        contact_or_number=draft["contact"],
+        message=draft["message"]
+    )
+
+
+@tool(
+    name="get_pending_whatsapp_draft",
+    description="Inspect or view the current pending unconfirmed WhatsApp draft."
+)
+def get_pending_whatsapp_draft() -> str:
+    """View active pending draft."""
+    if not _PENDING_WHATSAPP_DRAFT:
+        return "No pending WhatsApp message drafts."
+
+    d = _PENDING_WHATSAPP_DRAFT
+    return f"Active Pending Draft to {d['contact']}:\n\"{d['message']}\""
+
+
+@tool(
+    name="send_whatsapp_message",
+    description="Send a WhatsApp message immediately by contact name (auto-resolved from memory) or direct phone number."
+)
 def send_whatsapp_message(contact_or_number: str, message: str) -> str:
     """
     Open WhatsApp and send the message to the contact or phone number.
@@ -90,7 +182,7 @@ def send_whatsapp_message(contact_or_number: str, message: str) -> str:
     # Resolve contact name from MAG long-term memory (e.g. "Amma" -> "9505864289")
     resolved_target = _resolve_contact_from_memory(raw_input)
 
-    # Check if target is a phone number (e.g. 9505864289, +919505864289)
+    # Check if target is a phone number
     clean_digits = re.sub(r"[^\d]", "", resolved_target)
     is_phone_number = len(clean_digits) >= 10 and (
         resolved_target.startswith("+")
@@ -106,6 +198,13 @@ def send_whatsapp_message(contact_or_number: str, message: str) -> str:
         logger.info(f"[WhatsAppTool] Direct WhatsApp dispatch to +{clean_digits} (Target: '{raw_input}')...")
         encoded_msg = urllib.parse.quote(msg)
         whatsapp_uri = f"whatsapp://send?phone={clean_digits}&text={encoded_msg}"
+
+        # Record episodic event in MAG memory
+        mag_engine.record_event(
+            event_type="whatsapp_message_sent",
+            description=f"Sent WhatsApp message to {raw_input} (+{clean_digits})",
+            metadata=f"Message: {msg[:100]}"
+        )
 
         try:
             webbrowser.open(whatsapp_uri)
@@ -125,6 +224,13 @@ def send_whatsapp_message(contact_or_number: str, message: str) -> str:
     # Name-Based WhatsApp Desktop Search Fallback
     target_name = resolved_target
     logger.info(f"[WhatsAppTool] Searching WhatsApp Desktop for contact '{target_name}'...")
+
+    # Record episodic event in MAG memory
+    mag_engine.record_event(
+        event_type="whatsapp_message_sent",
+        description=f"Sent WhatsApp message to {target_name}",
+        metadata=f"Message: {msg[:100]}"
+    )
 
     has_focus = _focus_whatsapp_window()
     if not has_focus:
@@ -171,7 +277,22 @@ def send_whatsapp_message(contact_or_number: str, message: str) -> str:
     return f"Successfully sent WhatsApp message to '{target_name}': '{msg}'"
 
 
-@tool(name="save_whatsapp_contact_alias", description="Save a contact name mapping or phone number in memory (e.g. alias='Amma', saved_name='9505864289').")
+@tool(
+    name="get_quick_whatsapp_templates",
+    description="List quick WhatsApp template messages (e.g. leaving college, in class, reaching soon, need notes)."
+)
+def get_quick_whatsapp_templates() -> str:
+    """List available quick templates."""
+    lines = ["📋 Quick WhatsApp Response Templates:"]
+    for k, v in QUICK_WHATSAPP_TEMPLATES.items():
+        lines.append(f"• [{k}]: \"{v}\"")
+    return "\n".join(lines)
+
+
+@tool(
+    name="save_whatsapp_contact_alias",
+    description="Save a contact name mapping or phone number in memory (e.g. alias='Amma', saved_name='9505864289')."
+)
 def save_whatsapp_contact_alias(alias: str, saved_name: str) -> str:
     """Save a contact name mapping or phone number in MAG memory."""
     clean_alias = alias.strip()
@@ -179,7 +300,6 @@ def save_whatsapp_contact_alias(alias: str, saved_name: str) -> str:
     if not clean_alias or not clean_val:
         return "Error: Alias and target name/number are required."
 
-    # Check if number
     digits = re.sub(r"[^\d]", "", clean_val)
     if len(digits) >= 10:
         fact = f"{clean_alias} phone number is {clean_val}"

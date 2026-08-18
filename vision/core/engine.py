@@ -26,6 +26,45 @@ from vision.logger import logger
 from vision.core.reminder_daemon import reminder_manager
 
 
+def _convert_markdown_tables_to_speech(text: str) -> str:
+    """Convert markdown tables into clean, natural spoken key-value sentences."""
+    lines = text.split("\n")
+    processed_lines = []
+    in_table = False
+    headers = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|"):
+            # Table row: extract cell contents
+            cells = [c.strip() for c in stripped.split("|")[1:-1]]
+            # Skip separator line like |---|---|
+            if all(re.match(r"^:?-+:?$", c) for c in cells if c):
+                continue
+            if not in_table:
+                in_table = True
+                headers = cells
+                continue
+            else:
+                # Content row
+                if len(cells) == 2 and headers and len(headers) == 2:
+                    # Clean key-value pair like | Name | Nandini Kovvuri |
+                    k = re.sub(r'[*_`]', '', cells[0]).strip()
+                    v = re.sub(r'[*_`]', '', cells[1]).strip()
+                    if k and v:
+                        processed_lines.append(f"{k}: {v}.")
+                else:
+                    clean_cells = [re.sub(r'[*_`]', '', c).strip() for c in cells if c.strip()]
+                    if clean_cells:
+                        processed_lines.append(", ".join(clean_cells) + ".")
+        else:
+            in_table = False
+            headers = []
+            processed_lines.append(line)
+
+    return "\n".join(processed_lines)
+
+
 def clean_text_for_speech(text: str) -> str:
     """Normalize and clean LLM response text for natural, fluid spoken voice playback."""
     if not text:
@@ -38,6 +77,9 @@ def clean_text_for_speech(text: str) -> str:
 
     # Remove thinking tags if model outputs <think>...</think>
     t = re.sub(r'<think>.*?</think>', '', t, flags=re.DOTALL)
+
+    # Convert markdown tables into natural spoken sentences
+    t = _convert_markdown_tables_to_speech(t)
 
     # Remove markdown code blocks ```...```
     t = re.sub(r'```[\s\S]*?```', '', t)
@@ -63,6 +105,30 @@ def clean_text_for_speech(text: str) -> str:
     # Convert markdown bullet points or numbered lists into natural spoken pauses
     t = re.sub(r'^\s*[\*\-\+•]\s*', '', t, flags=re.MULTILINE)
     t = re.sub(r'^\s*\d+\.\s*', '', t, flags=re.MULTILINE)
+
+    # Remove any remaining stray pipe characters (|) so TTS never speaks "vertical bar"
+    t = t.replace('|', ' ')
+
+    # Replace all non-standard unicode whitespace (narrow spaces, zero-width, non-breaking) with standard space
+    t = re.sub(r'[\u00a0\u1680\u2000-\u200f\u2028-\u202f\u205f\u3000\ufeff]', ' ', t)
+
+    # Clean phone numbers and spaced-out digit sequences so TTS speaks them fluently without unnatural gaps
+    # E.g. "910 021 9275", "9 1 0 0 2 1 9 2 7 5", "+91 910 021 9275" -> "9100219275"
+    def _join_spaced_phone_digits(m):
+        raw = m.group(0)
+        digits = re.sub(r'[^\d+]', '', raw)
+        return digits
+
+    t = re.sub(r'(?:\+?91[\s\-\.]*)?(?:\d[\s\-\.]*){9,12}\d', _join_spaced_phone_digits, t)
+
+    # Remove markdown table dashes / dividers
+    t = re.sub(r'[-–—]{2,}', ' ', t)
+
+    # Remove repeated dots / ellipses that cause long artificial pauses
+    t = re.sub(r'\.{2,}', '.', t)
+
+    # Remove isolated special symbols
+    t = re.sub(r'[\~^&|#]', ' ', t)
 
     # Normalize smart quotes, dashes, and special typography
     t = t.replace('\u2011', '-').replace('\u2013', '-').replace('\u2014', ' - ')

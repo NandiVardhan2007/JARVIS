@@ -53,6 +53,11 @@ def open_website(site_or_url: str) -> str:
 
     logger.info(f"[BrowserTool] Opening website: '{url}'...")
     try:
+        if "youtube" in target or "youtube.com" in url:
+            from vision.tools.media_tools import _open_url_in_comet_or_browser
+            _open_url_in_comet_or_browser(url)
+            return f"Opened {url} in the Comet Browser."
+
         webbrowser.open(url)
         return f"Opened {url} in your web browser."
     except Exception as e:
@@ -60,19 +65,13 @@ def open_website(site_or_url: str) -> str:
         return f"Failed to open website '{url}': {e}"
 
 
-@tool(name="search_youtube_videos", description="Search YouTube for videos, tutorials, music, or topics and open the search results.")
+@tool(name="search_youtube_videos", description="Search YouTube for videos, tutorials, music, or topics and open the search results in Comet Browser.")
 def search_youtube_videos(query: str) -> str:
-    """Searches YouTube and opens the results page in browser."""
+    """Searches YouTube and plays the video in Comet browser."""
     if not query:
-        return "Error: YouTube search query is required."
-
-    url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query.strip())}"
-    logger.info(f"[BrowserTool] Searching YouTube: '{query}' -> '{url}'")
-    try:
-        webbrowser.open(url)
-        return f"Searching YouTube for '{query}'."
-    except Exception as e:
-        return f"Failed to search YouTube: {e}"
+        return "Error: Search query is required."
+    from vision.tools.media_tools import play_youtube_video
+    return play_youtube_video(query=query)
 
 
 @tool(name="search_google_web", description="Open a Google Search in the browser for any query, question, or research.")
