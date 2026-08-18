@@ -80,6 +80,19 @@ async def websocket_endpoint(websocket: WebSocket):
         await event_bus.publish(VisionEvents.WEB_CLIENT_DISCONNECTED)
 
 
+# ── Serve Frontend Static Files ──────────────────────────────────
+FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 
+if FRONTEND_DIR.exists():
+    @app.get("/")
+    async def serve_frontend():
+        """Serve the VISION dashboard SPA."""
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
 
+    # Mount entire frontend directory for CSS, JS, and any other static assets
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend_static")
+
+    logger.info(f"[Server] Frontend dashboard mounted from '{FRONTEND_DIR}'")
+else:
+    logger.warning(f"[Server] Frontend directory not found at '{FRONTEND_DIR}' — skipping static mount.")
 
