@@ -35,5 +35,14 @@ class AudioPlayer:
         finally:
             self.is_playing = False
 
+    def stop(self):
+        """Immediately stop all active audio playback (Barge-in)."""
+        if sd is not None:
+            try:
+                sd.stop()
+            except Exception as e:
+                logger.debug(f"[AudioPlayer] Stop error: {e}")
+        self.is_playing = False
+
 
 audio_player = AudioPlayer()

@@ -12,7 +12,7 @@ import psutil
 from datetime import datetime
 
 from vision.core.engine import vision_engine
-from vision.perception.stt.groq_stt import GroqSTT
+from vision.perception.stt.local_whisper import local_stt
 from vision.perception.vision.screen import screen_capture
 from vision.tools.registry import tool_registry
 from vision.config import config
@@ -20,9 +20,10 @@ from vision.cognitive.load_balancer import load_balancer
 from vision.memory.mag_engine import mag_engine
 from vision.memory.cag_engine import cag_engine
 from vision.memory.working_memory import working_memory
+from vision.logger import logger
 
 router = APIRouter()
-stt = GroqSTT()
+stt = local_stt
 
 START_TIME = time.time()
 
@@ -230,9 +231,26 @@ async def synthesize_speech(req: SynthesizeRequest):
 
 @router.post("/audio/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
-    contents = await file.read()
-    text = await stt.transcribe(contents)
-    return {"text": text}
+    try:
+        contents = await file.read()
+        if not contents or len(contents) < 400:
+            return {"text": ""}
+        text = await stt.transcribe(contents, filename=file.filename)
+        return {"text": text or ""}
+    except Exception as e:
+        logger.warning(f"[STT] Transcribe endpoint warning: {e}")
+        return {"text": ""}
+
+
+@router.post("/audio/stop")
+async def stop_audio_playback():
+    """Immediately stop TTS speech playback on server (Barge-In)."""
+    try:
+        from vision.synthesis.player import audio_player
+        audio_player.stop()
+        return {"status": "stopped"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 @router.get("/vision/screenshot")

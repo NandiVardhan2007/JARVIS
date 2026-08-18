@@ -20,12 +20,23 @@ class GroqSTT(BaseSTT):
         self.model = model or config.VISION_STT_MODEL
         self.client = AsyncGroq(api_key=self.api_key) if AsyncGroq and self.api_key else None
 
-    async def transcribe(self, audio_data: bytes, language: str = "en") -> str:
+    async def transcribe(self, audio_data: bytes, language: str = "en", filename: str = None) -> str:
         if not self.client:
             raise RuntimeError("groq library is not installed or API key missing.")
         try:
+            ext_filename = "input.webm"
+            if filename and "." in filename:
+                ext_part = filename.rsplit(".", 1)[-1].lower()
+                ext_filename = f"input.{ext_part}"
+            elif audio_data.startswith(b"RIFF"):
+                ext_filename = "input.wav"
+            elif audio_data.startswith(b"OggS"):
+                ext_filename = "input.ogg"
+            elif audio_data.startswith(b"\x1a\x45\xdf\xa3") or b"webm" in audio_data[:64] or b"matroska" in audio_data[:64]:
+                ext_filename = "input.webm"
+
             audio_file = BytesIO(audio_data)
-            audio_file.name = "input.wav"
+            audio_file.name = ext_filename
 
             transcription = await self.client.audio.transcriptions.create(
                 file=audio_file,

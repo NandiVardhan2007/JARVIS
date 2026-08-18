@@ -109,7 +109,9 @@
       font-size: 1.25rem; font-weight: 700; letter-spacing: 0.22em;
       text-transform: uppercase;
       background: linear-gradient(90deg, #ffffff, var(--cyan));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .brand-tag {
       font-size: 0.65rem; font-family: var(--mono); color: var(--cyan);
@@ -298,15 +300,16 @@
       word-break: break-word; line-height: 1.25;
     }
 
-    /* ── Right Column: Live Voice Transcriptions Stream ── */
+    /* ── Right Column: Live Voice Transcriptions Stream & Integrated Input Bar ── */
     .transcriptions-card {
-      width: 330px; height: 100%; max-height: 480px;
+      width: 350px; height: 100%; max-height: 520px;
       background: var(--hud-bg); backdrop-filter: blur(16px);
       border: 1px solid var(--hud-border); border-radius: 16px;
-      padding: 16px 18px;
-      display: flex; flex-direction: column; gap: 10px;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6);
       z-index: 15; justify-self: end;
+      justify-content: space-between;
     }
     .transcriptions-card:hover {
       border-color: rgba(0, 242, 254, 0.4);
@@ -315,7 +318,7 @@
     .transcriptions-header {
       display: flex; align-items: center; justify-content: space-between;
       border-bottom: 1px solid rgba(0, 242, 254, 0.12);
-      padding-bottom: 8px;
+      padding-bottom: 6px; flex-shrink: 0;
     }
     .transcriptions-header-title {
       font-size: 0.7rem; font-family: var(--mono); text-transform: uppercase;
@@ -335,8 +338,8 @@
     @keyframes pulseDot { from { opacity: 0.4; } to { opacity: 1; } }
 
     .transcriptions-list {
-      display: flex; flex-direction: column; gap: 10px;
-      overflow-y: auto; flex: 1;
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-y: auto; flex: 1; min-height: 120px;
       padding-right: 4px;
     }
     .transcriptions-list::-webkit-scrollbar { width: 4px; }
@@ -346,8 +349,8 @@
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.05);
       border-left: 3px solid var(--cyan);
-      border-radius: 8px; padding: 8px 10px;
-      display: flex; flex-direction: column; gap: 4px;
+      border-radius: 8px; padding: 7px 9px;
+      display: flex; flex-direction: column; gap: 3px;
       animation: fadeInTranscript 0.3s ease;
     }
     .transcript-entry.ai {
@@ -368,9 +371,81 @@
     .transcript-entry.ai .transcript-speaker { color: #c084fc; }
     .transcript-time { color: var(--text-dim); }
     .transcript-text {
-      font-size: 0.78rem; line-height: 1.35; color: #e2ecf8;
+      font-size: 0.76rem; line-height: 1.35; color: #e2ecf8;
       word-break: break-word; user-select: text;
     }
+
+    /* ── Integrated Sidebar Input Footer ── */
+    .transcriptions-footer {
+      display: flex; flex-direction: column; gap: 6px;
+      width: 100%; border-top: 1px solid rgba(0, 242, 254, 0.12);
+      padding-top: 8px; flex-shrink: 0;
+    }
+    .voice-command-bar {
+      width: 100%;
+      background: rgba(0, 242, 254, 0.04);
+      border: 1px solid rgba(0, 242, 254, 0.2);
+      border-radius: 30px;
+      padding: 3px 4px 3px 12px;
+      display: flex; align-items: center; gap: 6px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      transition: all 0.25s;
+    }
+    .voice-command-bar:focus-within {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+    }
+    .hud-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #ffffff; font-family: var(--font); font-size: 0.85rem;
+      padding: 6px 0;
+    }
+    .hud-input::placeholder { color: var(--text-dim); font-size: 0.78rem; }
+
+    .hud-mic-btn {
+      width: 32px; height: 32px; border-radius: 50%; border: none;
+      background: linear-gradient(135deg, var(--cyan), var(--neon-blue));
+      color: #030508; font-size: 0.9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; flex-shrink: 0;
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+    }
+    .hud-mic-btn:hover {
+      transform: scale(1.06); box-shadow: 0 0 20px rgba(0, 242, 254, 0.7);
+    }
+    .hud-mic-btn.listening {
+      background: linear-gradient(135deg, var(--red), #ff758c);
+      box-shadow: 0 0 20px rgba(255, 51, 102, 0.8);
+      animation: micPulse 1s infinite alternate;
+    }
+    .hud-mic-btn.muted {
+      background: #2a0812; border: 1px solid var(--red);
+      color: var(--red); box-shadow: none; animation: none;
+    }
+    @keyframes micPulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.1); }
+    }
+
+    .hud-send-btn {
+      width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--hud-border);
+      background: rgba(255,255,255,0.05); color: var(--cyan);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; flex-shrink: 0;
+    }
+    .hud-send-btn:hover {
+      background: rgba(0, 242, 254, 0.15); border-color: var(--cyan);
+    }
+
+    .key-hints {
+      display: flex; gap: 8px; justify-content: center; font-family: var(--mono);
+      font-size: 0.6rem; color: var(--text-dim);
+    }
+    .key-hints kbd {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 3px; padding: 1px 4px; color: var(--cyan);
+    }
+
 
     /* ── Center Hologram Core Trigger & Subtitles ── */
     .center-hud {
@@ -381,191 +456,36 @@
       margin: 0 auto;
       text-align: center;
       z-index: 12;
-      position: relative;
     }
-
     .orb-hitbox {
-      width: 210px; height: 210px; border-radius: 50%;
+      width: 250px; height: 250px; border-radius: 50%;
       cursor: pointer; pointer-events: auto;
       display: flex; align-items: center; justify-content: center;
       position: relative;
     }
-    .orb-hint {
-      position: absolute; bottom: -6px;
-      font-family: var(--mono); font-size: 0.68rem;
-      letter-spacing: 0.15em; text-transform: uppercase;
-      color: rgba(0, 242, 254, 0.8);
-      background: rgba(6, 12, 24, 0.85);
-      padding: 3px 12px; border-radius: 20px;
-      border: 1px solid var(--hud-border);
-      transition: all 0.3s;
-      display: flex; align-items: center; gap: 5px;
-    }
-    .orb-hitbox:hover .orb-hint {
-      color: var(--cyan); border-color: var(--cyan);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
-    }
-    .orb-hitbox.muted .orb-hint {
-      color: var(--red); border-color: var(--red);
-      background: rgba(20, 4, 8, 0.9);
-      box-shadow: 0 0 15px rgba(255, 51, 102, 0.35);
-    }
 
-    .vad-meter-container {
-      width: 160px; height: 5px; border-radius: 3px;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(0,242,254,0.15);
-      overflow: hidden; position: relative; margin-top: 2px;
-    }
-    .vad-meter-fill {
-      height: 100%; width: 0%; border-radius: 3px;
-      background: linear-gradient(90deg, var(--cyan), var(--green));
-      transition: width 0.05s ease-out;
-    }
-
-    .live-subtitle-box {
-      max-width: 480px; width: 100%;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 0 14px;
-    }
-    .live-state-tag {
-      font-size: 0.65rem; font-family: var(--mono); letter-spacing: 0.2em;
-      text-transform: uppercase; color: var(--cyan); margin-bottom: 3px;
-      text-shadow: 0 0 10px var(--cyan);
-      display: flex; align-items: center; gap: 5px;
-    }
-    .live-subtitle-text {
-      font-size: 0.95rem; line-height: 1.35; font-weight: 500;
-      color: #ffffff; text-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
-      max-height: 44px; overflow: hidden; text-overflow: ellipsis;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      transition: all 0.2s;
-    }
-
-    /* ── Floating Sci-Fi Dossier (For detailed/long outputs) ── */
-    #response-dossier {
+    /* ── Futuristic Holographic Voice Waveform (Below Orb) ── */
+    .voice-waveform-wrap {
       position: absolute;
-      left: 50%; bottom: 85px;
-      transform: translateX(-50%) translateY(20px);
-      width: 580px; max-width: 90vw;
-      background: rgba(4, 9, 20, 0.94);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(0, 242, 254, 0.35);
-      border-radius: 16px;
-      padding: 14px 18px;
-      box-shadow: 0 10px 50px rgba(0,0,0,0.9), 0 0 30px rgba(0, 242, 254, 0.15);
-      z-index: 30;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.3s var(--ease, ease), transform 0.3s var(--ease, ease);
-      display: flex; flex-direction: column; gap: 8px;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(4, 9, 20, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(0, 242, 254, 0.30);
+      border-radius: 24px;
+      padding: 4px 14px;
+      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 242, 254, 0.15);
+      z-index: 15;
+      pointer-events: auto;
     }
-    #response-dossier.visible {
-      opacity: 1; pointer-events: auto;
-      transform: translateX(-50%) translateY(0);
-    }
-    .dossier-header {
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 1px solid rgba(0, 242, 254, 0.15);
-      padding-bottom: 6px;
-    }
-    .dossier-title {
-      font-size: 0.7rem; font-family: var(--mono); font-weight: 700;
-      color: var(--cyan); letter-spacing: 0.15em; text-transform: uppercase;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .dossier-close {
-      background: transparent; border: none; color: var(--text-dim);
-      font-size: 1rem; cursor: pointer; padding: 2px 6px; border-radius: 4px;
-      transition: color 0.15s; display: flex; align-items: center; justify-content: center;
-    }
-    .dossier-close:hover { color: #ffffff; }
-
-    .dossier-body {
-      font-size: 0.82rem; line-height: 1.55; color: #e2ecf8;
-      max-height: 200px; overflow-y: auto; padding-right: 6px;
-      user-select: text;
-    }
-    .dossier-body::-webkit-scrollbar { width: 4px; }
-    .dossier-body::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.35); border-radius: 4px; }
-    .dossier-body strong { color: var(--cyan); font-weight: 600; }
-    .dossier-body ul { padding-left: 18px; margin: 5px 0; }
-    .dossier-body li { margin-bottom: 3px; }
-    .dossier-body p { margin-bottom: 5px; }
-    .dossier-body p:last-child { margin-bottom: 0; }
-    .dossier-body code {
-      font-family: var(--mono); font-size: 0.8em;
-      background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.2);
-      border-radius: 4px; padding: 1px 5px; color: #a5f3fc;
-    }
-
-    /* ── Bottom Control Bar ── */
-    .hud-bottom {
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-      width: 100%; max-width: 620px; margin: 0 auto;
-      z-index: 25; position: relative;
-    }
-
-    .voice-command-bar {
-      width: 100%;
-      background: var(--hud-bg); backdrop-filter: blur(20px);
-      border: 1px solid var(--hud-border); border-radius: 40px;
-      padding: 4px 6px 4px 16px;
-      display: flex; align-items: center; gap: 10px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(0, 242, 254, 0.1);
-      transition: all 0.3s;
-    }
-    .voice-command-bar:focus-within {
-      border-color: var(--cyan);
-      box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 30px rgba(0, 242, 254, 0.25);
-    }
-    .hud-input {
-      flex: 1; background: transparent; border: none; outline: none;
-      color: #ffffff; font-family: var(--font); font-size: 0.9rem;
-      padding: 7px 0;
-    }
-    .hud-input::placeholder { color: var(--text-dim); font-size: 0.82rem; }
-
-    .hud-mic-btn {
-      width: 40px; height: 40px; border-radius: 50%; border: none;
-      background: linear-gradient(135deg, var(--cyan), var(--neon-blue));
-      color: #030508; font-size: 1.1rem; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s;
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
-    }
-    .hud-mic-btn:hover {
-      transform: scale(1.08); box-shadow: 0 0 30px rgba(0, 242, 254, 0.7);
-    }
-    .hud-mic-btn.listening {
-      background: linear-gradient(135deg, var(--red), #ff758c);
-      box-shadow: 0 0 30px rgba(255, 51, 102, 0.8);
-      animation: micPulse 1s infinite alternate;
-    }
-    .hud-mic-btn.muted {
-      background: #2a0812; border: 1px solid var(--red);
-      color: var(--red); box-shadow: none; animation: none;
-    }
-    @keyframes micPulse {
-      from { transform: scale(1); }
-      to { transform: scale(1.12); }
-    }
-
-    .hud-send-btn {
-      width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--hud-border);
-      background: rgba(255,255,255,0.05); color: var(--cyan);
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s;
-    }
-    .hud-send-btn:hover {
-      background: rgba(0, 242, 254, 0.15); border-color: var(--cyan);
-    }
-
-    .key-hints {
-      display: flex; gap: 14px; font-family: var(--mono);
-      font-size: 0.62rem; color: var(--text-dim);
-    }
-    .key-hints kbd {
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 4px; padding: 1px 5px; color: var(--cyan);
+    #waveform-canvas {
+      display: block;
+      width: 260px;
+      height: 38px;
     }
 
     /* ── Responsive ── */
@@ -573,7 +493,6 @@
       .hud-middle { grid-template-columns: 1fr; }
       .left-hud-column, .transcriptions-card { display: none; }
       .center-hud { max-width: 90%; }
-      #response-dossier { width: 92vw; }
       #hud-shell { padding: 12px; }
     }
   </style>
@@ -712,29 +631,17 @@
 
       </div>
 
-      <!-- Center: 3D Orb Trigger & Live Subtitles -->
+      <!-- Center: 3D Orb Stage (Clean & Pure with Voice Waveform) -->
       <div class="center-hud">
-        <div class="orb-hitbox" id="orb-hitbox" title="Click to speak or toggle mute">
-          <div class="orb-hint" id="orb-hint-text">
-            <i data-lucide="radio" class="icon-sm"></i>
-            <span>HANDS-FREE LISTENING</span>
-          </div>
-        </div>
+        <div class="orb-hitbox" id="orb-hitbox" title="Toggle Mute / Mic"></div>
 
-        <div class="vad-meter-container" title="Live Voice Activity Meter">
-          <div class="vad-meter-fill" id="vad-meter-bar"></div>
-        </div>
-
-        <div class="live-subtitle-box">
-          <div class="live-state-tag" id="live-state-tag">
-            <i data-lucide="sparkles" class="icon-sm"></i>
-            <span>VISION READY</span>
-          </div>
-          <div class="live-subtitle-text" id="live-subtitles">"Hey Nandu, I am listening hands-free. Speak anytime!"</div>
+        <!-- Dynamic Holographic Voice Waveform (Active while speaking) -->
+        <div class="voice-waveform-wrap" id="voice-waveform-wrap">
+          <canvas id="waveform-canvas" width="280" height="48"></canvas>
         </div>
       </div>
 
-      <!-- Right Column: Live Voice Transcriptions Stream -->
+      <!-- Right Column: Live Voice Transcriptions Stream with Integrated Input Bar -->
       <div class="transcriptions-card">
         <div class="transcriptions-header">
           <div class="transcriptions-header-title">
@@ -743,6 +650,7 @@
           </div>
           <div class="live-pulse-badge">STREAM</div>
         </div>
+        
         <div class="transcriptions-list" id="transcriptions-stream">
           <div class="transcript-entry ai">
             <div class="transcript-meta">
@@ -755,43 +663,29 @@
             <div class="transcript-text">VISION is online. Continuous hands-free VAD speech recognition is active.</div>
           </div>
         </div>
-      </div>
 
-    </div>
-
-    <!-- Floating Sci-Fi Hologram Response Dossier (For detailed/long outputs) -->
-    <div id="response-dossier">
-      <div class="dossier-header">
-        <div class="dossier-title">
-          <i data-lucide="file-text" class="icon-sm"></i>
-          <span>VISION INTELLIGENCE REPORT</span>
+        <!-- Integrated Command Bar inside Live Transcriptions Sidebar -->
+        <div class="transcriptions-footer">
+          <div class="voice-command-bar">
+            <input type="text" class="hud-input" id="command-input" placeholder="Speak hands-free, or type here..." autocomplete="off">
+            <button class="hud-send-btn" id="send-command-btn" title="Execute Command">
+              <i data-lucide="send" class="icon-sm"></i>
+            </button>
+            <button class="hud-mic-btn" id="voice-trigger-btn" title="Toggle Mute / Mic">
+              <span id="main-mic-icon">
+                <i data-lucide="mic" class="icon-md"></i>
+              </span>
+            </button>
+          </div>
+          <div class="key-hints">
+            <span><kbd>M</kbd> Mute</span>
+            <span><kbd>SPACE</kbd> Mic</span>
+            <span><kbd>ENTER</kbd> Send</span>
+          </div>
         </div>
-        <button class="dossier-close" id="dossier-close-btn" title="Close Report">
-          <i data-lucide="x" class="icon-sm"></i>
-        </button>
       </div>
-      <div class="dossier-body" id="dossier-content"></div>
-    </div>
 
-    <!-- Bottom: Voice Command Input Bar -->
-    <footer class="hud-bottom">
-      <div class="voice-command-bar">
-        <input type="text" class="hud-input" id="command-input" placeholder="Speak hands-free, or type here..." autocomplete="off">
-        <button class="hud-send-btn" id="send-command-btn" title="Execute Command">
-          <i data-lucide="send" class="icon-sm"></i>
-        </button>
-        <button class="hud-mic-btn" id="voice-trigger-btn" title="Toggle Mute / Mic">
-          <span id="main-mic-icon">
-            <i data-lucide="mic" class="icon-md"></i>
-          </span>
-        </button>
-      </div>
-      <div class="key-hints">
-        <span><kbd>M</kbd> Mute/Unmute Mic</span>
-        <span><kbd>SPACEBAR</kbd> Mic Toggle</span>
-        <span><kbd>ENTER</kbd> Send Typed</span>
-      </div>
-    </footer>
+    </div>
 
   </div>
 
@@ -799,10 +693,13 @@
 
   <script>
     /* ══════════════════════════════════════════════════════════════
-       VISION 3D Quantum Particle Orb (Three.js WebGL Engine)
+       VISION Cinematic 3D Quantum Energy Orb (WebGL / Three.js)
+       ══════════════════════════════════════════════════════════════ */
+    /* ══════════════════════════════════════════════════════════════
+       VISION Masterpiece 3D Quantum Plasma Supernova Orb (Three.js)
        ══════════════════════════════════════════════════════════════ */
     let scene, camera, renderer;
-    let particleSphere, outerRings = [], coreGlow;
+    let orbGroup, particleSphere, coronaDust, plasmaCore, outerRings = [], satellites = [];
     let noiseVal = 0;
     let agentState = 'idle'; // idle | listening | thinking | executing | speaking | muted
     let audioFrequencyData = new Uint8Array(32);
@@ -813,27 +710,40 @@
       const height = window.innerHeight;
 
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-      camera.position.z = 5.0;
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      camera.position.z = 4.6;
 
       renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), alpha: true, antialias: true });
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-      // 1. Holographic Quantum Particle Sphere
-      const particleCount = 2000;
+      orbGroup = new THREE.Group();
+      scene.add(orbGroup);
+
+      // High-precision radial particle glow texture
+      const pTexture = createParticleTexture();
+
+      // ── 1. High-Density Quantum Particle Matrix (4,000 Nodes) ──
+      const particleCount = 4000;
       const geometry = new THREE.BufferGeometry();
       const positions = new Float32Array(particleCount * 3);
       const originalPositions = new Float32Array(particleCount * 3);
       const colors = new Float32Array(particleCount * 3);
+      const phases = new Float32Array(particleCount);
 
-      const color1 = new THREE.Color(0x00f2fe);
-      const color2 = new THREE.Color(0x7f00ff);
+      const colCyan = new THREE.Color(0x00f2fe);
+      const colBlue = new THREE.Color(0x38bdf8);
+      const colPurple = new THREE.Color(0x7f00ff);
+      const colMagenta = new THREE.Color(0xec4899);
+      const colGreen = new THREE.Color(0x00ff88);
 
       for (let i = 0; i < particleCount; i++) {
+        // Golden Ratio Fibonacci distribution with compact volumetric thickness
         const phi = Math.acos(-1 + (2 * i) / particleCount);
         const theta = Math.sqrt(particleCount * Math.PI) * phi;
-        const radius = 1.25;
+        
+        const shell = 0.88 + (i % 5) * 0.05;
+        const radius = 0.94 * shell;
 
         const x = radius * Math.cos(theta) * Math.sin(phi);
         const y = radius * Math.sin(theta) * Math.sin(phi);
@@ -847,7 +757,21 @@
         originalPositions[i * 3 + 1] = y;
         originalPositions[i * 3 + 2] = z;
 
-        const mixedColor = color1.clone().lerp(color2, Math.random() * 0.7);
+        phases[i] = Math.random() * Math.PI * 2;
+
+        // Rich Multi-stop Chromatic Gradient
+        let mixedColor;
+        const norm = i / particleCount;
+        if (norm < 0.35) {
+          mixedColor = colCyan.clone().lerp(colBlue, norm * 2.85);
+        } else if (norm < 0.7) {
+          mixedColor = colBlue.clone().lerp(colPurple, (norm - 0.35) * 2.85);
+        } else if (norm < 0.9) {
+          mixedColor = colPurple.clone().lerp(colMagenta, (norm - 0.7) * 5.0);
+        } else {
+          mixedColor = colMagenta.clone().lerp(colGreen, (norm - 0.9) * 10.0);
+        }
+
         colors[i * 3] = mixedColor.r;
         colors[i * 3 + 1] = mixedColor.g;
         colors[i * 3 + 2] = mixedColor.b;
@@ -855,21 +779,10 @@
 
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      geometry.userData = { originalPositions };
+      geometry.userData = { originalPositions, phases };
 
-      const canvas = document.createElement('canvas');
-      canvas.width = 32; canvas.height = 32;
-      const ctx = canvas.getContext('2d');
-      const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(0.3, 'rgba(0,242,254,0.8)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 32, 32);
-      const pTexture = new THREE.CanvasTexture(canvas);
-
-      const material = new THREE.PointsMaterial({
-        size: 0.05,
+      const particleMat = new THREE.PointsMaterial({
+        size: 0.048,
         map: pTexture,
         transparent: true,
         vertexColors: true,
@@ -877,39 +790,137 @@
         depthWrite: false
       });
 
-      particleSphere = new THREE.Points(geometry, material);
-      scene.add(particleSphere);
+      particleSphere = new THREE.Points(geometry, particleMat);
+      orbGroup.add(particleSphere);
 
-      // 2. Rotating Gyroscopic Holographic Orbital Rings
-      for (let r = 0; r < 3; r++) {
-        const ringGeo = new THREE.RingGeometry(1.45 + r * 0.2, 1.47 + r * 0.2, 64);
-        const ringMat = new THREE.MeshBasicMaterial({
-          color: r === 0 ? 0x00f2fe : (r === 1 ? 0x7f00ff : 0x4facfe),
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.25,
-          blending: THREE.AdditiveBlending
-        });
-        const ring = new THREE.Mesh(ringGeo, ringMat);
-        ring.rotation.x = Math.random() * Math.PI;
-        ring.rotation.y = Math.random() * Math.PI;
-        scene.add(ring);
-        outerRings.push({ mesh: ring, speedX: (r + 1) * 0.003, speedY: (r + 1) * 0.004 });
+      // ── 2. Ethereal Cosmic Corona Dust (1,200 Floating Star Particles) ──
+      const dustCount = 1200;
+      const dustGeo = new THREE.BufferGeometry();
+      const dustPos = new Float32Array(dustCount * 3);
+      const dustColors = new Float32Array(dustCount * 3);
+      const dustOrig = new Float32Array(dustCount * 3);
+
+      for (let i = 0; i < dustCount; i++) {
+        const u = Math.random();
+        const v = Math.random();
+        const theta = u * 2.0 * Math.PI;
+        const phi = Math.acos(2.0 * v - 1.0);
+        const r = 1.05 + Math.random() * 0.45;
+
+        const x = r * Math.sin(phi) * Math.cos(theta);
+        const y = r * Math.sin(phi) * Math.sin(theta);
+        const z = r * Math.cos(phi);
+
+        dustPos[i * 3] = x; dustPos[i * 3 + 1] = y; dustPos[i * 3 + 2] = z;
+        dustOrig[i * 3] = x; dustOrig[i * 3 + 1] = y; dustOrig[i * 3 + 2] = z;
+
+        const dustCol = Math.random() > 0.5 ? colCyan : colPurple;
+        dustColors[i * 3] = dustCol.r;
+        dustColors[i * 3 + 1] = dustCol.g;
+        dustColors[i * 3 + 2] = dustCol.b;
       }
 
-      // 3. Inner Energy Core Glow
-      const coreGeo = new THREE.SphereGeometry(0.65, 32, 32);
-      const coreMat = new THREE.MeshBasicMaterial({
-        color: 0x00f2fe,
+      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+      dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
+      dustGeo.userData = { originalPositions: dustOrig };
+
+      const dustMat = new THREE.PointsMaterial({
+        size: 0.030,
+        map: pTexture,
         transparent: true,
-        opacity: 0.12,
-        blending: THREE.AdditiveBlending
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.75,
+        depthWrite: false
       });
-      coreGlow = new THREE.Mesh(coreGeo, coreMat);
-      scene.add(coreGlow);
+      coronaDust = new THREE.Points(dustGeo, dustMat);
+      orbGroup.add(coronaDust);
+
+      // ── 3. Concentric White-Hot Supernova Plasma Nucleus (Direct Center) ──
+      // Central Radiant Flare Sprite
+      const coreCanvas = document.createElement('canvas');
+      coreCanvas.width = 128; coreCanvas.height = 128;
+      const cctx = coreCanvas.getContext('2d');
+      const cgrad = cctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      cgrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      cgrad.addColorStop(0.2, 'rgba(0, 242, 254, 0.95)');
+      cgrad.addColorStop(0.55, 'rgba(127, 0, 255, 0.45)');
+      cgrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      cctx.fillStyle = cgrad;
+      cctx.fillRect(0, 0, 128, 128);
+      const coreSpriteTex = new THREE.CanvasTexture(coreCanvas);
+
+      const coreSpriteMat = new THREE.SpriteMaterial({
+        map: coreSpriteTex,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.9
+      });
+      plasmaCore = new THREE.Sprite(coreSpriteMat);
+      plasmaCore.scale.set(0.92, 0.92, 0.92);
+      orbGroup.add(plasmaCore);
+
+      // ── 4. Concentric Holographic Gyroscopic Gimbal Rings ──
+      const ringConfigs = [
+        { radius: 1.10, color: 0x00f2fe, tiltX: 1.28, tiltY: 0.20, spinSpeed: 0.0035 },
+        { radius: 1.22, color: 0x7f00ff, tiltX: 0.45, tiltY: 1.15, spinSpeed: -0.0030 },
+        { radius: 1.35, color: 0x38bdf8, tiltX: 0.85, tiltY: -0.75, spinSpeed: 0.0025 }
+      ];
+
+      ringConfigs.forEach((cfg, idx) => {
+        const ringPivot = new THREE.Group();
+        ringPivot.rotation.x = cfg.tiltX;
+        ringPivot.rotation.y = cfg.tiltY;
+        orbGroup.add(ringPivot);
+
+        const ringGeo = new THREE.RingGeometry(cfg.radius, cfg.radius + 0.010, 64);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: cfg.color,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.32,
+          blending: THREE.AdditiveBlending
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringPivot.add(ringMesh);
+
+        // Glowing Photon Satellite
+        const satGeo = new THREE.SphereGeometry(0.024, 16, 16);
+        const satMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.95,
+          blending: THREE.AdditiveBlending
+        });
+        const sat = new THREE.Mesh(satGeo, satMat);
+        ringPivot.add(sat);
+
+        outerRings.push({
+          pivot: ringPivot,
+          mesh: ringMesh,
+          sat: sat,
+          radius: cfg.radius + 0.005,
+          angle: (idx * Math.PI) / 1.5,
+          spinSpeed: cfg.spinSpeed
+        });
+      });
 
       window.addEventListener('resize', onWindowResize);
       animate3D();
+    }
+
+    function createParticleTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.2, 'rgba(0,242,254,0.95)');
+      grad.addColorStop(0.55, 'rgba(127,0,255,0.45)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(canvas);
     }
 
     function onWindowResize() {
@@ -920,31 +931,38 @@
 
     function animate3D() {
       requestAnimationFrame(animate3D);
-      noiseVal += 0.02;
+      noiseVal += 0.008;
 
+      // ── 1. Quantum Particle Sphere Wave Dynamics ──
       if (particleSphere) {
         const pos = particleSphere.geometry.attributes.position.array;
         const orig = particleSphere.geometry.userData.originalPositions;
         const count = pos.length / 3;
 
-        let intensity = 0.07;
-        let speed = 1.0;
+        let intensity = 0.045;
+        let speed = 0.65;
+        let rotSpeed = 0.0012;
 
         if (agentState === 'muted') {
-          intensity = 0.03;
-          speed = 0.4;
+          intensity = 0.015;
+          speed = 0.25;
+          rotSpeed = 0.0004;
         } else if (agentState === 'listening') {
-          intensity = 0.22;
-          speed = 2.4;
+          intensity = 0.07;
+          speed = 0.9;
+          rotSpeed = 0.0018;
         } else if (agentState === 'thinking') {
-          intensity = 0.35;
-          speed = 4.5;
+          intensity = 0.09;
+          speed = 1.4;
+          rotSpeed = 0.0035;
         } else if (agentState === 'executing') {
-          intensity = 0.45;
-          speed = 5.5;
+          intensity = 0.10;
+          speed = 1.6;
+          rotSpeed = 0.0040;
         } else if (agentState === 'speaking') {
-          intensity = 0.3;
-          speed = 3.2;
+          intensity = 0.08;
+          speed = 1.0;
+          rotSpeed = 0.0020;
         }
 
         let audioBoost = 0;
@@ -954,34 +972,157 @@
           audioBoost = (sum / 16) / 255;
         }
 
+        // Concentric Spherical Breathing Waves (Maintains Perfect Spherical Shape)
+        const primaryBreathe = Math.sin(noiseVal * speed) * (intensity * 0.5);
+        const secondaryHarmonic = Math.cos(noiseVal * (speed * 1.6)) * (intensity * 0.25 + audioBoost * 0.12);
+        const phasesArr = particleSphere.geometry.userData.phases;
+
         for (let i = 0; i < count; i++) {
           const idx = i * 3;
           const ox = orig[idx];
           const oy = orig[idx + 1];
           const oz = orig[idx + 2];
 
-          const wave = Math.sin(noiseVal * speed + ox * 3.0 + oy * 2.0) * (intensity + audioBoost * 0.45);
-          pos[idx] = ox * (1.0 + wave);
-          pos[idx + 1] = oy * (1.0 + wave);
-          pos[idx + 2] = oz * (1.0 + wave);
+          // Micro-surface shimmer along radial shell
+          const shellPhase = (phasesArr && phasesArr[i]) || 0;
+          const surfaceShimmer = Math.sin(noiseVal * 2.0 + shellPhase) * 0.02;
+
+          const totalScale = 1.0 + primaryBreathe + secondaryHarmonic + surfaceShimmer;
+
+          pos[idx] = ox * totalScale;
+          pos[idx + 1] = oy * totalScale;
+          pos[idx + 2] = oz * totalScale;
         }
         particleSphere.geometry.attributes.position.needsUpdate = true;
-        particleSphere.rotation.y += (agentState === 'muted' ? 0.001 : (agentState === 'thinking' ? 0.012 : 0.004));
-        particleSphere.rotation.x += (agentState === 'muted' ? 0.0005 : 0.002);
+        particleSphere.rotation.y += rotSpeed;
       }
 
-      outerRings.forEach(ringObj => {
-        let mult = (agentState === 'muted') ? 0.3 : ((agentState === 'thinking' || agentState === 'executing') ? 4 : 1);
-        ringObj.mesh.rotation.x += ringObj.speedX * mult;
-        ringObj.mesh.rotation.y += ringObj.speedY * mult;
+      // ── 2. Ethereal Corona Dust Rotation ──
+      if (coronaDust) {
+        coronaDust.rotation.y -= 0.0008;
+      }
+
+      // ── 3. Supernova Radiant Plasma Core (Centered & Glowing) ──
+      if (plasmaCore) {
+        const baseScale = 0.92;
+        let corePulse = baseScale * (1.0 + Math.sin(noiseVal * 1.3) * 0.07);
+        if (agentState === 'thinking') corePulse = baseScale * (1.0 + Math.sin(noiseVal * 3.2) * 0.15);
+        else if (agentState === 'listening') corePulse = baseScale * (1.0 + Math.sin(noiseVal * 2.0) * 0.10);
+        else if (agentState === 'muted') corePulse = baseScale * (0.75 + Math.sin(noiseVal * 0.5) * 0.03);
+
+        plasmaCore.scale.set(corePulse, corePulse, 1.0);
+        plasmaCore.material.opacity = (agentState === 'thinking' || agentState === 'speaking') ? 0.95 : (agentState === 'muted' ? 0.35 : 0.85);
+      }
+
+      // ── 4. Concentric Gyroscopic Orbiting (Rings Stay in Precise Position) ──
+      let mult = (agentState === 'thinking' || agentState === 'executing') ? 2.2 : (agentState === 'muted' ? 0.3 : 1.0);
+      
+      outerRings.forEach(r => {
+        r.angle += r.spinSpeed * mult;
+        r.mesh.rotation.z += r.spinSpeed * 0.5 * mult;
+        r.sat.position.set(
+          r.radius * Math.cos(r.angle),
+          r.radius * Math.sin(r.angle),
+          0
+        );
       });
 
-      if (coreGlow) {
-        const pulse = 1.0 + Math.sin(noiseVal * (agentState === 'muted' ? 0.5 : 2)) * 0.1;
-        coreGlow.scale.set(pulse, pulse, pulse);
-      }
+      // ── 5. Render Dynamic Holographic Voice Waveform Below Orb ──
+      renderVoiceWaveform();
 
       renderer.render(scene, camera);
+    }
+
+    let wavePhase = 0;
+    let currentWaveAmp = 0;
+
+    function renderVoiceWaveform() {
+      const waveformCanvas = document.getElementById('waveform-canvas');
+      if (!waveformCanvas) return;
+      const waveCtx = waveformCanvas.getContext('2d');
+      if (!waveCtx) return;
+
+      const isSpeaking = (agentState === 'speaking');
+      const isListening = (agentState === 'listening');
+      const targetAmp = (isSpeaking || isListening) ? 1.0 : 0.0;
+      
+      // Smooth organic interpolation
+      currentWaveAmp += (targetAmp - currentWaveAmp) * 0.09;
+
+      wavePhase += (currentWaveAmp > 0.1) ? 0.08 : 0.03;
+      const w = waveformCanvas.width;
+      const h = waveformCanvas.height;
+      const midY = h / 2;
+      waveCtx.clearRect(0, 0, w, h);
+
+      // ── 1. Always Render the Glowing Horizon Baseline (Calm Line) ──
+      waveCtx.beginPath();
+      waveCtx.moveTo(0, midY);
+      for (let x = 0; x <= w; x += 4) {
+        const idleRipple = Math.sin(wavePhase * 1.5 + x * 0.04) * 1.2 * (1.0 - currentWaveAmp);
+        waveCtx.lineTo(x, midY + idleRipple);
+      }
+      waveCtx.strokeStyle = isSpeaking 
+        ? 'rgba(0, 242, 254, 0.7)' 
+        : (isListening ? 'rgba(0, 255, 136, 0.7)' : 'rgba(0, 242, 254, 0.35)');
+      waveCtx.lineWidth = 1.5;
+      waveCtx.shadowBlur = (currentWaveAmp > 0.1) ? 8 : 4;
+      waveCtx.shadowColor = isSpeaking ? '#00f2fe' : (isListening ? '#00ff88' : 'rgba(0, 242, 254, 0.5)');
+      waveCtx.stroke();
+
+      // ── 2. Harmonic Equalizer Bars (Active while speaking / listening) ──
+      const numBars = 28;
+      const barWidth = 4;
+      const gap = (w - (numBars * barWidth)) / (numBars - 1);
+      const mid = numBars / 2;
+
+      for (let i = 0; i < numBars; i++) {
+        const distFromCenter = Math.abs(i - mid + 0.5) / mid;
+        const envelope = Math.cos(distFromCenter * Math.PI * 0.5);
+
+        const wave1 = Math.sin(wavePhase * 2.5 + i * 0.45);
+        const wave2 = Math.cos(wavePhase * 1.8 + i * 0.65);
+        const wave3 = Math.sin(wavePhase * 3.2 - i * 0.35);
+        const rawAmp = Math.abs(wave1 * 0.5 + wave2 * 0.35 + wave3 * 0.15);
+
+        let audioAmp = 0;
+        if (audioFrequencyData && audioFrequencyData.length > 0) {
+          const freqIdx = i % 16;
+          audioAmp = (audioFrequencyData[freqIdx] / 255) * 0.8;
+        }
+
+        // Modulate with currentWaveAmp: when idle, height collapses flush with the calm line
+        const activeHeight = (rawAmp * 26 + audioAmp * 18 + 2) * envelope;
+        const barHeight = Math.max(2, activeHeight * currentWaveAmp + 2);
+        const x = i * (barWidth + gap);
+        const y = (h - barHeight) / 2;
+
+        const grad = waveCtx.createLinearGradient(0, y, 0, y + barHeight);
+        if (isSpeaking) {
+          grad.addColorStop(0, '#00f2fe');
+          grad.addColorStop(0.5, '#7f00ff');
+          grad.addColorStop(1, '#ec4899');
+        } else if (isListening) {
+          grad.addColorStop(0, '#00ff88');
+          grad.addColorStop(0.5, '#00f2fe');
+          grad.addColorStop(1, '#38bdf8');
+        } else {
+          grad.addColorStop(0, 'rgba(0, 242, 254, 0.4)');
+          grad.addColorStop(1, 'rgba(127, 0, 255, 0.2)');
+        }
+
+        waveCtx.fillStyle = grad;
+        waveCtx.shadowBlur = (currentWaveAmp > 0.1) ? 8 : 3;
+        waveCtx.shadowColor = isSpeaking ? 'rgba(0, 242, 254, 0.7)' : (isListening ? 'rgba(0, 255, 136, 0.7)' : 'rgba(0, 242, 254, 0.3)');
+
+        if (waveCtx.roundRect) {
+          waveCtx.beginPath();
+          waveCtx.roundRect(x, y, barWidth, barHeight, 2);
+          waveCtx.fill();
+        } else {
+          waveCtx.fillRect(x, y, barWidth, barHeight);
+        }
+      }
     }
 
     /* ══════════════════════════════════════════════════════════════
@@ -995,11 +1136,6 @@
     let analyser = null;
     let mediaRecorder = null;
     let recordedChunks = [];
-    
-    const SPEECH_ENERGY_THRESHOLD = 0.022;
-    const SILENCE_DURATION_MS = 1100;
-    const MIN_SPEECH_DURATION_MS = 500;
-
     let isUserSpeaking = false;
     let speechStartTime = 0;
     let lastSpeechTime = 0;
@@ -1015,15 +1151,8 @@
     const orbHitbox = document.getElementById('orb-hitbox');
     const cmdInput = document.getElementById('command-input');
     const sendBtn = document.getElementById('send-command-btn');
-    const stateTag = document.getElementById('live-state-tag');
-    const subtitles = document.getElementById('live-subtitles');
     const statusText = document.getElementById('system-status-text');
     const statusDot = document.getElementById('status-indicator');
-    const hintText = document.getElementById('orb-hint-text');
-    const vadMeterBar = document.getElementById('vad-meter-bar');
-    const responseDossier = document.getElementById('response-dossier');
-    const dossierContent = document.getElementById('dossier-content');
-    const dossierCloseBtn = document.getElementById('dossier-close-btn');
 
     document.addEventListener('DOMContentLoaded', async () => {
       init3DOrb();
@@ -1050,69 +1179,48 @@
       agentState = state;
 
       if (state === 'muted') {
-        stateTag.innerHTML = `<i data-lucide="mic-off" class="icon-sm"></i><span>MIC MUTED</span>`;
-        stateTag.style.color = 'var(--red)';
         statusText.textContent = 'MUTED (NOT LISTENING)';
         statusDot.className = 'status-dot muted';
-        hintText.innerHTML = `<i data-lucide="mic-off" class="icon-sm"></i><span>MIC IS MUTED (PRESS M)</span>`;
         orbHitbox.classList.add('muted');
         micBtn.classList.add('muted');
         micBtn.classList.remove('listening');
         mainMicIcon.innerHTML = `<i data-lucide="mic-off" class="icon-md"></i>`;
-        vadMeterBar.style.width = '0%';
-        if (customSubtitle) subtitles.textContent = customSubtitle;
       } else if (state === 'idle') {
-        stateTag.innerHTML = `<i data-lucide="sparkles" class="icon-sm"></i><span>${handsFreeEnabled ? 'HANDS-FREE LISTENING' : 'VISION READY'}</span>`;
-        stateTag.style.color = 'var(--cyan)';
         statusText.textContent = 'ONLINE';
         statusDot.className = 'status-dot';
-        hintText.innerHTML = `<i data-lucide="radio" class="icon-sm"></i><span>${handsFreeEnabled ? 'SPEAK NATURALLY (VAD ACTIVE)' : 'CLICK TO SPEAK'}</span>`;
         orbHitbox.classList.remove('muted');
         micBtn.classList.remove('muted');
         micBtn.classList.remove('listening');
         mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
       } else if (state === 'listening') {
-        stateTag.innerHTML = `<i data-lucide="mic" class="icon-sm"></i><span>USER SPEAKING...</span>`;
-        stateTag.style.color = 'var(--green)';
         statusText.textContent = 'RECORDING SPEECH';
         statusDot.className = 'status-dot';
-        hintText.innerHTML = `<i data-lucide="volume-2" class="icon-sm"></i><span>RECORDING</span>`;
         orbHitbox.classList.remove('muted');
         micBtn.classList.remove('muted');
         micBtn.classList.add('listening');
         mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
-        if (customSubtitle) subtitles.textContent = customSubtitle;
       } else if (state === 'thinking') {
-        stateTag.innerHTML = `<i data-lucide="cpu" class="icon-sm"></i><span>PROCESSING COGNITION...</span>`;
-        stateTag.style.color = 'var(--amber)';
         statusText.textContent = 'NEURAL REASONING';
         statusDot.className = 'status-dot busy';
-        hintText.innerHTML = `<i data-lucide="loader" class="icon-sm"></i><span>THINKING</span>`;
         orbHitbox.classList.remove('muted');
         micBtn.classList.remove('muted');
         micBtn.classList.remove('listening');
-        if (customSubtitle) subtitles.textContent = customSubtitle;
       } else if (state === 'executing') {
-        stateTag.innerHTML = `<i data-lucide="zap" class="icon-sm"></i><span>EXECUTING AUTONOMOUS TOOL...</span>`;
-        stateTag.style.color = 'var(--neon-blue)';
         statusText.textContent = 'EXECUTING ACTIONS';
         statusDot.className = 'status-dot busy';
-        hintText.innerHTML = `<i data-lucide="layers" class="icon-sm"></i><span>EXECUTING</span>`;
         orbHitbox.classList.remove('muted');
         micBtn.classList.remove('muted');
-        if (customSubtitle) subtitles.textContent = customSubtitle;
       } else if (state === 'speaking') {
-        stateTag.innerHTML = `<i data-lucide="volume-2" class="icon-sm"></i><span>SPEAKING RESPONSE</span>`;
-        stateTag.style.color = 'var(--green)';
         statusText.textContent = 'VOICE ACTIVE';
         statusDot.className = 'status-dot';
-        hintText.innerHTML = `<i data-lucide="volume-2" class="icon-sm"></i><span>SPEAKING</span>`;
         orbHitbox.classList.remove('muted');
         micBtn.classList.remove('muted');
-        if (customSubtitle) subtitles.textContent = customSubtitle;
       }
       refreshIcons();
     }
+
+    const API_BASE = (window.location.origin.startsWith('http')) ? '' : 'http://localhost:8000';
+    let isManualRecording = false;
 
     function setupEventListeners() {
       muteBtn.addEventListener('click', toggleMute);
@@ -1122,12 +1230,15 @@
         if (isMuted) {
           toggleMute();
         } else if (!handsFreeEnabled) {
-          startHandsFreeVAD();
+          toggleManualRecord();
         }
       });
 
-      micBtn.addEventListener('click', toggleMute);
-      dossierCloseBtn.addEventListener('click', hideDossier);
+      // Bottom Mic Button -> Push-to-Talk / Click-to-Speak
+      micBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleManualRecord();
+      });
 
       document.addEventListener('keydown', (e) => {
         if (document.activeElement === cmdInput) return;
@@ -1137,17 +1248,74 @@
           toggleMute();
         } else if (e.code === 'Space' && !isProcessing) {
           e.preventDefault();
-          if (isMuted) toggleMute();
-          else toggleHandsFree();
-        } else if (e.key === 'Escape') {
-          hideDossier();
+          toggleManualRecord();
         }
       });
 
       cmdInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') executeCommandText();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          executeCommandText();
+        }
       });
-      sendBtn.addEventListener('click', executeCommandText);
+      sendBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        executeCommandText();
+      });
+    }
+
+    // ── Manual Push-to-Talk / Click-to-Speak Toggle ──
+    async function toggleManualRecord() {
+      if (isMuted) {
+        toggleMute();
+        return;
+      }
+
+      // If currently recording, STOP and SEND
+      if (isManualRecording || (mediaRecorder && mediaRecorder.state === 'recording')) {
+        isManualRecording = false;
+        micBtn.classList.remove('listening');
+        setAgentState('thinking');
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          try { mediaRecorder.stop(); } catch(e){}
+        }
+        return;
+      }
+
+      // If VISION is currently speaking, cut speech
+      if (agentState === 'speaking' || speechTimeout) {
+        if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
+        fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
+      }
+
+      // Start recording
+      try {
+        if (!micStream) {
+          micStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+          });
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 512;
+          const source = audioContext.createMediaStreamSource(micStream);
+          source.connect(analyser);
+        }
+        setupMediaRecorder();
+        
+        isManualRecording = true;
+        recordedChunks = [];
+        if (mediaRecorder) {
+          if (mediaRecorder.state === 'recording') {
+            try { mediaRecorder.stop(); } catch(e){}
+          }
+          mediaRecorder.start(100);
+        }
+        setAgentState('listening');
+        micBtn.classList.add('listening');
+        statusText.textContent = 'LISTENING (CLICK MIC TO SEND)';
+      } catch (err) {
+        setAgentState('idle');
+      }
     }
 
     // ── Mute Microphone Kill-Switch ──
@@ -1167,8 +1335,10 @@
         }
         recordedChunks = [];
         isUserSpeaking = false;
+        isManualRecording = false;
+        micBtn.classList.remove('listening');
         
-        setAgentState('muted', '"Microphone is muted. VISION cannot listen."');
+        setAgentState('muted');
         logAction('tool', 'Microphone Muted', 'Audio input paused.');
       } else {
         muteBtn.classList.remove('muted');
@@ -1177,50 +1347,77 @@
 
         if (micStream) {
           micStream.getAudioTracks().forEach(track => track.enabled = true);
-        } else {
+        } else if (handsFreeEnabled) {
           startHandsFreeVAD();
         }
 
-        setAgentState('idle', '"Microphone unmuted. VISION listening hands-free."');
+        setAgentState('idle');
         logAction('tool', 'Microphone Unmuted', 'Audio input active.');
       }
       refreshIcons();
     }
 
     function toggleHandsFree() {
-      if (isMuted) {
-        toggleMute();
-        return;
-      }
       handsFreeEnabled = !handsFreeEnabled;
+
       if (handsFreeEnabled) {
         handsfreeBtn.classList.remove('off');
         handsfreeLabel.textContent = 'HANDS-FREE VAD: ON';
         startHandsFreeVAD();
+        logAction('tool', 'Hands-Free VAD', 'Auto voice detection active.');
       } else {
         handsfreeBtn.classList.add('off');
         handsfreeLabel.textContent = 'HANDS-FREE VAD: OFF';
         stopHandsFreeVAD();
-        setAgentState('idle', '"Hands-free VAD paused."');
+        setAgentState('idle');
+        logAction('tool', 'Hands-Free VAD', 'Manual Push-to-Talk active (Click Mic below to speak).');
       }
       refreshIcons();
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       State-of-the-Art Autonomous Voice Activity Engine (Silero/DSP VAD)
+       ══════════════════════════════════════════════════════════════ */
+    let ambientNoiseFloor = 0.008;
+    let consecutiveSpeechFrames = 0;
+    const REQUIRED_SPEECH_FRAMES = 2; // ~100ms temporal confirmation
+    const MIN_SPEECH_DURATION_MS = 450;
+
     async function startHandsFreeVAD() {
-      if (micStream || isProcessing || isMuted) return;
+      if (micStream || isProcessing || isMuted || !handsFreeEnabled) return;
       try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        });
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // ── Human Vocal Frequency Bandpass Filter (120Hz to 3400Hz) ──
+        const highpass = audioContext.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.value = 120; // Cut low-frequency desk rumble/thump
+
+        const lowpass = audioContext.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 3400; // Cut high-frequency hiss/fan noise
+
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.4;
+
         const source = audioContext.createMediaStreamSource(micStream);
-        source.connect(analyser);
+        source.connect(highpass);
+        highpass.connect(lowpass);
+        lowpass.connect(analyser);
 
         setupMediaRecorder();
         startVADLoop();
         setAgentState('idle');
       } catch (err) {
-        setAgentState('idle', '"Microphone access required. Please allow mic in browser."');
+        setAgentState('idle');
       }
     }
 
@@ -1229,35 +1426,46 @@
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         try { mediaRecorder.stop(); } catch(e){}
       }
-      if (micStream) {
-        micStream.getTracks().forEach(t => t.stop());
-        micStream = null;
-      }
-      if (audioContext) {
-        try { audioContext.close(); } catch(e){}
-        audioContext = null;
-      }
       isUserSpeaking = false;
+      isManualRecording = false;
+      consecutiveSpeechFrames = 0;
+      micBtn.classList.remove('listening');
     }
 
     function setupMediaRecorder() {
       if (!micStream) return;
       try {
-        mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+        let mimeType = 'audio/webm';
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        }
+
+        mediaRecorder = new MediaRecorder(micStream, { mimeType });
         recordedChunks = [];
+        
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) recordedChunks.push(e.data);
+          if (e.data && e.data.size > 0) {
+            recordedChunks.push(e.data);
+          }
         };
         mediaRecorder.onstop = onRecordingFinalized;
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[Recorder] Setup error:', e);
+      }
     }
+
+    let speechTimeout = null;
 
     function startVADLoop() {
       if (vadCheckInterval) clearInterval(vadCheckInterval);
       const buffer = new Float32Array(analyser.fftSize);
 
       vadCheckInterval = setInterval(() => {
-        if (!analyser || isProcessing || !handsFreeEnabled || isMuted) return;
+        if (!analyser || !handsFreeEnabled || isMuted || isManualRecording) return;
 
         analyser.getFloatTimeDomainData(buffer);
         analyser.getByteFrequencyData(audioFrequencyData);
@@ -1269,92 +1477,135 @@
         const rms = Math.sqrt(sum / buffer.length);
         const now = Date.now();
 
-        const meterPct = Math.min(100, Math.round((rms / 0.15) * 100));
-        vadMeterBar.style.width = `${meterPct}%`;
+        // ── Adaptive Dynamic Noise Floor Tracking ──
+        if (!isUserSpeaking) {
+          ambientNoiseFloor = ambientNoiseFloor * 0.96 + rms * 0.04;
+        }
+        const dynamicSpeechThreshold = Math.max(0.016, Math.min(0.065, ambientNoiseFloor * 2.7));
 
-        // 1. Detect Speech Start
-        if (rms > SPEECH_ENERGY_THRESHOLD) {
+        // 1. Detect User Speech Start with Multi-Frame Confirmation & Barge-in
+        if (rms > dynamicSpeechThreshold) {
+          consecutiveSpeechFrames++;
           lastSpeechTime = now;
-          if (!isUserSpeaking) {
+
+          // Immediate speech interruption if VISION is talking
+          if (agentState === 'speaking' || speechTimeout) {
+            if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
+            fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
+            isProcessing = false;
+            setAgentState('listening');
+          }
+
+          if (consecutiveSpeechFrames >= REQUIRED_SPEECH_FRAMES && !isUserSpeaking && !isProcessing) {
             isUserSpeaking = true;
             speechStartTime = now;
-            hideDossier();
-            setAgentState('listening', '"Listening to your command..."');
+            setAgentState('listening');
             
             recordedChunks = [];
-            if (mediaRecorder && mediaRecorder.state === 'inactive') {
-              mediaRecorder.start(100);
+            if (mediaRecorder) {
+              if (mediaRecorder.state === 'recording') {
+                try { mediaRecorder.stop(); } catch(e){}
+              }
+              try {
+                mediaRecorder.start(100);
+              } catch(e){}
             }
           }
         } 
-        // 2. Detect Speech Finish / Silence Cutoff
-        else if (isUserSpeaking) {
-          const silenceDuration = now - lastSpeechTime;
-          const totalSpeechDuration = now - speechStartTime;
+        // 2. Detect Speech Finish with Adaptive Cadence Silence Timeout
+        else {
+          consecutiveSpeechFrames = 0;
 
-          if (silenceDuration >= SILENCE_DURATION_MS) {
-            isUserSpeaking = false;
-            if (totalSpeechDuration >= MIN_SPEECH_DURATION_MS) {
-              setAgentState('thinking', '"Speech detected — processing command..."');
-              if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
+          if (isUserSpeaking) {
+            const silenceDuration = now - lastSpeechTime;
+            const totalSpeechDuration = now - speechStartTime;
+
+            // Adaptive Silence Timeout: 850ms for quick utterances, 1200ms for long sentences
+            const adaptiveSilenceTimeout = (totalSpeechDuration > 2200) ? 1200 : 850;
+
+            if (silenceDuration >= adaptiveSilenceTimeout) {
+              isUserSpeaking = false;
+              if (totalSpeechDuration >= MIN_SPEECH_DURATION_MS) {
+                setAgentState('thinking');
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                  try {
+                    mediaRecorder.stop();
+                  } catch(e){}
+                }
+              } else {
+                recordedChunks = [];
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                  try {
+                    mediaRecorder.stop();
+                  } catch(e){}
+                }
+                setAgentState('idle');
               }
-            } else {
-              if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-              }
-              setAgentState('idle');
             }
           }
         }
-      }, 50);
+      }, 40);
     }
 
     async function onRecordingFinalized() {
-      if (recordedChunks.length === 0 || isProcessing || isMuted) return;
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      if (recordedChunks.length === 0 || isMuted) {
+        if (!isProcessing) setAgentState(isMuted ? 'muted' : 'idle');
+        return;
+      }
+      const mimeType = mediaRecorder?.mimeType || 'audio/webm';
+      const blob = new Blob(recordedChunks, { type: mimeType });
       recordedChunks = [];
+
+      if (blob.size < 600) {
+        if (!isProcessing) setAgentState(isMuted ? 'muted' : 'idle');
+        return;
+      }
 
       isProcessing = true;
       const formData = new FormData();
-      formData.append('file', blob, 'voice.webm');
+      const filename = mimeType.includes('ogg') ? 'voice.ogg' : 'voice.webm';
+      formData.append('file', blob, filename);
 
       try {
-        setAgentState('thinking', '"Transcribing voice with Groq Whisper..."');
-        const res = await fetch('/api/audio/transcribe', { method: 'POST', body: formData });
+        setAgentState('thinking');
+        const res = await fetch(`${API_BASE}/api/audio/transcribe`, { method: 'POST', body: formData });
         const data = await res.json();
         const text = (data.text || '').trim();
 
         if (text.length >= 2) {
-          subtitles.textContent = `"${text}"`;
           logTranscript('user', 'You (Spoken)', text);
           await sendToVision(text);
         } else {
           isProcessing = false;
-          setAgentState(isMuted ? 'muted' : 'idle', '"No clear speech detected. Listening..."');
+          setAgentState(isMuted ? 'muted' : 'idle');
         }
       } catch (err) {
         isProcessing = false;
-        setAgentState(isMuted ? 'muted' : 'idle', `"Audio error: ${err.message}"`);
+        setAgentState(isMuted ? 'muted' : 'idle');
       }
     }
 
     async function executeCommandText() {
       const text = cmdInput.value.trim();
-      if (!text || isProcessing) return;
+      if (!text) return;
       cmdInput.value = '';
-      hideDossier();
-      subtitles.textContent = `"${text}"`;
+      
+      // Stop any current speech if user types
+      if (agentState === 'speaking' || speechTimeout) {
+        if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
+        fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
+      }
+
       logTranscript('user', 'You (Typed)', text);
       await sendToVision(text);
     }
 
     async function sendToVision(userMessage) {
       isProcessing = true;
-      setAgentState('thinking', `"Executing request: '${userMessage}'..."`);
+      setAgentState('thinking');
 
       try {
-        const res = await fetch('/api/chat', {
+        const res = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1368,22 +1619,24 @@
         const responseText = data.response || data.detail || 'Action completed.';
 
         const cleanFirstSentence = extractFirstSentence(responseText);
-        setAgentState('speaking', `"${cleanFirstSentence}"`);
+        setAgentState('speaking');
         
         logTranscript('ai', 'VISION', responseText);
 
-        if (responseText.length > 80 || responseText.includes('\n') || responseText.includes('**')) {
-          showDossier(responseText);
-        }
-
-        const estimatedSpeechDuration = Math.max(3500, Math.min(14000, responseText.length * 50));
-        setTimeout(() => {
+        const estimatedSpeechDuration = Math.max(3000, Math.min(14000, responseText.length * 45));
+        
+        if (speechTimeout) clearTimeout(speechTimeout);
+        speechTimeout = setTimeout(() => {
           isProcessing = false;
-          setAgentState(isMuted ? 'muted' : 'idle');
+          speechTimeout = null;
+          if (agentState === 'speaking') {
+            setAgentState(isMuted ? 'muted' : 'idle');
+          }
         }, estimatedSpeechDuration);
 
       } catch (err) {
-        setAgentState(isMuted ? 'muted' : 'idle', `"Connection error: ${err.message}"`);
+        logTranscript('ai', 'VISION', `⚠️ Request failed: ${err.message}. Please ensure VISION server is running on http://localhost:8000.`);
+        setAgentState(isMuted ? 'muted' : 'idle');
         isProcessing = false;
       }
     }
@@ -1398,16 +1651,6 @@
       const parts = clean.split(/[\.\n]/);
       const first = parts[0].trim();
       return first.length > 10 ? first : clean.substring(0, 110);
-    }
-
-    function showDossier(rawMarkdown) {
-      dossierContent.innerHTML = renderMarkdown(rawMarkdown);
-      responseDossier.classList.add('visible');
-      refreshIcons();
-    }
-
-    function hideDossier() {
-      responseDossier.classList.remove('visible');
     }
 
     function renderMarkdown(text) {
