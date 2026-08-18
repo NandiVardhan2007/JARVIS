@@ -1,9 +1,11 @@
 """
 Memory management and user recall tools for VISION AI.
-Allows the user to explicitly store, recall, search, and delete personal memories and preferences.
+Allows the user to explicitly store, recall, search, delete, and synchronize personal memories,
+habits, procedural rules, and episodic event logs.
 """
 
 from typing import Optional
+from pathlib import Path
 from vision.tools.registry import tool
 from vision.memory.mag_engine import mag_engine
 from vision.logger import logger
@@ -24,7 +26,6 @@ def remember_fact(fact: str, category: str = "user_preference") -> str:
 @tool(name="recall_memory", description="Query long-term memory for stored facts, preferences, hardware, contacts, friends, or past history.")
 def recall_memory(query: str, limit: int = 15) -> str:
     """Search and retrieve relevant stored memories."""
-    # Ensure limit is integer
     try:
         lim = int(limit) if limit else 15
     except Exception:
@@ -52,7 +53,7 @@ def forget_memory(query_or_keyword: str) -> str:
 @tool(name="list_all_memories", description="List all long-term memories and stored user facts.")
 def list_all_memories() -> str:
     """List all stored semantic memories."""
-    memories = mag_engine.list_all(limit=25)
+    memories = mag_engine.list_all(limit=50)
     if not memories:
         return "No long-term memories currently stored."
 
@@ -60,3 +61,55 @@ def list_all_memories() -> str:
     for m in memories:
         lines.append(f"- #{m['id']} [{m['category'].upper()}]: {m['content']}")
     return "\n".join(lines)
+
+
+@tool(name="learn_user_rule", description="Save a procedural rule, habit, or instruction (e.g. trigger='youtube,media', rule='Always use Comet browser').")
+def learn_user_rule(trigger_context: str, rule: str) -> str:
+    """Record a procedural habit or rule into MAG memory."""
+    rule_id = mag_engine.record_procedural_rule(trigger_context, rule)
+    if rule_id <= 0:
+        return "Error: Could not record rule. Please provide valid trigger and rule."
+    return f"Recorded procedural habit #{rule_id}: When '{trigger_context}' -> '{rule}'."
+
+
+@tool(name="list_procedural_rules", description="List all learned procedural habits, execution rules, and user preferences.")
+def list_procedural_rules() -> str:
+    """List procedural habits and rules."""
+    rules = mag_engine.list_procedural_rules(limit=20)
+    if not rules:
+        return "No procedural rules currently recorded."
+
+    lines = ["Learned Procedural Habits & Rules:"]
+    for r in rules:
+        lines.append(f"- #{r['id']} [When: {r['trigger_context']}]: {r['rule_action']}")
+    return "\n".join(lines)
+
+
+@tool(name="search_past_events", description="Search past episodic timeline events, tool executions, and system actions by keyword.")
+def search_past_events(query: str) -> str:
+    """Search episodic timeline."""
+    events = mag_engine.search_episodic_events(query, limit=10)
+    if not events:
+        return f"No recent timeline events found matching '{query}'."
+
+    lines = [f"Episodic Timeline Events for '{query}':"]
+    for e in events:
+        lines.append(f"- [{e['created_at']}] ({e['event_type']}) {e['description']}")
+    return "\n".join(lines)
+
+
+@tool(name="sync_memories_file", description="Synchronize edited memories from MEMORIES.md back into the SQLite database.")
+def sync_memories_file(file_path: Optional[str] = None) -> str:
+    """Sync edits made in MEMORIES.md back to SQLite."""
+    target = Path(file_path) if file_path else None
+    res = mag_engine.import_from_markdown(target)
+    if "error" in res:
+        return f"Sync failed: {res['error']}"
+    return f"Memory Sync Complete: {res.get('updated', 0)} memories updated, {res.get('added', 0)} new memories added."
+
+
+@tool(name="export_memories_file", description="Export all active long-term memories from SQLite into MEMORIES.md.")
+def export_memories_file(file_path: Optional[str] = None) -> str:
+    """Export SQLite memories to MEMORIES.md."""
+    target = Path(file_path) if file_path else None
+    return mag_engine.export_to_markdown(target)

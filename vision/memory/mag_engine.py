@@ -1,26 +1,30 @@
 """
 Memory-Augmented Generation (MAG) Engine for VISION.
 Provides persistent multi-tier memory storage (Semantic Profile, Episodic Timeline, Procedural Habits)
-with SQLite backend, fast BM25/keyword retrieval, and contextual prompt injection.
+with SQLite backend, fast BM25/keyword retrieval, contextual prompt injection,
+and bi-directional Markdown sync (MEMORIES.md).
 """
 
 import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from vision.logger import logger
 
 
 class MAGEngine:
     def __init__(self, db_path: Optional[str] = None):
+        project_root = Path(__file__).resolve().parent.parent.parent
+        self.project_root = project_root
         if db_path is None:
-            project_root = Path(__file__).resolve().parent.parent.parent
             data_dir = project_root / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
             self.db_path = str(data_dir / "memory.db")
         else:
             self.db_path = db_path
+
+        self.default_md_path = project_root / "MEMORIES.md"
 
         self._init_db()
         self._seed_default_profile()
@@ -70,7 +74,7 @@ class MAGEngine:
             conn.commit()
 
     def _seed_default_profile(self):
-        """Seed essential environment knowledge if memory is empty."""
+        """Seed essential environment knowledge and procedural rules if empty."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) as cnt FROM semantic_memories")
@@ -88,7 +92,32 @@ class MAGEngine:
                         "INSERT INTO semantic_memories (category, content, tags) VALUES (?, ?, ?)",
                         (cat, content, tags)
                     )
-                conn.commit()
+
+            # Seed Procedural Rules if empty
+            cursor.execute("SELECT COUNT(*) as cnt FROM procedural_memories")
+            proc_row = cursor.fetchone()
+            if proc_row["cnt"] == 0:
+                rules = [
+                    ("youtube,video,song,music,media,browser", "Always open YouTube and media in the Comet Browser (or taskbar shortcut)."),
+                    ("fullscreen,full screen,youtube", "When user says keep it full screen, trigger full-screen mode using hotkey 'f'."),
+                    ("forward,skip,rewind,youtube", "When user says forward or rewind, forward or rewind video by specified seconds (default 10s via 'l'/'j')."),
+                    ("document,print", "Always print formatted bordered documents on A4 paper with 1.5 cm margins on Pantum P2500."),
+                ]
+                for trigger, rule in rules:
+                    cursor.execute(
+                        "INSERT INTO procedural_memories (trigger_context, rule_action) VALUES (?, ?)",
+                        (trigger, rule)
+                    )
+
+            conn.commit()
+
+    def _invalidate_cag_cache(self, pattern: Optional[str] = None):
+        """Helper to clear related CAG cache entries when memory changes."""
+        try:
+            from vision.memory.cag_engine import cag_engine
+            cag_engine.invalidate(pattern or "all")
+        except Exception as e:
+            logger.debug(f"[MAG] CAG cache invalidation skipped: {e}")
 
     # ── Semantic Memory CRUD ───────────────────────────────────
 
@@ -98,7 +127,6 @@ class MAGEngine:
         if not clean:
             return -1
 
-        # Check for duplicates or updates
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, content FROM semantic_memories WHERE content = ?", (clean,))
@@ -109,6 +137,7 @@ class MAGEngine:
                     (existing["id"],)
                 )
                 conn.commit()
+                self._invalidate_cag_cache()
                 return existing["id"]
 
             cursor.execute(
@@ -118,6 +147,7 @@ class MAGEngine:
             conn.commit()
             mem_id = cursor.lastrowid
             logger.info(f"[MAG] Stored new semantic memory #{mem_id}: '{clean}'")
+            self._invalidate_cag_cache()
             return mem_id
 
     def forget(self, query: str) -> int:
@@ -148,14 +178,56 @@ class MAGEngine:
 
             conn.commit()
             logger.info(f"[MAG] Deleted {deleted} memories matching '{clean}'")
+            if deleted > 0:
+                self._invalidate_cag_cache()
             return deleted
 
-    def list_all(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_all(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Retrieve all active semantic memories."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM semantic_memories ORDER BY id DESC LIMIT ?", (limit,))
+            cursor.execute("SELECT * FROM semantic_memories ORDER BY id ASC LIMIT ?", (limit,))
             return [dict(row) for row in cursor.fetchall()]
+
+    # ── Procedural Memory (Habits & Rules) ─────────────────────
+
+    def record_procedural_rule(self, trigger_context: str, rule_action: str) -> int:
+        """Save a habitual rule or preference (e.g. 'Use Comet browser for YouTube')."""
+        clean_trig = trigger_context.strip().lower()
+        clean_act = rule_action.strip()
+        if not clean_act:
+            return -1
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO procedural_memories (trigger_context, rule_action) VALUES (?, ?)",
+                (clean_trig, clean_act)
+            )
+            conn.commit()
+            rule_id = cursor.lastrowid
+            logger.info(f"[MAG] Recorded procedural rule #{rule_id}: When '{clean_trig}' -> '{clean_act}'")
+            return rule_id
+
+    def list_procedural_rules(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Retrieve all registered procedural rules."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM procedural_memories ORDER BY id ASC LIMIT ?", (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_matching_procedural_rules(self, query: str) -> List[str]:
+        """Find procedural rules that match keywords in the query."""
+        rules = self.list_procedural_rules(limit=50)
+        q_lower = query.lower()
+        q_tokens = set(re.findall(r"\w+", q_lower))
+
+        matched = []
+        for r in rules:
+            triggers = [t.strip().lower() for t in r["trigger_context"].split(",") if t.strip()]
+            if any(trig in q_lower or trig in q_tokens for trig in triggers):
+                matched.append(r["rule_action"])
+        return matched
 
     # ── Episodic Memory ────────────────────────────────────────
 
@@ -176,6 +248,20 @@ class MAGEngine:
             cursor.execute("SELECT * FROM episodic_memories ORDER BY id DESC LIMIT ?", (limit,))
             return [dict(row) for row in cursor.fetchall()]
 
+    def search_episodic_events(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search past timeline actions and events by keyword."""
+        clean = query.strip()
+        if not clean:
+            return self.get_recent_events(limit=limit)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM episodic_memories WHERE description LIKE ? OR event_type LIKE ? OR metadata LIKE ? ORDER BY id DESC LIMIT ?",
+                (f"%{clean}%", f"%{clean}%", f"%{clean}%", limit)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     # ── Search & Context Retrieval ─────────────────────────────
 
     def get_contact_number(self, query_name: str) -> Optional[str]:
@@ -184,7 +270,6 @@ class MAGEngine:
             return None
         target = query_name.strip().lower()
 
-        # Direct alias mappings
         alias_map = {
             "amma": ["amma", "mother", "mom", "dhana lakshmi", "kovvuri dhana lakshmi"],
             "mother": ["amma", "mother", "mom", "dhana lakshmi"],
@@ -210,38 +295,38 @@ class MAGEngine:
             "tanuja": ["tanuja"],
         }
 
-        # Fast-path for user self
         if target in ("myself", "me", "nandu", "nandi", "self", "my number", "my phone"):
-            return "7337419275"
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT content FROM semantic_memories WHERE (category = 'contact' OR category = 'profile' OR tags LIKE '%self%' OR tags LIKE '%primary_phone%') AND (content LIKE '%mobile%' OR content LIKE '%phone%') ORDER BY id DESC")
+                row = cursor.fetchone()
+                if row:
+                    num_match = re.search(r"(\+?\d[\d\s\-]{8,}\d)", row["content"])
+                    if num_match:
+                        digits = re.sub(r"[^\d]", "", num_match.group(1))
+                        if len(digits) >= 10:
+                            return digits
 
-        search_tokens = alias_map.get(target, [target])
-
-        # Query all contact / family memories
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT content, tags, category FROM semantic_memories WHERE category IN ('contact', 'family', 'friends_profile', 'profile') ORDER BY CASE WHEN category = 'contact' THEN 1 ELSE 2 END, id DESC")
+            cursor.execute("SELECT content, tags, category FROM semantic_memories WHERE category IN ('contact', 'family', 'friends_profile', 'profile', 'NICKNAMES', 'family_profile') ORDER BY CASE WHEN category = 'contact' THEN 1 ELSE 2 END, id DESC")
             rows = cursor.fetchall()
 
             for row in rows:
                 content = row["content"]
                 tags = (row["tags"] or "").lower()
                 
-                # Check for explicit token match with word boundaries
                 matched = False
                 for tok in search_tokens:
-                    # Match exact word in content or tags
                     if re.search(rf"\b{re.escape(tok)}\b", content, re.IGNORECASE) or tok in tags.split(","):
-                        # Avoid cross matching Peddamma with Amma
                         if tok in ("amma", "mom", "mother") and re.search(r"\bpeddamma\b", content, re.IGNORECASE) and not re.search(r"\b(?:amma|mother|mom)\b", content, re.IGNORECASE):
                             continue
-                        # Avoid matching other people when searching self
                         if tok in ("nandu", "self") and not row["category"] == "contact" and "primary mobile" not in content.lower():
                             continue
                         matched = True
                         break
 
                 if matched:
-                    # Extract phone number
                     num_match = re.search(r"(\+?\d[\d\s\-]{8,}\d)", content)
                     if num_match:
                         digits = re.sub(r"[^\d]", "", num_match.group(1))
@@ -251,34 +336,41 @@ class MAGEngine:
         return None
 
     def search_memories(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Rank and return relevant memories matching user query with accurate TF-IDF whole-word scoring."""
-        clean_words = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2]
+        """Rank and return relevant memories matching user query with accurate TF-IDF whole-word scoring and stem matching."""
+        stop_words = {"what", "which", "how", "when", "where", "why", "who", "does", "have", "with", "from", "that", "this", "tell", "show", "the", "and", "for"}
+        all_words = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2]
+        clean_words = [w for w in all_words if w not in stop_words]
+        if not clean_words:
+            clean_words = all_words
+
         if not clean_words:
             return self.list_all(limit=limit)
 
         memories = self.list_all(limit=100)
-        scored: List[tuple] = []
+        scored: List[Tuple[float, Dict[str, Any]]] = []
 
         for m in memories:
             content = m["content"]
+            content_lower = content.lower()
             category = m["category"].lower()
             tags = (m.get("tags") or "").lower()
-            combined_text = f"{category} {content} {tags}".lower()
+            combined_text = f"{category} {content_lower} {tags}"
             
-            score = 0
+            score = 0.0
             for word in clean_words:
-                # 1. Exact whole-word boundary match in content (high confidence)
                 if re.search(rf"\b{re.escape(word)}\b", content, re.IGNORECASE):
-                    score += 5
-                # 2. Match in tags
+                    score += 6.0
+                elif word in content_lower:
+                    score += 4.0
                 if word in tags.split(",") or re.search(rf"\b{re.escape(word)}\b", tags):
-                    score += 4
-                # 3. Match in category
+                    score += 4.0
                 if word == category:
-                    score += 3
-                # 4. Partial substring fallback
+                    score += 3.0
                 elif word in combined_text:
-                    score += 1
+                    score += 1.0
+
+            if query.lower() in content_lower:
+                score += 10.0
 
             if score > 0:
                 scored.append((score, m))
@@ -287,37 +379,137 @@ class MAGEngine:
         return [item[1] for item in scored[:limit]]
 
     def get_mag_prompt_injection(self, user_query: str) -> str:
-        """Generate formatted dynamic long-term memory context for LLM prompt injection."""
+        """Generate formatted dynamic long-term memory & procedural habit context for LLM prompt injection."""
         q_lower = user_query.lower()
-        # If user asks for comprehensive info about themselves
         broad_keywords = ["everything", "all", "know about me", "who am i", "about me", "my details", "full profile", "my profile"]
         is_broad = any(kw in q_lower for kw in broad_keywords)
 
         if is_broad:
-            relevant = self.list_all(limit=40)
+            relevant = self.list_all(limit=50)
         else:
             relevant = self.search_memories(user_query, limit=15)
             if not relevant:
-                # Fallback to key profile facts
-                relevant = self.list_all(limit=8)
+                relevant = self.list_all(limit=10)
 
-        if not relevant:
-            return ""
+        sections = []
+        if relevant:
+            seen = set()
+            lines = ["\n[LONG-TERM USER MEMORY & PREFERENCES (MAG)]"]
+            for m in relevant:
+                c = m["content"].strip()
+                if c.lower() not in seen:
+                    seen.add(c.lower())
+                    lines.append(f"• [{m['category'].upper()}] {c}")
+            sections.append("\n".join(lines))
 
-        seen = set()
-        lines = ["\n[LONG-TERM USER MEMORY & PREFERENCES (MAG)]"]
-        for m in relevant:
-            c = m["content"].strip()
-            if c.lower() not in seen:
-                seen.add(c.lower())
-                lines.append(f"• [{m['category'].upper()}] {c}")
+        # Check for matching procedural habits & execution rules
+        proc_rules = self.get_matching_procedural_rules(user_query)
+        if proc_rules:
+            p_lines = ["[PROCEDURAL HABITS & RULES]"]
+            for r in proc_rules:
+                p_lines.append(f"• {r}")
+            sections.append("\n".join(p_lines))
 
-        return "\n".join(lines) + "\n"
+        return ("\n".join(sections) + "\n") if sections else ""
 
-    # ── Background Autonomous Fact Extraction ──────────────────
+    # ── Markdown Import & Export Sync (MEMORIES.md) ─────────────
+
+    def export_to_markdown(self, target_path: Optional[Path] = None) -> str:
+        """Export all stored semantic memories into a beautifully formatted Markdown file."""
+        md_file = target_path or self.default_md_path
+        memories = self.list_all(limit=200)
+
+        lines = [
+            "# 🧠 VISION AI — Stored Memories & Knowledge Base",
+            "",
+            f"> **File:** `{md_file}`  ",
+            f"> **Backend Database:** `{self.db_path}`  ",
+            f"> **Total Stored Items:** {len(memories)}  ",
+            f"> **Last Synchronized:** {datetime.now().strftime('%B %d, %Y - %I:%M %p')}  ",
+            "",
+            "---",
+            "",
+            "| ID | Category | Memory Content | Tags | Confidence |",
+            "|:---|:---|:---|:---|:---:|"
+        ]
+
+        for m in memories:
+            tags = m.get('tags') or ''
+            conf = m.get('confidence', 1.0)
+            lines.append(f"| **#{m['id']}** | `{m['category']}` | {m['content']} | `{tags}` | {conf} |")
+
+        lines.extend([
+            "",
+            "---",
+            "### Instructions for Editing:",
+            "- You can update any memory content, phone number, or details directly in this file.",
+            "- To add a new memory, add a new row or list item under any section.",
+            "- Use the command `sync_memories_file` to sync changes into the SQLite database."
+        ])
+
+        content = "\n".join(lines)
+        with open(md_file, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(f"[MAG] Exported {len(memories)} memories to '{md_file}'")
+        return f"Successfully exported {len(memories)} memories to '{md_file}'."
+
+    def import_from_markdown(self, source_path: Optional[Path] = None) -> Dict[str, int]:
+        """Parse and import memory updates or additions from MEMORIES.md into SQLite."""
+        md_file = source_path or self.default_md_path
+        if not md_file.exists():
+            return {"error": f"File '{md_file}' not found."}
+
+        with open(md_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+
+        added = 0
+        updated = 0
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for line in lines:
+                line = line.strip()
+                if not line.startswith("|") or line.startswith("| ID") or line.startswith("|:--"):
+                    continue
+
+                parts = [p.strip() for p in line.split("|") if p.strip()]
+                if len(parts) >= 3:
+                    id_raw = parts[0].replace("**", "").replace("#", "").strip()
+                    cat = parts[1].replace("`", "").strip()
+                    content = parts[2].strip()
+                    tags = parts[3].replace("`", "").strip() if len(parts) > 3 else "user_explicit"
+
+                    if not content or content == "Memory Content":
+                        continue
+
+                    if id_raw.isdigit():
+                        mem_id = int(id_raw)
+                        cursor.execute("SELECT id FROM semantic_memories WHERE id = ?", (mem_id,))
+                        if cursor.fetchone():
+                            cursor.execute(
+                                "UPDATE semantic_memories SET category = ?, content = ?, tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                (cat, content, tags, mem_id)
+                            )
+                            updated += 1
+                            continue
+
+                    cursor.execute(
+                        "INSERT INTO semantic_memories (category, content, tags) VALUES (?, ?, ?)",
+                        (cat, content, tags)
+                    )
+                    added += 1
+
+            conn.commit()
+
+        self._invalidate_cag_cache()
+        logger.info(f"[MAG] Markdown sync completed: {updated} updated, {added} added.")
+        return {"updated": updated, "added": added}
+
+    # ── Background Autonomous Fact & Habit Extraction ─────────
 
     def auto_extract_facts(self, user_text: str, assistant_text: str):
-        """Heuristic and pattern extractor that automatically captures user facts and preferences."""
+        """Heuristic and pattern extractor that automatically captures user facts, preferences, and rules."""
         patterns = [
             r"my (?:favorite|preferred) ([\w\s]+) is ([\w\s\.-]+)",
             r"i (?:prefer|like|always use) ([\w\s\.-]+)",

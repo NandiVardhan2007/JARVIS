@@ -1,12 +1,25 @@
 # Environments & Secrets
 .env
+.env.*
+!.env.example
 env_variables.txt
+
+# Personal Knowledge & Memories
+MEMORIES.md
+*MEMORIES*.md
+*memories*.md
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.bak
+*.bak_*
+
+# Python & Virtual Environments
 .venv/
 venv/
 ENV/
 env/
-
-# Python & Caches
 __pycache__/
 *.py[cod]
 *$py.class
@@ -15,14 +28,11 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Local databases & logs
-*.sqlite
-*.sqlite3
-*.db
+# Logs & Telemetry
 *.log
 logs/
 
-# IDE & OS files
+# IDE & OS Files
 .vscode/
 .idea/
 .DS_Store
@@ -36,7 +46,6 @@ dist/
 
 # Scratch & Temporary artifacts
 scratch/
-data/screenshots/
 
 # Frontend (if present)
 frontend/node_modules/

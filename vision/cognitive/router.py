@@ -51,8 +51,15 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["remember_fact", "recall_memory", "forget_memory", "list_all_memories", "get_cache_stats", "clear_system_cache"]
     },
     "media": {
-        "keywords": ["play", "song", "music", "youtube", "video"],
-        "tools": ["play_media", "open_application"]
+        "keywords": [
+            "play", "song", "music", "youtube", "video", "track", "audio",
+            "fullscreen", "full screen", "forward", "rewind", "seek", "skip", "fast forward",
+            "pause", "resume", "mute", "unmute", "comet", "comet browser", "vishwanath and sons"
+        ],
+        "tools": [
+            "play_youtube_video", "play_media", "control_youtube_playback",
+            "set_youtube_fullscreen", "seek_youtube_video", "open_application"
+        ]
     },
     "email": {
         "keywords": ["email", "mail", "send mail", "compose"],

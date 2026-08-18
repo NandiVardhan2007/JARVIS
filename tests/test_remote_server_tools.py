@@ -50,9 +50,10 @@ def test_ssh_execute_command_success(mock_get_client):
     mock_client.close.assert_called_once()
 
 
+@patch("vision.tools.remote_server_tools.open_parking_logs_terminal")
 @patch("vision.tools.remote_server_tools._get_ssh_client")
-def test_check_parking_logs(mock_get_client):
-    """Test checking KPR parking logs."""
+def test_check_parking_logs(mock_get_client, mock_open_terminal):
+    """Test checking KPR parking logs without opening visible GUI CMD."""
     mock_client = MagicMock()
     mock_stdout = MagicMock()
     mock_stdout.read.return_value = b"2026-08-17 05:25:00 - [INFO] Job #104 Printed ticket successfully."
@@ -63,7 +64,7 @@ def test_check_parking_logs(mock_get_client):
     mock_client.exec_command.return_value = (MagicMock(), mock_stdout, mock_stderr)
     mock_get_client.return_value = mock_client
 
-    res = check_parking_logs(lines=20)
+    res = check_parking_logs(lines=20, open_terminal=False)
     assert "Printed ticket successfully" in res
     assert "Exit code: 0" in res
 
