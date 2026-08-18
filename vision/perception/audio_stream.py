@@ -1,5 +1,5 @@
 """
-Audio Stream Capture & Voice Listener from local microphone with Voice Activity Detection.
+Audio Stream Capture & Voice Listener from local microphone with Silero Voice Activity Detection.
 Supports adaptive device selection, PortAudio fallback, and graceful error handling.
 """
 
@@ -7,6 +7,7 @@ import io
 import time
 import wave
 from typing import Optional
+from vision.perception.vad import vad_detector
 from vision.logger import logger
 
 try:
@@ -36,12 +37,12 @@ class AudioStreamManager:
     def record_phrase(
         self,
         energy_threshold: float = 0.012,
-        silence_timeout: float = 1.2,
+        silence_timeout: float = 1.1,
         max_duration: float = 25.0
     ) -> Optional[bytes]:
         """
-        Listen on the microphone until speech is detected, record the utterance,
-        and stop after silence_timeout seconds of silence. Returns WAV bytes.
+        Listen on the microphone until speech is detected via Silero/Energy VAD,
+        record the utterance, and stop automatically after silence_timeout of silence.
         """
         if sd is None or np is None:
             return None
@@ -52,7 +53,6 @@ class AudioStreamManager:
         start_time = time.time()
 
         try:
-            # Query default input device parameters
             dev_info = sd.query_devices(kind='input')
             native_rate = int(dev_info.get('default_samplerate', self.sample_rate))
             native_channels = min(self.channels, dev_info.get('max_input_channels', 1))
@@ -70,8 +70,12 @@ class AudioStreamManager:
 
                     data, _ = stream.read(self.chunk_size)
                     rms = np.sqrt(np.mean(data**2))
+                    
+                    # Convert to int16 bytes for VAD check
+                    int16_chunk = (data * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
+                    speech_active = (rms > energy_threshold) or vad_detector.is_speech(int16_chunk, native_rate)
 
-                    if rms > energy_threshold:
+                    if speech_active:
                         if not is_speaking:
                             is_speaking = True
                         frames.append(data.copy())

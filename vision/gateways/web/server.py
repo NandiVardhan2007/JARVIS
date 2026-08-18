@@ -59,7 +59,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if action == "chat":
                 user_msg = payload.get("message", "")
                 session_id = payload.get("session_id", "ws_session")
-                synth = payload.get("synthesize_voice", False)
+                synth = payload.get("synthesize_voice", True)
                 response = await vision_engine.process_user_input(
                     user_text=user_msg,
                     session_id=session_id,

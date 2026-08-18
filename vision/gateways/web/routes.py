@@ -30,7 +30,7 @@ START_TIME = time.time()
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "web_session"
-    synthesize_voice: Optional[bool] = False
+    synthesize_voice: Optional[bool] = True
 
 
 class ToolExecRequest(BaseModel):

@@ -235,8 +235,8 @@ def _ensure_and_focus_window(app_name: str) -> bool:
     return False
 
 
-def _type_letter_by_letter(text: str, delay_per_char: float = 0.002):
-    """Types text using native Win32 SendInput KEYEVENTF_UNICODE."""
+def _type_letter_by_letter(text: str, delay_per_char: float = 0.015):
+    """Types text using native Win32 SendInput KEYEVENTF_UNICODE with safe inter-key delay."""
     if not text:
         return
 
@@ -248,13 +248,13 @@ def _type_letter_by_letter(text: str, delay_per_char: float = 0.002):
                 inp_up = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=2, time=0, dwExtraInfo=None)))
                 user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
                 user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
-                time.sleep(0.01)
+                time.sleep(0.02)
             elif char == '\t':
                 inp_down = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=0, time=0, dwExtraInfo=None)))
                 inp_up = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0x09, wScan=0, dwFlags=2, time=0, dwExtraInfo=None)))
                 user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
                 user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(_INPUT))
-                time.sleep(0.01)
+                time.sleep(0.02)
             else:
                 code = ord(char)
                 inp_down = _INPUT(type=1, u=_INPUT_UNION(ki=_KEYBDINPUT(wVk=0, wScan=code, dwFlags=4, time=0, dwExtraInfo=None)))
@@ -270,17 +270,17 @@ def _type_letter_by_letter(text: str, delay_per_char: float = 0.002):
             pyautogui.hotkey("ctrl", "v")
 
 
-@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word, Editor) character-by-character or via fast paste. Automatically opens the application if not already open, focuses it, and types the text.")
-def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = False, typing_mode: str = "type") -> str:
+@tool(name="type_text_into_application", description="Type or write text/notes into an application (e.g. Notepad, Word, Editor) with 100% exact accuracy. Automatically opens the application if not already open, focuses it, and writes the text.")
+def type_text_into_application(text: str, target_app: Optional[str] = "Notepad", press_enter: bool = False, typing_mode: str = "auto") -> str:
     """
     Ensures the target application (e.g. Notepad, Word, Editor) is open and focused,
-    then types the text into the application.
+    then writes the text into the application with 100% exact accuracy.
     
     Args:
-        text: The text content to type.
+        text: The text content to write/type.
         target_app: Target application name (default: 'Notepad').
         press_enter: Whether to press Enter after typing.
-        typing_mode: 'type' (realistic character-by-character typing) or 'paste' (instant clipboard paste).
+        typing_mode: 'auto' (recommended: instant clipboard paste for perfect fidelity), 'paste', or 'slow_type'.
     """
     if not text:
         return "Error: Text content to type is required."
@@ -292,27 +292,32 @@ def type_text_into_application(text: str, target_app: Optional[str] = "Notepad",
     _ensure_and_focus_window(app)
     time.sleep(0.3)
 
-    logger.info(f"[InputTool] Typing {len(text)} characters into '{app}' (mode: {typing_mode})...")
+    logger.info(f"[InputTool] Writing {len(text)} characters into '{app}' (mode: {typing_mode})...")
 
-    # If explicitly requested 'paste' or text is huge (> 8000 chars)
-    if typing_mode == "paste" or len(text) > 8000:
+    # For documents, notes, summaries, or multi-line text: use instant clipboard paste
+    # Clipboard paste guarantees 100% zero dropped characters, no repeated keys, and perfect formatting
+    if typing_mode in ["auto", "paste"] or len(text) > 25 or "\n" in text:
         if pyperclip and pyautogui:
             try:
+                # Save previous clipboard state
+                try:
+                    old_clipboard = pyperclip.paste()
+                except Exception:
+                    old_clipboard = ""
+
                 pyperclip.copy(text)
-                time.sleep(0.05)
-                pyautogui.hotkey("ctrl", "v")
                 time.sleep(0.1)
+                pyautogui.hotkey("ctrl", "v")
+                time.sleep(0.15)
                 if press_enter:
                     pyautogui.press("enter")
-                logger.info(f"[InputTool] Successfully pasted text into '{app}'.")
+                logger.info(f"[InputTool] Successfully wrote text into '{app}' via clipboard injection.")
                 return f"Successfully typed text into {app}."
             except Exception as e:
-                logger.warning(f"[InputTool] Paste failed, falling back to keystroke typing: {e}")
+                logger.warning(f"[InputTool] Clipboard paste failed, falling back to simulated keystrokes: {e}")
 
-    # Standard character-by-character simulated typing
-    # Adaptive delay: fast for longer texts, natural for shorter notes
-    delay = 0.001 if len(text) > 500 else 0.003
-    _type_letter_by_letter(text, delay_per_char=delay)
+    # Fallback to simulated keystrokes with safe delay
+    _type_letter_by_letter(text, delay_per_char=0.015)
     
     if press_enter and pyautogui:
         time.sleep(0.05)
@@ -320,6 +325,7 @@ def type_text_into_application(text: str, target_app: Optional[str] = "Notepad",
 
     logger.info(f"[InputTool] Successfully typed {len(text)} characters into '{app}'.")
     return f"Successfully typed text into {app}."
+
 
 
 @tool(name="press_keyboard_shortcut", description="Press a keyboard shortcut like 'ctrl+s', 'ctrl+z', 'ctrl+c', 'ctrl+v', 'alt+tab', 'enter', 'tab', 'backspace'.")

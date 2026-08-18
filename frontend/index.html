@@ -3,870 +3,1548 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VISION — Autonomous AI Operating System</title>
-  <meta name="description" content="VISION: Autonomous multimodal AI voice agent that controls your desktop.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🔮</text></svg>">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>VISION — Autonomous Multimodal AI Voice OS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%236c63ff'/><circle cx='16' cy='16' r='6' fill='%2300f2fe'/></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Official Lucide Vector Icon Suite -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    /* ═══════════════════════════════════════════════════════════
-       VISION OS — Gemini-Inspired Voice Agent Interface
-       ═══════════════════════════════════════════════════════════ */
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ══════════════════════════════════════════════════════════════
+       VISION OS — 3D Holographic Hands-Free Voice Agent HUD
+       ══════════════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 
     :root {
-      --bg: #131314;
-      --bg-secondary: #1e1f20;
-      --bg-surface: #282a2c;
-      --bg-hover: rgba(255,255,255,0.06);
-      --bg-bubble: #1e1f20;
-      --accent: #8ab4f8;
-      --accent-dim: rgba(138,180,248,0.12);
-      --accent-glow: rgba(138,180,248,0.2);
-      --green: #81c995;
-      --green-dim: rgba(129,201,149,0.12);
-      --orange: #fcad70;
-      --red: #f28b82;
-      --text: #e3e3e3;
-      --text-secondary: #9aa0a6;
-      --text-muted: #5f6368;
-      --border: rgba(255,255,255,0.08);
-      --font: 'Inter', 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      --mono: 'JetBrains Mono', 'Fira Code', monospace;
-      --radius: 24px;
-      --radius-sm: 12px;
-      --radius-xs: 8px;
-      --ease: cubic-bezier(0.2, 0, 0, 1);
+      --bg: #030508;
+      --cyan: #00f2fe;
+      --cyan-glow: rgba(0, 242, 254, 0.4);
+      --purple: #7f00ff;
+      --neon-blue: #4facfe;
+      --amber: #ffaa00;
+      --red: #ff3366;
+      --green: #00ff88;
+      --text: #ffffff;
+      --text-dim: #8b9bb4;
+      --hud-bg: rgba(6, 12, 24, 0.78);
+      --hud-border: rgba(0, 242, 254, 0.18);
+      --font: 'Space Grotesk', -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', monospace;
     }
 
-    html { font-size: 16px; -webkit-font-smoothing: antialiased; }
-
-    body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh; width: 100vw;
+    html, body {
+      width: 100vw; height: 100vh;
       overflow: hidden;
-      display: flex; flex-direction: column;
+      background: var(--bg);
+      font-family: var(--font);
+      color: var(--text);
     }
 
-    ::selection { background: var(--accent-dim); }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+    /* ── Official Lucide Icons Alignment ── */
+    .lucide, svg.icon {
+      width: 16px; height: 16px;
+      stroke-width: 2;
+      stroke: currentColor;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .icon-sm { width: 14px; height: 14px; }
+    .icon-md { width: 18px; height: 18px; }
+    .icon-lg { width: 22px; height: 22px; }
 
-    /* ── Top Nav ── */
-    .top-nav {
+    /* ── 3D Canvas ── */
+    #canvas-container {
+      position: absolute; inset: 0; z-index: 1;
+      width: 100%; height: 100%;
+    }
+    #canvas3d { width: 100%; height: 100%; display: block; }
+
+    /* ── Background Grid & Vignette ── */
+    .vignette {
+      position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      background: radial-gradient(circle at center, transparent 30%, rgba(3, 5, 8, 0.75) 75%, #030508 100%);
+    }
+    .hud-grid {
+      position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      background-image: 
+        linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+      -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+    }
+
+    /* ── Main HUD Shell ── */
+    #hud-shell {
+      position: relative; z-index: 10;
+      width: 100vw; height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 16px 24px;
+      pointer-events: none;
+      overflow: hidden;
+      gap: 8px;
+    }
+    #hud-shell * { pointer-events: auto; }
+
+    /* ── Header ── */
+    .hud-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 24px; flex-shrink: 0;
-      border-bottom: 1px solid var(--border);
+      width: 100%; z-index: 20;
     }
-    .top-nav-left { display: flex; align-items: center; gap: 12px; }
-    .top-nav-right { display: flex; align-items: center; gap: 8px; }
-
-    .logo-mark {
-      width: 32px; height: 32px; border-radius: 10px;
-      background: linear-gradient(135deg, #8ab4f8, #c58af9, #f28b82);
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .brand-core {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid var(--cyan);
       display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 0.85rem; color: #131314;
+      color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
     }
-    .logo-text {
-      font-size: 1.15rem; font-weight: 600; letter-spacing: 0.02em;
-    }
-    .logo-badge {
-      font-size: 0.58rem; padding: 2px 8px; border-radius: 20px;
-      background: var(--accent-dim); color: var(--accent);
-      font-weight: 600; letter-spacing: 0.04em;
-    }
-
-    .nav-btn {
-      width: 36px; height: 36px; border-radius: 50%; border: none;
-      background: transparent; color: var(--text-secondary); cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.1rem; transition: background 0.15s;
-    }
-    .nav-btn:hover { background: var(--bg-hover); }
-
-    .ws-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--green); margin-right: 4px;
-      box-shadow: 0 0 6px rgba(129,201,149,0.4);
-      animation: dotPulse 2s ease-in-out infinite;
-    }
-    .ws-dot.off { background: var(--red); box-shadow: 0 0 6px rgba(242,139,130,0.4); animation: none; }
-    @keyframes dotPulse {
-      0%,100% { opacity: 1; } 50% { opacity: 0.5; }
-    }
-    .ws-label { font-size: 0.68rem; color: var(--text-muted); font-weight: 500; }
-
-    /* ── Main Area ── */
-    .main-area {
-      flex: 1; overflow: hidden; display: flex; flex-direction: column;
-      max-width: 820px; width: 100%; margin: 0 auto;
-      padding: 0 20px;
-    }
-
-    /* ── Conversation ── */
-    .conversation {
-      flex: 1; overflow-y: auto; padding: 20px 0;
-      display: flex; flex-direction: column;
-    }
-
-    /* Welcome Screen */
-    .welcome {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      text-align: center; padding: 40px 20px;
-      animation: fadeUp 0.6s var(--ease);
-    }
-    .welcome-gradient {
-      font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #8ab4f8, #c58af9, #f28b82, #fcad70);
+    .brand-title {
+      font-size: 1.25rem; font-weight: 700; letter-spacing: 0.22em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #ffffff, var(--cyan));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; margin-bottom: 12px;
-      background-size: 200% 200%;
-      animation: gradientShift 6s ease-in-out infinite;
     }
-    @keyframes gradientShift {
-      0%,100% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-    }
-    .welcome-sub {
-      font-size: 1rem; color: var(--text-secondary); max-width: 480px;
-      line-height: 1.6; margin-bottom: 32px;
+    .brand-tag {
+      font-size: 0.65rem; font-family: var(--mono); color: var(--cyan);
+      border: 1px solid var(--hud-border); border-radius: 20px;
+      padding: 2px 10px; background: rgba(0, 242, 254, 0.05);
+      letter-spacing: 0.1em;
     }
 
-    /* Suggestion chips */
-    .suggestions {
-      display: grid; grid-template-columns: repeat(2, 1fr);
-      gap: 10px; max-width: 520px; width: 100%;
-    }
-    .suggestion {
-      padding: 16px 18px; border-radius: var(--radius-sm);
-      background: var(--bg-secondary); border: 1px solid var(--border);
-      cursor: pointer; transition: all 0.2s var(--ease); text-align: left;
-      display: flex; align-items: flex-start; gap: 12px;
-    }
-    .suggestion:hover {
-      background: var(--bg-surface); border-color: rgba(255,255,255,0.14);
-      transform: translateY(-1px);
-    }
-    .suggestion-icon {
-      font-size: 1.2rem; flex-shrink: 0; margin-top: 1px;
-    }
-    .suggestion-text {
-      font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45;
+    .header-controls {
+      display: flex; align-items: center; gap: 10px;
     }
 
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
+    /* Mute Toggle Button */
+    .mute-toggle-btn {
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--hud-border);
+      border-radius: 30px; padding: 6px 14px;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+      color: var(--text-dim); cursor: pointer; transition: all 0.3s;
+    }
+    .mute-toggle-btn:hover {
+      background: rgba(255,255,255,0.1); color: #ffffff;
+    }
+    .mute-toggle-btn.muted {
+      background: rgba(255, 51, 102, 0.15); border-color: var(--red);
+      color: var(--red); box-shadow: 0 0 15px rgba(255, 51, 102, 0.35);
+      animation: mutePulse 1.5s infinite alternate;
+    }
+    @keyframes mutePulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.03); }
     }
 
-    /* ── Messages ── */
-    .msg {
-      display: flex; gap: 16px; padding: 20px 0;
-      animation: msgIn 0.4s var(--ease);
-      align-items: flex-start;
+    .handsfree-toggle-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(0, 255, 136, 0.1); border: 1px solid var(--green);
+      border-radius: 30px; padding: 6px 16px;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+      color: var(--green); cursor: pointer; transition: all 0.3s;
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
     }
-    @keyframes msgIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+    .handsfree-toggle-btn.off {
+      background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2);
+      color: var(--text-dim); box-shadow: none;
     }
-
-    .msg-avatar {
-      width: 32px; height: 32px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-size: 0.8rem; font-weight: 600;
-      margin-top: 2px;
-    }
-    .msg-avatar.ai {
-      background: linear-gradient(135deg, #8ab4f8, #c58af9);
-      color: #131314;
-    }
-    .msg-avatar.user {
-      background: var(--bg-surface); color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .msg-body { flex: 1; min-width: 0; }
-
-    .msg-name {
-      font-size: 0.75rem; font-weight: 600; margin-bottom: 6px;
-      color: var(--text-secondary);
-    }
-
-    .msg-content {
-      font-size: 0.92rem; line-height: 1.75; color: var(--text);
-      word-wrap: break-word;
-    }
-    .msg-content p { margin-bottom: 10px; }
-    .msg-content p:last-child { margin-bottom: 0; }
-    .msg-content strong { font-weight: 600; }
-    .msg-content code {
-      font-family: var(--mono); font-size: 0.85em;
-      background: rgba(255,255,255,0.06); padding: 2px 6px;
-      border-radius: 6px;
-    }
-    .msg-content pre {
-      background: #0d0d0e; border: 1px solid var(--border);
-      border-radius: var(--radius-xs); padding: 14px 16px;
-      margin: 10px 0; overflow-x: auto;
-      font-family: var(--mono); font-size: 0.82rem; line-height: 1.6;
-    }
-    .msg-content pre code { background: none; padding: 0; }
-    .msg-content ul, .msg-content ol {
-      padding-left: 20px; margin: 8px 0;
-    }
-    .msg-content li { margin-bottom: 4px; }
-
-    .msg-meta {
-      font-size: 0.65rem; color: var(--text-muted); margin-top: 8px;
-      font-family: var(--mono); display: flex; align-items: center; gap: 8px;
-    }
-    .msg-meta .voice-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 1px 8px; border-radius: 20px;
-      background: var(--green-dim); color: var(--green);
-      font-size: 0.6rem; font-weight: 600;
-    }
-
-    /* Thinking indicator */
-    .thinking-dots {
-      display: flex; align-items: center; gap: 4px;
-      padding: 8px 0;
-    }
-    .thinking-dots span {
+    .handsfree-toggle-btn:hover { transform: scale(1.04); }
+    .vad-indicator-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--text-muted);
-      animation: thinkBounce 1.4s ease-in-out infinite;
+      background: var(--green); box-shadow: 0 0 8px var(--green);
+      animation: vadGlow 1.5s infinite alternate;
     }
-    .thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
-    .thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes thinkBounce {
-      0%,60%,100% { transform: translateY(0); opacity: 0.3; }
-      30% { transform: translateY(-8px); opacity: 1; }
+    .handsfree-toggle-btn.off .vad-indicator-dot {
+      background: var(--text-dim); box-shadow: none; animation: none;
     }
-
-    /* ── Input Area ── */
-    .input-area {
-      padding: 8px 0 20px; flex-shrink: 0;
-    }
-    .input-box {
-      display: flex; align-items: flex-end; gap: 0;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 8px 8px 8px 20px;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .input-box:focus-within {
-      border-color: rgba(138,180,248,0.3);
-      box-shadow: 0 0 0 2px var(--accent-dim);
+    @keyframes vadGlow {
+      from { transform: scale(0.9); opacity: 0.7; }
+      to { transform: scale(1.2); opacity: 1; }
     }
 
-    .input-textarea {
-      flex: 1; border: none; background: transparent;
-      color: var(--text); font-family: var(--font);
-      font-size: 0.92rem; padding: 10px 0;
-      outline: none; resize: none;
-      min-height: 24px; max-height: 150px;
-      line-height: 1.5;
+    .hud-status-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--hud-bg); backdrop-filter: blur(12px);
+      border: 1px solid var(--hud-border); border-radius: 30px;
+      padding: 6px 16px; font-family: var(--mono); font-size: 0.72rem;
+      color: var(--text); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
-    .input-textarea::placeholder { color: var(--text-muted); }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 10px var(--green);
+    }
+    .status-dot.busy { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+    .status-dot.muted { background: var(--red); box-shadow: 0 0 10px var(--red); }
 
-    .input-actions {
-      display: flex; align-items: center; gap: 4px;
-      padding-bottom: 4px;
+    /* ── Middle Stage ── */
+    .hud-middle {
+      display: grid;
+      grid-template-columns: 290px 1fr 330px;
+      align-items: center;
+      width: 100%; height: 100%;
+      position: relative;
+      overflow: hidden;
+      gap: 16px;
     }
 
-    .input-btn {
-      width: 40px; height: 40px; border-radius: 50%; border: none;
-      background: transparent; color: var(--text-secondary);
-      cursor: pointer; display: flex; align-items: center;
-      justify-content: center; font-size: 1.15rem;
-      transition: background 0.15s, color 0.15s, transform 0.15s;
+    /* ── Left Column: System Vitals (Top) + Autonomous Monitor (Bottom) ── */
+    .left-hud-column {
+      display: flex; flex-direction: column; gap: 12px;
+      width: 290px; height: 100%; justify-content: center;
+      z-index: 15;
     }
-    .input-btn:hover { background: var(--bg-hover); color: var(--text); }
 
-    .mic-btn {
-      width: 44px; height: 44px; border-radius: 50%;
-      background: var(--bg-surface); border: 1px solid var(--border);
-      color: var(--text); cursor: pointer;
+    .telemetry-card {
+      background: var(--hud-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--hud-border); border-radius: 14px;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      transition: all 0.3s;
+    }
+    .telemetry-card:hover {
+      border-color: rgba(0, 242, 254, 0.4);
+      box-shadow: 0 0 25px rgba(0, 242, 254, 0.15);
+    }
+    .card-title {
+      font-size: 0.68rem; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--cyan);
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .title-left { display: flex; align-items: center; gap: 6px; }
+    
+    .stat-row {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .stat-label-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono);
+    }
+    .stat-name-wrap { display: flex; align-items: center; gap: 5px; }
+    .stat-val { color: var(--text); font-weight: 600; }
+    .stat-bar-track {
+      width: 100%; height: 3px; border-radius: 2px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .stat-bar-fill {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--neon-blue), var(--cyan));
+      transition: width 0.6s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    /* Left: Autonomous Monitor Card (Below System Vitals) */
+    .actions-card {
+      background: var(--hud-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--hud-border); border-radius: 14px;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      max-height: 230px;
+    }
+    .actions-header {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding-bottom: 2px;
+    }
+    .actions-header-title {
+      font-size: 0.68rem; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--cyan);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .actions-header-count {
+      font-size: 0.62rem; font-family: var(--mono); color: var(--text-dim);
+      background: rgba(0, 242, 254, 0.08); border-radius: 10px;
+      padding: 1px 7px; border: 1px solid rgba(0, 242, 254, 0.2);
+    }
+    .actions-list {
+      display: flex; flex-direction: column; gap: 6px;
+      overflow-y: auto; max-height: 170px;
+      padding-right: 2px;
+    }
+    .actions-list::-webkit-scrollbar { width: 3px; }
+    .actions-list::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.3); border-radius: 3px; }
+
+    .action-item {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px; padding: 6px 10px;
+      display: flex; gap: 8px; align-items: flex-start;
+      animation: fadeInAction 0.3s ease;
+    }
+    @keyframes fadeInAction {
+      from { opacity: 0; transform: translateX(8px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .action-icon-box {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.2);
       display: flex; align-items: center; justify-content: center;
-      font-size: 1.3rem; transition: all 0.2s var(--ease);
+      color: var(--cyan); flex-shrink: 0; margin-top: 1px;
     }
-    .mic-btn:hover {
-      background: var(--accent-dim); border-color: var(--accent);
-      color: var(--accent); transform: scale(1.05);
+    .action-content { flex: 1; min-width: 0; }
+    .action-name {
+      font-size: 0.72rem; font-weight: 600; color: var(--cyan);
+      font-family: var(--mono);
     }
-    .mic-btn.recording {
-      background: rgba(242,139,130,0.15); border-color: var(--red);
-      color: var(--red); animation: micPulse 1.2s ease-in-out infinite;
+    .action-desc {
+      font-size: 0.65rem; color: var(--text-dim); margin-top: 1px;
+      word-break: break-word; line-height: 1.25;
+    }
+
+    /* ── Right Column: Live Voice Transcriptions Stream ── */
+    .transcriptions-card {
+      width: 330px; height: 100%; max-height: 480px;
+      background: var(--hud-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--hud-border); border-radius: 16px;
+      padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      z-index: 15; justify-self: end;
+    }
+    .transcriptions-card:hover {
+      border-color: rgba(0, 242, 254, 0.4);
+      box-shadow: 0 0 30px rgba(0, 242, 254, 0.15);
+    }
+    .transcriptions-header {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 242, 254, 0.12);
+      padding-bottom: 8px;
+    }
+    .transcriptions-header-title {
+      font-size: 0.7rem; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--cyan);
+      display: flex; align-items: center; gap: 7px;
+    }
+    .live-pulse-badge {
+      font-size: 0.6rem; font-family: var(--mono); color: var(--green);
+      background: rgba(0, 255, 136, 0.1); border-radius: 12px;
+      padding: 2px 8px; border: 1px solid rgba(0, 255, 136, 0.3);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .live-pulse-badge::before {
+      content: ''; width: 5px; height: 5px; border-radius: 50%;
+      background: var(--green); animation: pulseDot 1s infinite alternate;
+    }
+    @keyframes pulseDot { from { opacity: 0.4; } to { opacity: 1; } }
+
+    .transcriptions-list {
+      display: flex; flex-direction: column; gap: 10px;
+      overflow-y: auto; flex: 1;
+      padding-right: 4px;
+    }
+    .transcriptions-list::-webkit-scrollbar { width: 4px; }
+    .transcriptions-list::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.3); border-radius: 4px; }
+
+    .transcript-entry {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-left: 3px solid var(--cyan);
+      border-radius: 8px; padding: 8px 10px;
+      display: flex; flex-direction: column; gap: 4px;
+      animation: fadeInTranscript 0.3s ease;
+    }
+    .transcript-entry.ai {
+      border-left-color: #c084fc;
+      background: rgba(127, 0, 255, 0.04);
+    }
+    @keyframes fadeInTranscript {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .transcript-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--mono); font-size: 0.62rem;
+    }
+    .transcript-speaker {
+      font-weight: 700; color: var(--cyan); display: flex; align-items: center; gap: 5px;
+    }
+    .transcript-entry.ai .transcript-speaker { color: #c084fc; }
+    .transcript-time { color: var(--text-dim); }
+    .transcript-text {
+      font-size: 0.78rem; line-height: 1.35; color: #e2ecf8;
+      word-break: break-word; user-select: text;
+    }
+
+    /* ── Center Hologram Core Trigger & Subtitles ── */
+    .center-hud {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center;
+      gap: 10px; pointer-events: none;
+      width: 100%; max-width: 520px;
+      margin: 0 auto;
+      text-align: center;
+      z-index: 12;
+      position: relative;
+    }
+
+    .orb-hitbox {
+      width: 210px; height: 210px; border-radius: 50%;
+      cursor: pointer; pointer-events: auto;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .orb-hint {
+      position: absolute; bottom: -6px;
+      font-family: var(--mono); font-size: 0.68rem;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      color: rgba(0, 242, 254, 0.8);
+      background: rgba(6, 12, 24, 0.85);
+      padding: 3px 12px; border-radius: 20px;
+      border: 1px solid var(--hud-border);
+      transition: all 0.3s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .orb-hitbox:hover .orb-hint {
+      color: var(--cyan); border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+    }
+    .orb-hitbox.muted .orb-hint {
+      color: var(--red); border-color: var(--red);
+      background: rgba(20, 4, 8, 0.9);
+      box-shadow: 0 0 15px rgba(255, 51, 102, 0.35);
+    }
+
+    .vad-meter-container {
+      width: 160px; height: 5px; border-radius: 3px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(0,242,254,0.15);
+      overflow: hidden; position: relative; margin-top: 2px;
+    }
+    .vad-meter-fill {
+      height: 100%; width: 0%; border-radius: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+      transition: width 0.05s ease-out;
+    }
+
+    .live-subtitle-box {
+      max-width: 480px; width: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 0 14px;
+    }
+    .live-state-tag {
+      font-size: 0.65rem; font-family: var(--mono); letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--cyan); margin-bottom: 3px;
+      text-shadow: 0 0 10px var(--cyan);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .live-subtitle-text {
+      font-size: 0.95rem; line-height: 1.35; font-weight: 500;
+      color: #ffffff; text-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+      max-height: 44px; overflow: hidden; text-overflow: ellipsis;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      transition: all 0.2s;
+    }
+
+    /* ── Floating Sci-Fi Dossier (For detailed/long outputs) ── */
+    #response-dossier {
+      position: absolute;
+      left: 50%; bottom: 85px;
+      transform: translateX(-50%) translateY(20px);
+      width: 580px; max-width: 90vw;
+      background: rgba(4, 9, 20, 0.94);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(0, 242, 254, 0.35);
+      border-radius: 16px;
+      padding: 14px 18px;
+      box-shadow: 0 10px 50px rgba(0,0,0,0.9), 0 0 30px rgba(0, 242, 254, 0.15);
+      z-index: 30;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s var(--ease, ease), transform 0.3s var(--ease, ease);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    #response-dossier.visible {
+      opacity: 1; pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+    .dossier-header {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 242, 254, 0.15);
+      padding-bottom: 6px;
+    }
+    .dossier-title {
+      font-size: 0.7rem; font-family: var(--mono); font-weight: 700;
+      color: var(--cyan); letter-spacing: 0.15em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dossier-close {
+      background: transparent; border: none; color: var(--text-dim);
+      font-size: 1rem; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+      transition: color 0.15s; display: flex; align-items: center; justify-content: center;
+    }
+    .dossier-close:hover { color: #ffffff; }
+
+    .dossier-body {
+      font-size: 0.82rem; line-height: 1.55; color: #e2ecf8;
+      max-height: 200px; overflow-y: auto; padding-right: 6px;
+      user-select: text;
+    }
+    .dossier-body::-webkit-scrollbar { width: 4px; }
+    .dossier-body::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.35); border-radius: 4px; }
+    .dossier-body strong { color: var(--cyan); font-weight: 600; }
+    .dossier-body ul { padding-left: 18px; margin: 5px 0; }
+    .dossier-body li { margin-bottom: 3px; }
+    .dossier-body p { margin-bottom: 5px; }
+    .dossier-body p:last-child { margin-bottom: 0; }
+    .dossier-body code {
+      font-family: var(--mono); font-size: 0.8em;
+      background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.2);
+      border-radius: 4px; padding: 1px 5px; color: #a5f3fc;
+    }
+
+    /* ── Bottom Control Bar ── */
+    .hud-bottom {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      width: 100%; max-width: 620px; margin: 0 auto;
+      z-index: 25; position: relative;
+    }
+
+    .voice-command-bar {
+      width: 100%;
+      background: var(--hud-bg); backdrop-filter: blur(20px);
+      border: 1px solid var(--hud-border); border-radius: 40px;
+      padding: 4px 6px 4px 16px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(0, 242, 254, 0.1);
+      transition: all 0.3s;
+    }
+    .voice-command-bar:focus-within {
+      border-color: var(--cyan);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 30px rgba(0, 242, 254, 0.25);
+    }
+    .hud-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #ffffff; font-family: var(--font); font-size: 0.9rem;
+      padding: 7px 0;
+    }
+    .hud-input::placeholder { color: var(--text-dim); font-size: 0.82rem; }
+
+    .hud-mic-btn {
+      width: 40px; height: 40px; border-radius: 50%; border: none;
+      background: linear-gradient(135deg, var(--cyan), var(--neon-blue));
+      color: #030508; font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+    }
+    .hud-mic-btn:hover {
+      transform: scale(1.08); box-shadow: 0 0 30px rgba(0, 242, 254, 0.7);
+    }
+    .hud-mic-btn.listening {
+      background: linear-gradient(135deg, var(--red), #ff758c);
+      box-shadow: 0 0 30px rgba(255, 51, 102, 0.8);
+      animation: micPulse 1s infinite alternate;
+    }
+    .hud-mic-btn.muted {
+      background: #2a0812; border: 1px solid var(--red);
+      color: var(--red); box-shadow: none; animation: none;
     }
     @keyframes micPulse {
-      0%,100% { box-shadow: 0 0 0 0 rgba(242,139,130,0.2); }
-      50% { box-shadow: 0 0 0 10px rgba(242,139,130,0); }
+      from { transform: scale(1); }
+      to { transform: scale(1.12); }
     }
 
-    .send-btn {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: var(--accent); border: none;
-      color: #131314; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.1rem; transition: all 0.15s;
-      opacity: 0.4; pointer-events: none;
+    .hud-send-btn {
+      width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--hud-border);
+      background: rgba(255,255,255,0.05); color: var(--cyan);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
     }
-    .send-btn.active {
-      opacity: 1; pointer-events: auto;
-    }
-    .send-btn.active:hover { transform: scale(1.08); filter: brightness(1.1); }
-
-    /* Voice waveform overlay */
-    .voice-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(19,19,20,0.85); backdrop-filter: blur(12px);
-      z-index: 100; flex-direction: column;
-      align-items: center; justify-content: center;
-    }
-    .voice-overlay.active { display: flex; }
-
-    .voice-overlay-orb {
-      width: 120px; height: 120px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(138,180,248,0.15), transparent);
-      border: 2px solid var(--accent);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2.5rem; margin-bottom: 24px;
-      animation: orbPulse 1.5s ease-in-out infinite;
-      box-shadow: 0 0 40px var(--accent-glow);
-    }
-    @keyframes orbPulse {
-      0%,100% { transform: scale(1); box-shadow: 0 0 40px var(--accent-glow); }
-      50% { transform: scale(1.06); box-shadow: 0 0 60px var(--accent-glow); }
+    .hud-send-btn:hover {
+      background: rgba(0, 242, 254, 0.15); border-color: var(--cyan);
     }
 
-    .voice-waveform-row {
-      display: flex; align-items: center; gap: 3px; height: 48px;
-      margin-bottom: 20px;
+    .key-hints {
+      display: flex; gap: 14px; font-family: var(--mono);
+      font-size: 0.62rem; color: var(--text-dim);
     }
-    .vw-bar {
-      width: 4px; border-radius: 4px; background: var(--accent);
-      height: 6px; transition: height 0.08s;
+    .key-hints kbd {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 1px 5px; color: var(--cyan);
     }
-
-    .voice-overlay-label {
-      font-size: 1rem; color: var(--text-secondary); font-weight: 500;
-      margin-bottom: 24px;
-    }
-    .voice-overlay-stop {
-      padding: 10px 28px; border-radius: 24px;
-      background: var(--bg-surface); border: 1px solid var(--border);
-      color: var(--text); cursor: pointer; font-family: var(--font);
-      font-size: 0.85rem; font-weight: 500; transition: all 0.15s;
-    }
-    .voice-overlay-stop:hover {
-      background: rgba(242,139,130,0.1); border-color: var(--red);
-      color: var(--red);
-    }
-
-    /* ── Toast ── */
-    #toast-container {
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      display: flex; flex-direction: column-reverse; gap: 8px;
-      z-index: 200; pointer-events: none;
-    }
-    .toast {
-      padding: 10px 20px; border-radius: var(--radius-sm);
-      background: var(--bg-surface); border: 1px solid var(--border);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      font-size: 0.82rem; color: var(--text); pointer-events: auto;
-      animation: toastIn 0.3s var(--ease);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .toast.removing { animation: toastOut 0.25s var(--ease) forwards; }
-    @keyframes toastIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes toastOut { to { opacity:0; transform:translateY(12px); } }
-
-    /* ── Splash ── */
-    #splash {
-      position: fixed; inset: 0; z-index: 300; background: var(--bg);
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; transition: opacity 0.6s var(--ease);
-    }
-    #splash.hidden { opacity: 0; pointer-events: none; }
-    .splash-mark {
-      width: 72px; height: 72px; border-radius: 20px;
-      background: linear-gradient(135deg, #8ab4f8, #c58af9, #f28b82);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.8rem; font-weight: 800; color: #131314;
-      margin-bottom: 20px; animation: splashPulse 2s ease-in-out infinite;
-      box-shadow: 0 0 60px rgba(138,180,248,0.15);
-    }
-    @keyframes splashPulse {
-      0%,100% { transform: scale(1); } 50% { transform: scale(1.04); }
-    }
-    .splash-title {
-      font-size: 1.5rem; font-weight: 700; letter-spacing: 0.08em;
-      background: linear-gradient(135deg, #8ab4f8, #c58af9);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; margin-bottom: 16px;
-    }
-    .splash-sub {
-      font-size: 0.78rem; color: var(--text-muted);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .splash-spinner {
-      width: 14px; height: 14px; border: 2px solid var(--border);
-      border-top-color: var(--accent); border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Responsive ── */
-    @media (max-width: 640px) {
-      .main-area { padding: 0 12px; }
-      .suggestions { grid-template-columns: 1fr; }
-      .welcome-gradient { font-size: 1.8rem; }
+    @media (max-width: 1080px) {
+      .hud-middle { grid-template-columns: 1fr; }
+      .left-hud-column, .transcriptions-card { display: none; }
+      .center-hud { max-width: 90%; }
+      #response-dossier { width: 92vw; }
+      #hud-shell { padding: 12px; }
     }
   </style>
 </head>
 
 <body>
-  <!-- Splash -->
-  <div id="splash">
-    <div class="splash-mark">V</div>
-    <div class="splash-title">VISION</div>
-    <div class="splash-sub">
-      <div class="splash-spinner"></div>
-      <span id="splash-text">Booting autonomous engine...</span>
-    </div>
+  <!-- 3D WebGL Canvas Layer -->
+  <div id="canvas-container">
+    <canvas id="canvas3d"></canvas>
   </div>
 
-  <!-- Toast -->
-  <div id="toast-container"></div>
+  <div class="vignette"></div>
+  <div class="hud-grid"></div>
 
-  <!-- Voice Overlay -->
-  <div class="voice-overlay" id="voice-overlay">
-    <div class="voice-overlay-orb">🎙️</div>
-    <div class="voice-waveform-row" id="waveform-row">
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
-      <div class="vw-bar"></div><div class="vw-bar"></div><div class="vw-bar"></div>
+  <!-- HUD Interface Layer -->
+  <div id="hud-shell">
+    
+    <!-- Top Header -->
+    <header class="hud-header">
+      <div class="brand">
+        <div class="brand-core">
+          <i data-lucide="sparkles" class="icon-md"></i>
+        </div>
+        <span class="brand-title">VISION</span>
+        <span class="brand-tag">AUTONOMOUS OS</span>
+      </div>
+
+      <div class="header-controls">
+        <!-- Mute Kill-Switch Button -->
+        <button class="mute-toggle-btn" id="mute-btn" title="Mute Microphone (VISION will not listen)">
+          <span id="mute-icon-container">
+            <i data-lucide="mic" class="icon-sm"></i>
+          </span>
+          <span id="mute-label">MUTE: OFF</span>
+        </button>
+
+        <!-- Hands-Free VAD Toggle Button -->
+        <button class="handsfree-toggle-btn" id="handsfree-btn" title="Toggle Continuous Hands-Free VAD Listening">
+          <div class="vad-indicator-dot"></div>
+          <span id="handsfree-status-label">HANDS-FREE VAD: ON</span>
+        </button>
+
+        <div class="hud-status-badge">
+          <div class="status-dot" id="status-indicator"></div>
+          <span id="system-status-text">ONLINE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Middle Stage -->
+    <div class="hud-middle">
+      
+      <!-- Left Column: System Vitals + Autonomous Monitor -->
+      <div class="left-hud-column">
+        
+        <!-- Top: System Vitals -->
+        <div class="telemetry-card">
+          <div class="card-title">
+            <div class="title-left">
+              <i data-lucide="activity" class="icon-sm"></i>
+              <span>SYSTEM VITALS</span>
+            </div>
+            <span id="telemetry-uptime">00:00:00</span>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label-row">
+              <div class="stat-name-wrap">
+                <i data-lucide="cpu" class="icon-sm"></i>
+                <span>QUANTUM CPU</span>
+              </div>
+              <span class="stat-val" id="cpu-stat">0%</span>
+            </div>
+            <div class="stat-bar-track">
+              <div class="stat-bar-fill" id="cpu-bar" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label-row">
+              <div class="stat-name-wrap">
+                <i data-lucide="hard-drive" class="icon-sm"></i>
+                <span>NEURAL MEMORY</span>
+              </div>
+              <span class="stat-val" id="ram-stat">0 / 0 GB</span>
+            </div>
+            <div class="stat-bar-track">
+              <div class="stat-bar-fill" id="ram-bar" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label-row">
+              <div class="stat-name-wrap">
+                <i data-lucide="database" class="icon-sm"></i>
+                <span>CAG / MAG NODES</span>
+              </div>
+              <span class="stat-val" id="memory-nodes-stat">0 Memories</span>
+            </div>
+            <div class="stat-bar-track">
+              <div class="stat-bar-fill" id="nodes-bar" style="width: 25%;"></div>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label-row">
+              <div class="stat-name-wrap">
+                <i data-lucide="battery-charging" class="icon-sm"></i>
+                <span>BATTERY CELL</span>
+              </div>
+              <span class="stat-val" id="battery-stat">--</span>
+            </div>
+            <div class="stat-bar-track">
+              <div class="stat-bar-fill" id="battery-bar" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom: Autonomous Action Monitor -->
+        <div class="actions-card">
+          <div class="actions-header">
+            <span class="actions-header-title">
+              <i data-lucide="layers" class="icon-sm"></i>
+              <span>AUTONOMOUS MONITOR</span>
+            </span>
+            <span class="actions-header-count" id="active-tools-count">28 Tools</span>
+          </div>
+          <div class="actions-list" id="actions-stream">
+            <div class="action-item">
+              <div class="action-icon-box">
+                <i data-lucide="zap" class="icon-sm"></i>
+              </div>
+              <div class="action-content">
+                <div class="action-name">VISION Engine Initialized</div>
+                <div class="action-desc">Autonomous tools ready (WhatsApp, Web, Files, SSH).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Center: 3D Orb Trigger & Live Subtitles -->
+      <div class="center-hud">
+        <div class="orb-hitbox" id="orb-hitbox" title="Click to speak or toggle mute">
+          <div class="orb-hint" id="orb-hint-text">
+            <i data-lucide="radio" class="icon-sm"></i>
+            <span>HANDS-FREE LISTENING</span>
+          </div>
+        </div>
+
+        <div class="vad-meter-container" title="Live Voice Activity Meter">
+          <div class="vad-meter-fill" id="vad-meter-bar"></div>
+        </div>
+
+        <div class="live-subtitle-box">
+          <div class="live-state-tag" id="live-state-tag">
+            <i data-lucide="sparkles" class="icon-sm"></i>
+            <span>VISION READY</span>
+          </div>
+          <div class="live-subtitle-text" id="live-subtitles">"Hey Nandu, I am listening hands-free. Speak anytime!"</div>
+        </div>
+      </div>
+
+      <!-- Right Column: Live Voice Transcriptions Stream -->
+      <div class="transcriptions-card">
+        <div class="transcriptions-header">
+          <div class="transcriptions-header-title">
+            <i data-lucide="message-square" class="icon-sm"></i>
+            <span>LIVE TRANSCRIPTIONS</span>
+          </div>
+          <div class="live-pulse-badge">STREAM</div>
+        </div>
+        <div class="transcriptions-list" id="transcriptions-stream">
+          <div class="transcript-entry ai">
+            <div class="transcript-meta">
+              <span class="transcript-speaker">
+                <i data-lucide="bot" class="icon-sm"></i>
+                <span>VISION</span>
+              </span>
+              <span class="transcript-time">System</span>
+            </div>
+            <div class="transcript-text">VISION is online. Continuous hands-free VAD speech recognition is active.</div>
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div class="voice-overlay-label" id="voice-label">Listening...</div>
-    <button class="voice-overlay-stop" id="voice-stop">Stop listening</button>
+
+    <!-- Floating Sci-Fi Hologram Response Dossier (For detailed/long outputs) -->
+    <div id="response-dossier">
+      <div class="dossier-header">
+        <div class="dossier-title">
+          <i data-lucide="file-text" class="icon-sm"></i>
+          <span>VISION INTELLIGENCE REPORT</span>
+        </div>
+        <button class="dossier-close" id="dossier-close-btn" title="Close Report">
+          <i data-lucide="x" class="icon-sm"></i>
+        </button>
+      </div>
+      <div class="dossier-body" id="dossier-content"></div>
+    </div>
+
+    <!-- Bottom: Voice Command Input Bar -->
+    <footer class="hud-bottom">
+      <div class="voice-command-bar">
+        <input type="text" class="hud-input" id="command-input" placeholder="Speak hands-free, or type here..." autocomplete="off">
+        <button class="hud-send-btn" id="send-command-btn" title="Execute Command">
+          <i data-lucide="send" class="icon-sm"></i>
+        </button>
+        <button class="hud-mic-btn" id="voice-trigger-btn" title="Toggle Mute / Mic">
+          <span id="main-mic-icon">
+            <i data-lucide="mic" class="icon-md"></i>
+          </span>
+        </button>
+      </div>
+      <div class="key-hints">
+        <span><kbd>M</kbd> Mute/Unmute Mic</span>
+        <span><kbd>SPACEBAR</kbd> Mic Toggle</span>
+        <span><kbd>ENTER</kbd> Send Typed</span>
+      </div>
+    </footer>
+
   </div>
 
-  <!-- Top Nav -->
-  <nav class="top-nav">
-    <div class="top-nav-left">
-      <div class="logo-mark">V</div>
-      <span class="logo-text">VISION</span>
-      <span class="logo-badge">AUTONOMOUS OS</span>
-    </div>
-    <div class="top-nav-right">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <div class="ws-dot" id="ws-dot"></div>
-        <span class="ws-label" id="ws-label">Connecting</span>
-      </div>
-      <button class="nav-btn" title="New chat" onclick="clearConversation()">🗑️</button>
-    </div>
-  </nav>
-
-  <!-- Main -->
-  <div class="main-area">
-    <div class="conversation" id="conversation">
-
-      <!-- Welcome (shown when empty) -->
-      <div class="welcome" id="welcome-screen">
-        <div class="welcome-gradient">Hello, Nandu</div>
-        <div class="welcome-sub">
-          I'm VISION — your autonomous AI agent. I can control your desktop, manage files, browse the web, play media, and execute tasks with my voice. What can I do for you?
-        </div>
-        <div class="suggestions">
-          <div class="suggestion" onclick="sendCommand('Open YouTube and play some lo-fi music')">
-            <span class="suggestion-icon">🎵</span>
-            <span class="suggestion-text">Open YouTube and play some lo-fi music</span>
-          </div>
-          <div class="suggestion" onclick="sendCommand('What is my battery level and CPU usage?')">
-            <span class="suggestion-icon">📊</span>
-            <span class="suggestion-text">What's my battery level and CPU usage?</span>
-          </div>
-          <div class="suggestion" onclick="sendCommand('Check the KPR print server logs on the remote Ubuntu server')">
-            <span class="suggestion-icon">🖥️</span>
-            <span class="suggestion-text">Check the KPR print server logs</span>
-          </div>
-          <div class="suggestion" onclick="sendCommand('Set a reminder to call Amma in 30 minutes')">
-            <span class="suggestion-icon">⏰</span>
-            <span class="suggestion-text">Set a reminder to call Amma in 30 min</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Input -->
-    <div class="input-area">
-      <div class="input-box" id="input-box">
-        <textarea class="input-textarea" id="input-field"
-                  placeholder="Ask VISION anything or give a command..."
-                  rows="1"></textarea>
-        <div class="input-actions">
-          <button class="mic-btn" id="mic-btn" title="Voice input">🎙️</button>
-          <button class="send-btn" id="send-btn" title="Send">➤</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Scripts -->
   <script src="js/websocket.js"></script>
+
   <script>
-    /* ═══════════════════════════════════════════════════════════
-       VISION — Gemini-Style Voice Agent Controller
-       ═══════════════════════════════════════════════════════════ */
+    /* ══════════════════════════════════════════════════════════════
+       VISION 3D Quantum Particle Orb (Three.js WebGL Engine)
+       ══════════════════════════════════════════════════════════════ */
+    let scene, camera, renderer;
+    let particleSphere, outerRings = [], coreGlow;
+    let noiseVal = 0;
+    let agentState = 'idle'; // idle | listening | thinking | executing | speaking | muted
+    let audioFrequencyData = new Uint8Array(32);
 
-    // ── State ──
-    let isProcessing = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let audioCtx = null;
-    let analyser = null;
-    let wfInterval = null;
+    function init3DOrb() {
+      const container = document.getElementById('canvas-container');
+      const width = window.innerWidth;
+      const height = window.innerHeight;
 
-    // ── Elements ──
-    const $ = id => document.getElementById(id);
-    const conv = $('conversation');
-    const welcome = $('welcome-screen');
-    const inputField = $('input-field');
-    const sendBtn = $('send-btn');
-    const micBtn = $('mic-btn');
-    const voiceOverlay = $('voice-overlay');
-    const voiceLabel = $('voice-label');
-    const voiceStop = $('voice-stop');
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+      camera.position.z = 5.0;
 
-    // ── Boot ──
-    window.addEventListener('DOMContentLoaded', () => {
-      splashBoot();
-      VisionWS.connect();
-      VisionWS.on('status', d => {
-        $('ws-dot').classList.toggle('off', !d.connected);
-        $('ws-label').textContent = d.connected ? 'Online' : 'Offline';
+      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), alpha: true, antialias: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      // 1. Holographic Quantum Particle Sphere
+      const particleCount = 2000;
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(particleCount * 3);
+      const originalPositions = new Float32Array(particleCount * 3);
+      const colors = new Float32Array(particleCount * 3);
+
+      const color1 = new THREE.Color(0x00f2fe);
+      const color2 = new THREE.Color(0x7f00ff);
+
+      for (let i = 0; i < particleCount; i++) {
+        const phi = Math.acos(-1 + (2 * i) / particleCount);
+        const theta = Math.sqrt(particleCount * Math.PI) * phi;
+        const radius = 1.25;
+
+        const x = radius * Math.cos(theta) * Math.sin(phi);
+        const y = radius * Math.sin(theta) * Math.sin(phi);
+        const z = radius * Math.cos(phi);
+
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+
+        originalPositions[i * 3] = x;
+        originalPositions[i * 3 + 1] = y;
+        originalPositions[i * 3 + 2] = z;
+
+        const mixedColor = color1.clone().lerp(color2, Math.random() * 0.7);
+        colors[i * 3] = mixedColor.r;
+        colors[i * 3 + 1] = mixedColor.g;
+        colors[i * 3 + 2] = mixedColor.b;
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geometry.userData = { originalPositions };
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 32; canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.3, 'rgba(0,242,254,0.8)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 32, 32);
+      const pTexture = new THREE.CanvasTexture(canvas);
+
+      const material = new THREE.PointsMaterial({
+        size: 0.05,
+        map: pTexture,
+        transparent: true,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
       });
 
-      inputField.addEventListener('input', () => {
-        autoResize();
-        sendBtn.classList.toggle('active', inputField.value.trim().length > 0);
-      });
-      inputField.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-      });
-      sendBtn.addEventListener('click', send);
-      micBtn.addEventListener('click', startVoice);
-      voiceStop.addEventListener('click', stopVoice);
+      particleSphere = new THREE.Points(geometry, material);
+      scene.add(particleSphere);
 
-      // Spacebar to activate voice (when not typing)
-      document.addEventListener('keydown', e => {
-        if (e.code === 'Space' && document.activeElement !== inputField && !isProcessing) {
-          e.preventDefault(); startVoice();
+      // 2. Rotating Gyroscopic Holographic Orbital Rings
+      for (let r = 0; r < 3; r++) {
+        const ringGeo = new THREE.RingGeometry(1.45 + r * 0.2, 1.47 + r * 0.2, 64);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: r === 0 ? 0x00f2fe : (r === 1 ? 0x7f00ff : 0x4facfe),
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.25,
+          blending: THREE.AdditiveBlending
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.random() * Math.PI;
+        ring.rotation.y = Math.random() * Math.PI;
+        scene.add(ring);
+        outerRings.push({ mesh: ring, speedX: (r + 1) * 0.003, speedY: (r + 1) * 0.004 });
+      }
+
+      // 3. Inner Energy Core Glow
+      const coreGeo = new THREE.SphereGeometry(0.65, 32, 32);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0x00f2fe,
+        transparent: true,
+        opacity: 0.12,
+        blending: THREE.AdditiveBlending
+      });
+      coreGlow = new THREE.Mesh(coreGeo, coreMat);
+      scene.add(coreGlow);
+
+      window.addEventListener('resize', onWindowResize);
+      animate3D();
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate3D() {
+      requestAnimationFrame(animate3D);
+      noiseVal += 0.02;
+
+      if (particleSphere) {
+        const pos = particleSphere.geometry.attributes.position.array;
+        const orig = particleSphere.geometry.userData.originalPositions;
+        const count = pos.length / 3;
+
+        let intensity = 0.07;
+        let speed = 1.0;
+
+        if (agentState === 'muted') {
+          intensity = 0.03;
+          speed = 0.4;
+        } else if (agentState === 'listening') {
+          intensity = 0.22;
+          speed = 2.4;
+        } else if (agentState === 'thinking') {
+          intensity = 0.35;
+          speed = 4.5;
+        } else if (agentState === 'executing') {
+          intensity = 0.45;
+          speed = 5.5;
+        } else if (agentState === 'speaking') {
+          intensity = 0.3;
+          speed = 3.2;
         }
+
+        let audioBoost = 0;
+        if (agentState !== 'muted' && audioFrequencyData && audioFrequencyData.length > 0) {
+          let sum = 0;
+          for (let i = 0; i < 16; i++) sum += audioFrequencyData[i];
+          audioBoost = (sum / 16) / 255;
+        }
+
+        for (let i = 0; i < count; i++) {
+          const idx = i * 3;
+          const ox = orig[idx];
+          const oy = orig[idx + 1];
+          const oz = orig[idx + 2];
+
+          const wave = Math.sin(noiseVal * speed + ox * 3.0 + oy * 2.0) * (intensity + audioBoost * 0.45);
+          pos[idx] = ox * (1.0 + wave);
+          pos[idx + 1] = oy * (1.0 + wave);
+          pos[idx + 2] = oz * (1.0 + wave);
+        }
+        particleSphere.geometry.attributes.position.needsUpdate = true;
+        particleSphere.rotation.y += (agentState === 'muted' ? 0.001 : (agentState === 'thinking' ? 0.012 : 0.004));
+        particleSphere.rotation.x += (agentState === 'muted' ? 0.0005 : 0.002);
+      }
+
+      outerRings.forEach(ringObj => {
+        let mult = (agentState === 'muted') ? 0.3 : ((agentState === 'thinking' || agentState === 'executing') ? 4 : 1);
+        ringObj.mesh.rotation.x += ringObj.speedX * mult;
+        ringObj.mesh.rotation.y += ringObj.speedY * mult;
       });
+
+      if (coreGlow) {
+        const pulse = 1.0 + Math.sin(noiseVal * (agentState === 'muted' ? 0.5 : 2)) * 0.1;
+        coreGlow.scale.set(pulse, pulse, pulse);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       Autonomous Real-Time VAD Voice Engine (Hands-Free Loop + Mute)
+       ══════════════════════════════════════════════════════════════ */
+    let handsFreeEnabled = true;
+    let isMuted = false;
+    let isProcessing = false;
+    let micStream = null;
+    let audioContext = null;
+    let analyser = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    
+    const SPEECH_ENERGY_THRESHOLD = 0.022;
+    const SILENCE_DURATION_MS = 1100;
+    const MIN_SPEECH_DURATION_MS = 500;
+
+    let isUserSpeaking = false;
+    let speechStartTime = 0;
+    let lastSpeechTime = 0;
+    let vadCheckInterval = null;
+
+    const muteBtn = document.getElementById('mute-btn');
+    const muteIconContainer = document.getElementById('mute-icon-container');
+    const muteLabel = document.getElementById('mute-label');
+    const micBtn = document.getElementById('voice-trigger-btn');
+    const mainMicIcon = document.getElementById('main-mic-icon');
+    const handsfreeBtn = document.getElementById('handsfree-btn');
+    const handsfreeLabel = document.getElementById('handsfree-status-label');
+    const orbHitbox = document.getElementById('orb-hitbox');
+    const cmdInput = document.getElementById('command-input');
+    const sendBtn = document.getElementById('send-command-btn');
+    const stateTag = document.getElementById('live-state-tag');
+    const subtitles = document.getElementById('live-subtitles');
+    const statusText = document.getElementById('system-status-text');
+    const statusDot = document.getElementById('status-indicator');
+    const hintText = document.getElementById('orb-hint-text');
+    const vadMeterBar = document.getElementById('vad-meter-bar');
+    const responseDossier = document.getElementById('response-dossier');
+    const dossierContent = document.getElementById('dossier-content');
+    const dossierCloseBtn = document.getElementById('dossier-close-btn');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      init3DOrb();
+      setupWebSocketListeners();
+      setupEventListeners();
+      startSystemTelemetry();
+      refreshIcons();
+
+      document.body.addEventListener('click', startHandsFreeVAD, { once: true });
+      document.body.addEventListener('keydown', startHandsFreeVAD, { once: true });
+      setTimeout(startHandsFreeVAD, 800);
     });
 
-    function splashBoot() {
-      const splash = $('splash');
-      const text = $('splash-text');
-      const steps = [
-        'Loading voice perception...',
-        'Initializing memory (MAG + CAG)...',
-        'Registering tool modules...',
-        'Connecting real-time gateway...',
-        'VISION Online!'
-      ];
-      let i = 0;
-      const iv = setInterval(() => {
-        if (i >= steps.length) {
-          clearInterval(iv);
-          setTimeout(() => splash.classList.add('hidden'), 400);
-          return;
+    function refreshIcons() {
+      if (window.lucide && lucide.createIcons) {
+        lucide.createIcons();
+      }
+    }
+
+    function setAgentState(state, customSubtitle = null) {
+      if (isMuted && state !== 'muted') {
+        state = 'muted';
+      }
+      agentState = state;
+
+      if (state === 'muted') {
+        stateTag.innerHTML = `<i data-lucide="mic-off" class="icon-sm"></i><span>MIC MUTED</span>`;
+        stateTag.style.color = 'var(--red)';
+        statusText.textContent = 'MUTED (NOT LISTENING)';
+        statusDot.className = 'status-dot muted';
+        hintText.innerHTML = `<i data-lucide="mic-off" class="icon-sm"></i><span>MIC IS MUTED (PRESS M)</span>`;
+        orbHitbox.classList.add('muted');
+        micBtn.classList.add('muted');
+        micBtn.classList.remove('listening');
+        mainMicIcon.innerHTML = `<i data-lucide="mic-off" class="icon-md"></i>`;
+        vadMeterBar.style.width = '0%';
+        if (customSubtitle) subtitles.textContent = customSubtitle;
+      } else if (state === 'idle') {
+        stateTag.innerHTML = `<i data-lucide="sparkles" class="icon-sm"></i><span>${handsFreeEnabled ? 'HANDS-FREE LISTENING' : 'VISION READY'}</span>`;
+        stateTag.style.color = 'var(--cyan)';
+        statusText.textContent = 'ONLINE';
+        statusDot.className = 'status-dot';
+        hintText.innerHTML = `<i data-lucide="radio" class="icon-sm"></i><span>${handsFreeEnabled ? 'SPEAK NATURALLY (VAD ACTIVE)' : 'CLICK TO SPEAK'}</span>`;
+        orbHitbox.classList.remove('muted');
+        micBtn.classList.remove('muted');
+        micBtn.classList.remove('listening');
+        mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
+      } else if (state === 'listening') {
+        stateTag.innerHTML = `<i data-lucide="mic" class="icon-sm"></i><span>USER SPEAKING...</span>`;
+        stateTag.style.color = 'var(--green)';
+        statusText.textContent = 'RECORDING SPEECH';
+        statusDot.className = 'status-dot';
+        hintText.innerHTML = `<i data-lucide="volume-2" class="icon-sm"></i><span>RECORDING</span>`;
+        orbHitbox.classList.remove('muted');
+        micBtn.classList.remove('muted');
+        micBtn.classList.add('listening');
+        mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
+        if (customSubtitle) subtitles.textContent = customSubtitle;
+      } else if (state === 'thinking') {
+        stateTag.innerHTML = `<i data-lucide="cpu" class="icon-sm"></i><span>PROCESSING COGNITION...</span>`;
+        stateTag.style.color = 'var(--amber)';
+        statusText.textContent = 'NEURAL REASONING';
+        statusDot.className = 'status-dot busy';
+        hintText.innerHTML = `<i data-lucide="loader" class="icon-sm"></i><span>THINKING</span>`;
+        orbHitbox.classList.remove('muted');
+        micBtn.classList.remove('muted');
+        micBtn.classList.remove('listening');
+        if (customSubtitle) subtitles.textContent = customSubtitle;
+      } else if (state === 'executing') {
+        stateTag.innerHTML = `<i data-lucide="zap" class="icon-sm"></i><span>EXECUTING AUTONOMOUS TOOL...</span>`;
+        stateTag.style.color = 'var(--neon-blue)';
+        statusText.textContent = 'EXECUTING ACTIONS';
+        statusDot.className = 'status-dot busy';
+        hintText.innerHTML = `<i data-lucide="layers" class="icon-sm"></i><span>EXECUTING</span>`;
+        orbHitbox.classList.remove('muted');
+        micBtn.classList.remove('muted');
+        if (customSubtitle) subtitles.textContent = customSubtitle;
+      } else if (state === 'speaking') {
+        stateTag.innerHTML = `<i data-lucide="volume-2" class="icon-sm"></i><span>SPEAKING RESPONSE</span>`;
+        stateTag.style.color = 'var(--green)';
+        statusText.textContent = 'VOICE ACTIVE';
+        statusDot.className = 'status-dot';
+        hintText.innerHTML = `<i data-lucide="volume-2" class="icon-sm"></i><span>SPEAKING</span>`;
+        orbHitbox.classList.remove('muted');
+        micBtn.classList.remove('muted');
+        if (customSubtitle) subtitles.textContent = customSubtitle;
+      }
+      refreshIcons();
+    }
+
+    function setupEventListeners() {
+      muteBtn.addEventListener('click', toggleMute);
+      handsfreeBtn.addEventListener('click', toggleHandsFree);
+      
+      orbHitbox.addEventListener('click', () => {
+        if (isMuted) {
+          toggleMute();
+        } else if (!handsFreeEnabled) {
+          startHandsFreeVAD();
         }
-        text.textContent = steps[i]; i++;
-      }, 350);
+      });
+
+      micBtn.addEventListener('click', toggleMute);
+      dossierCloseBtn.addEventListener('click', hideDossier);
+
+      document.addEventListener('keydown', (e) => {
+        if (document.activeElement === cmdInput) return;
+
+        if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          toggleMute();
+        } else if (e.code === 'Space' && !isProcessing) {
+          e.preventDefault();
+          if (isMuted) toggleMute();
+          else toggleHandsFree();
+        } else if (e.key === 'Escape') {
+          hideDossier();
+        }
+      });
+
+      cmdInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') executeCommandText();
+      });
+      sendBtn.addEventListener('click', executeCommandText);
     }
 
-    function autoResize() {
-      inputField.style.height = 'auto';
-      inputField.style.height = Math.min(inputField.scrollHeight, 150) + 'px';
+    // ── Mute Microphone Kill-Switch ──
+    function toggleMute() {
+      isMuted = !isMuted;
+
+      if (isMuted) {
+        muteBtn.classList.add('muted');
+        muteIconContainer.innerHTML = `<i data-lucide="mic-off" class="icon-sm"></i>`;
+        muteLabel.textContent = 'MUTED: ON';
+        
+        if (micStream) {
+          micStream.getAudioTracks().forEach(track => track.enabled = false);
+        }
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          try { mediaRecorder.stop(); } catch(e){}
+        }
+        recordedChunks = [];
+        isUserSpeaking = false;
+        
+        setAgentState('muted', '"Microphone is muted. VISION cannot listen."');
+        logAction('tool', 'Microphone Muted', 'Audio input paused.');
+      } else {
+        muteBtn.classList.remove('muted');
+        muteIconContainer.innerHTML = `<i data-lucide="mic" class="icon-sm"></i>`;
+        muteLabel.textContent = 'MUTE: OFF';
+
+        if (micStream) {
+          micStream.getAudioTracks().forEach(track => track.enabled = true);
+        } else {
+          startHandsFreeVAD();
+        }
+
+        setAgentState('idle', '"Microphone unmuted. VISION listening hands-free."');
+        logAction('tool', 'Microphone Unmuted', 'Audio input active.');
+      }
+      refreshIcons();
     }
 
-    // ── Send Message ──
-    async function send() {
-      const text = inputField.value.trim();
-      if (!text || isProcessing) return;
-      inputField.value = ''; autoResize();
-      sendBtn.classList.remove('active');
-      await processCommand(text);
+    function toggleHandsFree() {
+      if (isMuted) {
+        toggleMute();
+        return;
+      }
+      handsFreeEnabled = !handsFreeEnabled;
+      if (handsFreeEnabled) {
+        handsfreeBtn.classList.remove('off');
+        handsfreeLabel.textContent = 'HANDS-FREE VAD: ON';
+        startHandsFreeVAD();
+      } else {
+        handsfreeBtn.classList.add('off');
+        handsfreeLabel.textContent = 'HANDS-FREE VAD: OFF';
+        stopHandsFreeVAD();
+        setAgentState('idle', '"Hands-free VAD paused."');
+      }
+      refreshIcons();
     }
 
-    function sendCommand(text) {
-      if (isProcessing) return;
-      processCommand(text);
+    async function startHandsFreeVAD() {
+      if (micStream || isProcessing || isMuted) return;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        const source = audioContext.createMediaStreamSource(micStream);
+        source.connect(analyser);
+
+        setupMediaRecorder();
+        startVADLoop();
+        setAgentState('idle');
+      } catch (err) {
+        setAgentState('idle', '"Microphone access required. Please allow mic in browser."');
+      }
     }
 
-    async function processCommand(text) {
+    function stopHandsFreeVAD() {
+      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        try { mediaRecorder.stop(); } catch(e){}
+      }
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (audioContext) {
+        try { audioContext.close(); } catch(e){}
+        audioContext = null;
+      }
+      isUserSpeaking = false;
+    }
+
+    function setupMediaRecorder() {
+      if (!micStream) return;
+      try {
+        mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        mediaRecorder.onstop = onRecordingFinalized;
+      } catch (e) {}
+    }
+
+    function startVADLoop() {
+      if (vadCheckInterval) clearInterval(vadCheckInterval);
+      const buffer = new Float32Array(analyser.fftSize);
+
+      vadCheckInterval = setInterval(() => {
+        if (!analyser || isProcessing || !handsFreeEnabled || isMuted) return;
+
+        analyser.getFloatTimeDomainData(buffer);
+        analyser.getByteFrequencyData(audioFrequencyData);
+
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i++) {
+          sum += buffer[i] * buffer[i];
+        }
+        const rms = Math.sqrt(sum / buffer.length);
+        const now = Date.now();
+
+        const meterPct = Math.min(100, Math.round((rms / 0.15) * 100));
+        vadMeterBar.style.width = `${meterPct}%`;
+
+        // 1. Detect Speech Start
+        if (rms > SPEECH_ENERGY_THRESHOLD) {
+          lastSpeechTime = now;
+          if (!isUserSpeaking) {
+            isUserSpeaking = true;
+            speechStartTime = now;
+            hideDossier();
+            setAgentState('listening', '"Listening to your command..."');
+            
+            recordedChunks = [];
+            if (mediaRecorder && mediaRecorder.state === 'inactive') {
+              mediaRecorder.start(100);
+            }
+          }
+        } 
+        // 2. Detect Speech Finish / Silence Cutoff
+        else if (isUserSpeaking) {
+          const silenceDuration = now - lastSpeechTime;
+          const totalSpeechDuration = now - speechStartTime;
+
+          if (silenceDuration >= SILENCE_DURATION_MS) {
+            isUserSpeaking = false;
+            if (totalSpeechDuration >= MIN_SPEECH_DURATION_MS) {
+              setAgentState('thinking', '"Speech detected — processing command..."');
+              if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+              }
+            } else {
+              if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+              }
+              setAgentState('idle');
+            }
+          }
+        }
+      }, 50);
+    }
+
+    async function onRecordingFinalized() {
+      if (recordedChunks.length === 0 || isProcessing || isMuted) return;
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      recordedChunks = [];
+
       isProcessing = true;
-      hideWelcome();
-      addMessage('user', text);
-      const thinkingId = addThinking();
+      const formData = new FormData();
+      formData.append('file', blob, 'voice.webm');
+
+      try {
+        setAgentState('thinking', '"Transcribing voice with Groq Whisper..."');
+        const res = await fetch('/api/audio/transcribe', { method: 'POST', body: formData });
+        const data = await res.json();
+        const text = (data.text || '').trim();
+
+        if (text.length >= 2) {
+          subtitles.textContent = `"${text}"`;
+          logTranscript('user', 'You (Spoken)', text);
+          await sendToVision(text);
+        } else {
+          isProcessing = false;
+          setAgentState(isMuted ? 'muted' : 'idle', '"No clear speech detected. Listening..."');
+        }
+      } catch (err) {
+        isProcessing = false;
+        setAgentState(isMuted ? 'muted' : 'idle', `"Audio error: ${err.message}"`);
+      }
+    }
+
+    async function executeCommandText() {
+      const text = cmdInput.value.trim();
+      if (!text || isProcessing) return;
+      cmdInput.value = '';
+      hideDossier();
+      subtitles.textContent = `"${text}"`;
+      logTranscript('user', 'You (Typed)', text);
+      await sendToVision(text);
+    }
+
+    async function sendToVision(userMessage) {
+      isProcessing = true;
+      setAgentState('thinking', `"Executing request: '${userMessage}'..."`);
 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: text,
-            session_id: 'web_session',
-            synthesize_voice: true   // ← VISION SPEAKS BACK!
+            message: userMessage,
+            session_id: 'handsfree_session',
+            synthesize_voice: true
           })
         });
+
         const data = await res.json();
-        removeThinking(thinkingId);
+        const responseText = data.response || data.detail || 'Action completed.';
 
-        if (data.response) {
-          const meta = {
-            provider: data.provider || 'AI',
-            latency: Math.round(data.latency_ms || 0),
-            voiced: true
-          };
-          await addMessageAnimated('ai', data.response, meta);
-        } else if (data.detail) {
-          addMessage('ai', '⚠️ ' + data.detail);
+        const cleanFirstSentence = extractFirstSentence(responseText);
+        setAgentState('speaking', `"${cleanFirstSentence}"`);
+        
+        logTranscript('ai', 'VISION', responseText);
+
+        if (responseText.length > 80 || responseText.includes('\n') || responseText.includes('**')) {
+          showDossier(responseText);
         }
+
+        const estimatedSpeechDuration = Math.max(3500, Math.min(14000, responseText.length * 50));
+        setTimeout(() => {
+          isProcessing = false;
+          setAgentState(isMuted ? 'muted' : 'idle');
+        }, estimatedSpeechDuration);
+
       } catch (err) {
-        removeThinking(thinkingId);
-        addMessage('ai', '❌ Could not reach VISION backend. Make sure the server is running on port 8000.');
-      }
-
-      isProcessing = false;
-    }
-
-    // ── Voice Input ──
-    async function startVoice() {
-      if (isProcessing) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        voiceOverlay.classList.add('active');
-        voiceLabel.textContent = 'Listening...';
-        micBtn.classList.add('recording');
-
-        // Waveform
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        audioCtx.createMediaStreamSource(stream).connect(analyser);
-        analyser.fftSize = 64;
-        startWaveform();
-
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        audioChunks = [];
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.onstop = () => {
-          stream.getTracks().forEach(t => t.stop());
-          stopWaveform();
-          voiceLabel.textContent = 'Processing...';
-          transcribeAndSend();
-        };
-        mediaRecorder.start();
-
-        // Auto-stop after 15s
-        setTimeout(() => { if (mediaRecorder?.state === 'recording') stopVoice(); }, 15000);
-      } catch (err) {
-        toast('Microphone access denied', 'error');
+        setAgentState(isMuted ? 'muted' : 'idle', `"Connection error: ${err.message}"`);
+        isProcessing = false;
       }
     }
 
-    function stopVoice() {
-      if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
-      micBtn.classList.remove('recording');
+    function extractFirstSentence(text) {
+      if (!text) return '';
+      const clean = text.replace(/```[\s\S]*?```/g, '')
+                        .replace(/\*\*([^*]+)\*\*/g, '$1')
+                        .replace(/\*([^*]+)\*/g, '$1')
+                        .replace(/`([^`]+)`/g, '$1')
+                        .replace(/[-•]\s*/g, '');
+      const parts = clean.split(/[\.\n]/);
+      const first = parts[0].trim();
+      return first.length > 10 ? first : clean.substring(0, 110);
     }
 
-    async function transcribeAndSend() {
-      const blob = new Blob(audioChunks, { type: 'audio/webm' });
-      const form = new FormData();
-      form.append('file', blob, 'voice.webm');
-
-      try {
-        const res = await fetch('/api/audio/transcribe', { method: 'POST', body: form });
-        const data = await res.json();
-        voiceOverlay.classList.remove('active');
-
-        if (data.text?.trim().length > 1) {
-          toast('🎤 "' + data.text.trim() + '"', 'info');
-          await processCommand(data.text.trim());
-        } else {
-          toast('No speech detected — try again', 'warning');
-        }
-      } catch (err) {
-        voiceOverlay.classList.remove('active');
-        toast('Transcription failed', 'error');
-      }
+    function showDossier(rawMarkdown) {
+      dossierContent.innerHTML = renderMarkdown(rawMarkdown);
+      responseDossier.classList.add('visible');
+      refreshIcons();
     }
 
-    // ── Waveform ──
-    function startWaveform() {
-      const bars = document.querySelectorAll('#waveform-row .vw-bar');
-      wfInterval = setInterval(() => {
-        if (!analyser) return;
-        const d = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(d);
-        bars.forEach((b, i) => {
-          const v = d[i] || 0;
-          b.style.height = Math.max(4, (v/255)*42) + 'px';
-        });
-      }, 50);
+    function hideDossier() {
+      responseDossier.classList.remove('visible');
     }
 
-    function stopWaveform() {
-      if (wfInterval) { clearInterval(wfInterval); wfInterval = null; }
-      if (audioCtx) { audioCtx.close().catch(()=>{}); audioCtx = null; analyser = null; }
-    }
-
-    // ── Messages ──
-    function hideWelcome() {
-      if (welcome) welcome.style.display = 'none';
-    }
-
-    function addMessage(role, content, meta) {
-      const div = document.createElement('div');
-      div.className = 'msg';
-      const isUser = role === 'user';
-      const avatar = isUser
-        ? '<div class="msg-avatar user">N</div>'
-        : '<div class="msg-avatar ai">V</div>';
-      const name = isUser ? 'You' : 'VISION';
-
-      let metaHtml = '';
-      if (meta) {
-        metaHtml = `<div class="msg-meta">
-          ${meta.provider ? `<span>${meta.provider}</span>` : ''}
-          ${meta.latency ? `<span>${meta.latency}ms</span>` : ''}
-          ${meta.voiced ? '<span class="voice-badge">🔊 Spoken</span>' : ''}
-        </div>`;
-      }
-
-      div.innerHTML = `
-        ${avatar}
-        <div class="msg-body">
-          <div class="msg-name">${name}</div>
-          <div class="msg-content">${formatMd(content)}</div>
-          ${metaHtml}
-        </div>
-      `;
-      conv.appendChild(div);
-      scrollBottom();
-      return div;
-    }
-
-    async function addMessageAnimated(role, content, meta) {
-      const div = document.createElement('div');
-      div.className = 'msg';
-      div.innerHTML = `
-        <div class="msg-avatar ai">V</div>
-        <div class="msg-body">
-          <div class="msg-name">VISION</div>
-          <div class="msg-content" id="anim-target"></div>
-          <div class="msg-meta">
-            ${meta.provider ? `<span>${meta.provider}</span>` : ''}
-            ${meta.latency ? `<span>${meta.latency}ms</span>` : ''}
-            ${meta.voiced ? '<span class="voice-badge">🔊 Spoken</span>' : ''}
-          </div>
-        </div>
-      `;
-      conv.appendChild(div);
-      const target = div.querySelector('#anim-target');
-      target.removeAttribute('id');
-
-      // Stream characters
-      const formatted = formatMd(content);
-      const temp = document.createElement('div');
-      temp.innerHTML = formatted;
-      const plainText = temp.textContent;
-
-      let rendered = '';
-      for (let i = 0; i < content.length; i += 3) {
-        rendered += content.substring(i, i + 3);
-        target.innerHTML = formatMd(rendered);
-        scrollBottom();
-        await sleep(6);
-      }
-      target.innerHTML = formatted;
-      scrollBottom();
-    }
-
-    let thinkingCount = 0;
-    function addThinking() {
-      const id = 'thinking-' + (++thinkingCount);
-      const div = document.createElement('div');
-      div.className = 'msg'; div.id = id;
-      div.innerHTML = `
-        <div class="msg-avatar ai">V</div>
-        <div class="msg-body">
-          <div class="msg-name">VISION</div>
-          <div class="thinking-dots"><span></span><span></span><span></span></div>
-        </div>
-      `;
-      conv.appendChild(div);
-      scrollBottom();
-      return id;
-    }
-
-    function removeThinking(id) {
-      const el = document.getElementById(id);
-      if (el) el.remove();
-    }
-
-    // ── Markdown ──
-    function formatMd(text) {
+    function renderMarkdown(text) {
       if (!text) return '';
       let h = text;
-      h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
-        `<pre><code>${esc(code.trim())}</code></pre>`);
+      h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${escapeHtml(code.trim())}</code></pre>`);
+      h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-      h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent);">$1</a>');
+      h = h.replace(/^[•\-\*]\s*(.+)$/gm, '<li>$1</li>');
+      h = h.replace(/(<li>.+<\/li>)/s, '<ul>$1</ul>');
+      h = h.replace(/\n\n+/g, '</p><p>');
       h = h.replace(/\n/g, '<br>');
-      return h;
+      return `<p>${h}</p>`;
     }
 
-    function esc(s) {
+    function escapeHtml(s) {
       const d = document.createElement('div');
       d.textContent = s; return d.innerHTML;
     }
 
-    // ── Utilities ──
-    function scrollBottom() {
-      requestAnimationFrame(() => { conv.scrollTop = conv.scrollHeight; });
+    // ── Get Official Lucide Icon Name for Tool ──
+    function getToolIconName(toolName) {
+      const name = (toolName || '').toLowerCase();
+      if (name.includes('whatsapp') || name.includes('message')) return 'message-square';
+      if (name.includes('browser') || name.includes('web') || name.includes('search')) return 'globe';
+      if (name.includes('file') || name.includes('document') || name.includes('folder')) return 'file-text';
+      if (name.includes('terminal') || name.includes('ssh') || name.includes('command') || name.includes('code') || name.includes('python')) return 'terminal';
+      if (name.includes('media') || name.includes('youtube') || name.includes('music') || name.includes('video')) return 'play-circle';
+      if (name.includes('battery') || name.includes('hardware') || name.includes('system') || name.includes('cpu')) return 'cpu';
+      if (name.includes('memory') || name.includes('remember') || name.includes('recall')) return 'database';
+      if (name.includes('reminder') || name.includes('timer') || name.includes('time') || name.includes('date')) return 'clock';
+      if (name.includes('phone') || name.includes('mobile')) return 'smartphone';
+      if (name.includes('mic') || name.includes('voice') || name.includes('speech')) return 'mic';
+      return 'zap';
     }
 
-    function clearConversation() {
-      conv.innerHTML = '';
-      if (welcome) { welcome.style.display = ''; conv.appendChild(welcome); }
+    // ── Log to Autonomous Action Monitor (Left bottom card) ──
+    function logAction(type, name, desc) {
+      const stream = document.getElementById('actions-stream');
+      const item = document.createElement('div');
+      item.className = 'action-item';
+
+      const iconName = type === 'tool' ? getToolIconName(name) : (type === 'ai' ? 'sparkles' : 'zap');
+
+      item.innerHTML = `
+        <div class="action-icon-box">
+          <i data-lucide="${iconName}" class="icon-sm"></i>
+        </div>
+        <div class="action-content">
+          <div class="action-name">${escapeHtml(name)}</div>
+          <div class="action-desc">${escapeHtml(desc.substring(0, 80))}</div>
+        </div>
+      `;
+      stream.prepend(item);
+      while (stream.children.length > 15) stream.lastChild.remove();
+      refreshIcons();
     }
 
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    // ── Log to Live Transcriptions Stream (Right side card) ──
+    function logTranscript(speaker, label, text) {
+      const stream = document.getElementById('transcriptions-stream');
+      const entry = document.createElement('div');
+      entry.className = `transcript-entry ${speaker}`;
 
-    function toast(msg, type = 'info') {
-      const c = $('toast-container'); if (!c) return;
-      const t = document.createElement('div');
-      t.className = 'toast';
-      t.textContent = msg;
-      c.appendChild(t);
-      setTimeout(() => { t.classList.add('removing'); setTimeout(() => t.remove(), 300); }, 3500);
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const speakerIcon = speaker === 'user' ? 'user' : 'bot';
+
+      entry.innerHTML = `
+        <div class="transcript-meta">
+          <span class="transcript-speaker">
+            <i data-lucide="${speakerIcon}" class="icon-sm"></i>
+            <span>${escapeHtml(label)}</span>
+          </span>
+          <span class="transcript-time">${time}</span>
+        </div>
+        <div class="transcript-text">${renderMarkdown(text)}</div>
+      `;
+      stream.prepend(entry);
+      while (stream.children.length > 25) stream.lastChild.remove();
+      refreshIcons();
+    }
+
+    function setupWebSocketListeners() {
+      VisionWS.connect();
+      VisionWS.on('status', (d) => {
+        if (!isMuted) {
+          statusDot.style.background = d.connected ? 'var(--green)' : 'var(--red)';
+        }
+      });
+
+      VisionWS.on('tool_event', (event) => {
+        if (event.tool) {
+          setAgentState('executing', `"Executing: ${event.tool}..."`);
+          logAction('tool', `Tool: ${event.tool}`, JSON.stringify(event.args || {}));
+        }
+      });
+    }
+
+    function startSystemTelemetry() {
+      async function updateStats() {
+        try {
+          const res = await fetch('/api/system/stats');
+          const data = await res.json();
+
+          document.getElementById('cpu-stat').textContent = `${data.cpu.percent}%`;
+          document.getElementById('cpu-bar').style.width = `${data.cpu.percent}%`;
+
+          document.getElementById('ram-stat').textContent = `${data.ram.used_gb} / ${data.ram.total_gb} GB`;
+          document.getElementById('ram-bar').style.width = `${data.ram.percent}%`;
+
+          if (data.battery) {
+            document.getElementById('battery-stat').textContent = `${data.battery.percent}% ${data.battery.power_plugged ? '⚡' : ''}`;
+            document.getElementById('battery-bar').style.width = `${data.battery.percent}%`;
+          }
+
+          const h = Math.floor(data.uptime_seconds / 3600);
+          const m = Math.floor((data.uptime_seconds % 3600) / 60);
+          const s = data.uptime_seconds % 60;
+          document.getElementById('telemetry-uptime').textContent = 
+            `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+        } catch (e) {}
+      }
+
+      async function updateMemoryNodes() {
+        try {
+          const res = await fetch('/api/memory/stats');
+          const data = await res.json();
+          const memCount = (data.semantic_memories || []).length;
+          document.getElementById('memory-nodes-stat').textContent = `${memCount} Memories`;
+        } catch (e) {}
+      }
+
+      setInterval(updateStats, 2500);
+      setInterval(updateMemoryNodes, 6000);
+      updateStats();
+      updateMemoryNodes();
     }
   </script>
 </body>
