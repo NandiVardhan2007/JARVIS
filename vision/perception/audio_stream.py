@@ -47,6 +47,7 @@ class AudioStreamManager:
         if sd is None or np is None:
             return None
 
+        from collections import deque
         frames = []
         is_speaking = False
         silence_start_time = None
@@ -56,6 +57,9 @@ class AudioStreamManager:
             dev_info = sd.query_devices(kind='input')
             native_rate = int(dev_info.get('default_samplerate', self.sample_rate))
             native_channels = min(self.channels, dev_info.get('max_input_channels', 1))
+
+            pre_roll_chunks = int(0.35 * (native_rate / self.chunk_size))  # ~350ms pre-roll
+            pre_roll = deque(maxlen=max(2, pre_roll_chunks))
 
             with sd.InputStream(
                 samplerate=native_rate,
@@ -78,6 +82,8 @@ class AudioStreamManager:
                     if speech_active:
                         if not is_speaking:
                             is_speaking = True
+                            # Prepend pre-roll buffer so the start of the first word is not clipped
+                            frames.extend(list(pre_roll))
                         frames.append(data.copy())
                         silence_start_time = None
                     else:
@@ -87,6 +93,8 @@ class AudioStreamManager:
                                 silence_start_time = time.time()
                             elif time.time() - silence_start_time >= silence_timeout:
                                 break
+                        else:
+                            pre_roll.append(data.copy())
 
             if not frames or not is_speaking:
                 return None

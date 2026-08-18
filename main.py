@@ -21,11 +21,11 @@ from vision.core.engine import vision_engine
 from vision.cognitive.load_balancer import load_balancer
 from vision.tools.registry import tool_registry
 from vision.perception.audio_stream import audio_stream
-from vision.perception.stt.groq_stt import GroqSTT
+from vision.perception.stt import smart_stt
 from vision.logger import logger
 
 console = Console()
-stt = GroqSTT()
+stt = smart_stt
 
 
 def print_banner():

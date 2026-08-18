@@ -75,6 +75,7 @@ class VisionConfig:
         self.VISION_NIM_LLM_MODEL: str = os.getenv("VISION_NIM_LLM_MODEL", "meta/llama-3.1-8b-instruct")
         self.VISION_STT_ENGINE: str = os.getenv("VISION_STT_ENGINE", "groq")
         self.VISION_STT_MODEL: str = os.getenv("VISION_STT_MODEL", "whisper-large-v3-turbo")
+        self.VISION_LOCAL_STT_MODEL: str = os.getenv("VISION_LOCAL_STT_MODEL", "small.en")
 
         # ── Multimodal Vision & Gemini ───────────────────────
         self.GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")

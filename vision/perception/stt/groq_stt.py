@@ -13,14 +13,22 @@ except ImportError:
     AsyncGroq = None
 
 
+DEFAULT_PROMPT = (
+    "VISION AI assistant, JARVIS, Python, YouTube, WhatsApp, weather, browser, "
+    "terminal, system, music, open, search, remember, schedule, mute, unmute, "
+    "volume, battery, memory, notes, status, run, execute."
+)
+
+
 class GroqSTT(BaseSTT):
-    def __init__(self, api_key: str = None, model: str = None):
+    def __init__(self, api_key: str = None, model: str = None, prompt: str = None):
         super().__init__(name="Groq-Whisper")
         self.api_key = api_key or config.GROQ_API_KEY
-        self.model = model or config.VISION_STT_MODEL
+        self.model = model or config.VISION_STT_MODEL or "whisper-large-v3-turbo"
+        self.prompt = prompt or DEFAULT_PROMPT
         self.client = AsyncGroq(api_key=self.api_key) if AsyncGroq and self.api_key else None
 
-    async def transcribe(self, audio_data: bytes, language: str = "en", filename: str = None) -> str:
+    async def transcribe(self, audio_data: bytes, language: str = "en", filename: str = None, prompt: str = None) -> str:
         if not self.client:
             raise RuntimeError("groq library is not installed or API key missing.")
         try:
@@ -38,10 +46,13 @@ class GroqSTT(BaseSTT):
             audio_file = BytesIO(audio_data)
             audio_file.name = ext_filename
 
+            prompt_text = prompt or self.prompt
             transcription = await self.client.audio.transcriptions.create(
                 file=audio_file,
                 model=self.model,
-                language=language,
+                language=language if language and language != "auto" else None,
+                prompt=prompt_text,
+                temperature=0.0,
                 response_format="text"
             )
             text = str(transcription).strip()

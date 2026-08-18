@@ -12,7 +12,7 @@ import psutil
 from datetime import datetime
 
 from vision.core.engine import vision_engine
-from vision.perception.stt.local_whisper import local_stt
+from vision.perception.stt import smart_stt
 from vision.perception.vision.screen import screen_capture
 from vision.tools.registry import tool_registry
 from vision.config import config
@@ -23,7 +23,7 @@ from vision.memory.working_memory import working_memory
 from vision.logger import logger
 
 router = APIRouter()
-stt = local_stt
+stt = smart_stt
 
 START_TIME = time.time()
 

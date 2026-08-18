@@ -19,28 +19,40 @@ except ImportError:
     WhisperModel = None
 
 
+DEFAULT_LOCAL_PROMPT = (
+    "VISION AI assistant, JARVIS, Python, YouTube, WhatsApp, weather, browser, "
+    "terminal, system, music, open, search, remember, schedule, mute, unmute, "
+    "volume, battery, memory, notes, status, run, execute."
+)
+
+
 class LocalWhisperSTT(BaseSTT):
     def __init__(
         self,
-        model_size: str = "base.en",
+        model_size: str = None,
         device: str = "cpu",
         compute_type: str = "int8",
-        cpu_threads: int = 8
+        cpu_threads: int = 8,
+        prompt: str = None
     ):
         super().__init__(name="Local-Faster-Whisper")
-        self.model_size = model_size
+        from vision.config import config
+        self.model_size = model_size or getattr(config, "VISION_LOCAL_STT_MODEL", "small.en")
         self.device = device
         self.compute_type = compute_type
         self.cpu_threads = cpu_threads
+        self.prompt = prompt or DEFAULT_LOCAL_PROMPT
         self.model: Optional[WhisperModel] = None
         self._groq_fallback = GroqSTT()
-        self._init_model()
+        self._model_loading = False
 
-    def _init_model(self):
-        """Pre-load and initialize local quantized neural model."""
+    def _get_model(self) -> Optional[WhisperModel]:
+        """Lazy load local quantized neural model."""
+        if self.model is not None:
+            return self.model
         if WhisperModel is None:
             logger.warning("[LocalSTT] faster-whisper not installed. Falling back to Groq Cloud STT.")
-            return
+            return None
 
         try:
             logger.info(f"[LocalSTT] Loading local neural model '{self.model_size}' (Device: {self.device}, Compute: {self.compute_type}, Threads: {self.cpu_threads})...")
@@ -54,13 +66,16 @@ class LocalWhisperSTT(BaseSTT):
             )
             load_ms = round((time.time() - t0) * 1000, 1)
             logger.info(f"[LocalSTT] Local Faster-Whisper model ready in {load_ms}ms (Sub-50ms Offline ASR active).")
+            return self.model
         except Exception as e:
             logger.warning(f"[LocalSTT] Could not load local WhisperModel ({e}). Using Groq Cloud STT as fallback.")
             self.model = None
+            return None
 
-    def _transcribe_sync(self, audio_data: bytes, language: str = "en", filename: str = None) -> str:
+    def _transcribe_sync(self, audio_data: bytes, language: str = "en", filename: str = None, prompt: str = None) -> str:
         """Synchronous transcription execution inside worker thread."""
-        if self.model is None:
+        model = self._get_model()
+        if model is None:
             return ""
 
         # Write to temporary file for robust container decoding (WebM, WAV, OGG, MP3)
@@ -82,14 +97,19 @@ class LocalWhisperSTT(BaseSTT):
                 f.write(audio_data)
                 temp_path = f.name
 
-            segments, info = self.model.transcribe(
+            prompt_text = prompt or self.prompt
+            segments, info = model.transcribe(
                 temp_path,
-                beam_size=1,
-                best_of=1,
-                language=language if language != "auto" else None,
+                beam_size=5,
+                best_of=5,
+                language=language if language and language != "auto" else None,
+                initial_prompt=prompt_text,
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=400),
-                temperature=0.0
+                vad_parameters=dict(
+                    min_silence_duration_ms=500,
+                    speech_pad_ms=250
+                ),
+                temperature=[0.0, 0.2, 0.4]
             )
 
             text_parts = [segment.text.strip() for segment in segments if segment.text.strip()]
@@ -102,8 +122,8 @@ class LocalWhisperSTT(BaseSTT):
                 except Exception:
                     pass
 
-    async def transcribe(self, audio_data: bytes, language: str = "en", filename: str = None) -> str:
-        """Transcribe audio bytes to text with 0ms network latency."""
+    async def transcribe(self, audio_data: bytes, language: str = "en", filename: str = None, prompt: str = None) -> str:
+        """Transcribe audio bytes to text with high accuracy."""
         if not audio_data or len(audio_data) < 200:
             return ""
 
@@ -112,7 +132,7 @@ class LocalWhisperSTT(BaseSTT):
         # 1. Primary: Local CTranslate2 Fast Neural Engine
         if self.model is not None:
             try:
-                text = await asyncio.to_thread(self._transcribe_sync, audio_data, language, filename)
+                text = await asyncio.to_thread(self._transcribe_sync, audio_data, language, filename, prompt)
                 duration_ms = round((time.time() - t0) * 1000, 1)
                 logger.debug(f"[LocalSTT] Transcribed ({len(audio_data)} bytes) in {duration_ms}ms -> '{text}'")
                 return text
@@ -121,7 +141,7 @@ class LocalWhisperSTT(BaseSTT):
 
         # 2. Secondary: Groq Cloud Fallback
         try:
-            return await self._groq_fallback.transcribe(audio_data, language=language, filename=filename)
+            return await self._groq_fallback.transcribe(audio_data, language=language, filename=filename, prompt=prompt)
         except Exception as e:
             logger.warning(f"[LocalSTT] Fallback STT error ({e}). Returning empty.")
             return ""

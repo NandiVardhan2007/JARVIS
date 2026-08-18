@@ -1380,8 +1380,8 @@
        ══════════════════════════════════════════════════════════════ */
     let ambientNoiseFloor = 0.008;
     let consecutiveSpeechFrames = 0;
-    const REQUIRED_SPEECH_FRAMES = 2; // ~100ms temporal confirmation
-    const MIN_SPEECH_DURATION_MS = 450;
+    const REQUIRED_SPEECH_FRAMES = 1; // Instant temporal capture without clipping initial word
+    const MIN_SPEECH_DURATION_MS = 350;
 
     async function startHandsFreeVAD() {
       if (micStream || isProcessing || isMuted || !handsFreeEnabled) return;
