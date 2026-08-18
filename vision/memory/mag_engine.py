@@ -1,6 +1,10 @@
 """
 Memory-Augmented Generation (MAG) Engine for VISION.
-Provides persistent multi-tier memory storage (Semantic Profile, Episodic Timeline, Procedural Habits)
+Provides persistent multi-tier memory storage:
+1. Semantic Profile (Facts, Preferences, Contact Directory)
+2. Episodic Timeline (Action History, Event Logging)
+3. Procedural Memory (Habits, Automatic Rules)
+4. Graph-Augmented Memory (Entity-Relationship Knowledge Graph for Multi-Hop Associative Recall)
 with SQLite backend, fast BM25/keyword retrieval, contextual prompt injection,
 and bi-directional Markdown sync (MEMORIES.md).
 """
@@ -9,7 +13,7 @@ import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple, Set
 from vision.logger import logger
 
 
@@ -35,7 +39,7 @@ class MAGEngine:
         return conn
 
     def _init_db(self):
-        """Create SQLite tables for multi-tier MAG memory."""
+        """Create SQLite tables for multi-tier MAG memory and Knowledge Graph."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             # 1. Semantic Memory (Facts, Preferences, Profiles)
@@ -71,10 +75,35 @@ class MAGEngine:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # 4. Knowledge Graph: Entities
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS memory_entities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    entity_type TEXT DEFAULT 'concept',
+                    aliases TEXT,
+                    metadata TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # 5. Knowledge Graph: Relations (Multi-Hop Graph)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS memory_relations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_name TEXT NOT NULL,
+                    relation_type TEXT NOT NULL,
+                    target_name TEXT NOT NULL,
+                    description TEXT,
+                    confidence REAL DEFAULT 1.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             conn.commit()
 
     def _seed_default_profile(self):
-        """Seed essential environment knowledge and procedural rules if empty."""
+        """Seed essential environment knowledge, procedural rules, and knowledge graph."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) as cnt FROM semantic_memories")
@@ -102,11 +131,38 @@ class MAGEngine:
                     ("fullscreen,full screen,youtube", "When user says keep it full screen, trigger full-screen mode using hotkey 'f'."),
                     ("forward,skip,rewind,youtube", "When user says forward or rewind, forward or rewind video by specified seconds (default 10s via 'l'/'j')."),
                     ("document,print", "Always print formatted bordered documents on A4 paper with 1.5 cm margins on Pantum P2500."),
+                    ("code,error,debug,fix", "Diagnose compilation and runtime errors, explain the root cause, and ask to apply fix."),
                 ]
                 for trigger, rule in rules:
                     cursor.execute(
                         "INSERT INTO procedural_memories (trigger_context, rule_action) VALUES (?, ?)",
                         (trigger, rule)
+                    )
+
+            # Seed Knowledge Graph if empty
+            cursor.execute("SELECT COUNT(*) as cnt FROM memory_relations")
+            graph_row = cursor.fetchone()
+            if graph_row["cnt"] == 0:
+                relations = [
+                    ("Nandu", "studying_at", "Aditya College of Engineering and Technology", "B.Tech 3rd Year IT A, Room 221, Surampalem"),
+                    ("Nandu", "has_sister", "Nandini", "Sister born on Dec 4, 2002, phone: 9100219275"),
+                    ("Nandini", "donated_old_laptop_for", "Hyderabad Ubuntu Server", "Repurposed sister old laptop running Linux server"),
+                    ("Hyderabad Ubuntu Server", "hosts_application", "KPR Parking Print System", "Path /home/nandu/print-server/kpr_print.log, IP 100.93.70.63"),
+                    ("Nandu", "has_mother", "Kovvuri Dhana Lakshmi (Amma)", "Mother, phone 950-586-4289"),
+                    ("Nandu", "has_father", "Kovvuri Vijaya Bhaskara Reddy (Nanna)", "Father, passed away on August 1st"),
+                    ("Nandu", "has_maternal_uncle", "Peddananna (Palla Reddy)", "Phone 9640019275 / 8885519275"),
+                    ("Nandu", "has_maternal_aunt", "Peddamma (Nagamani)", "Mother's elder sister, married to Palla Reddy"),
+                    ("Nandu", "has_friend", "Pavan (Kukka)", "Aditya College friend from Rajahmundry, phone: +91 70136 31726"),
+                    ("Nandu", "has_friend", "Purnima (Pandi)", "Aditya College friend from Korukonda, phone: +91 89194 85389"),
+                    ("Nandu", "has_friend", "Sriram (Sri Ram)", "Aditya College friend from Pandalapaka, phone: +91 98493 26138"),
+                    ("Nandu", "has_friend", "Harshith", "Aditya College friend from Kadiyam, phone: +91 93927 88083"),
+                    ("Nandu", "uses_browser_for_youtube", "Comet Browser", "Perplexity Comet Browser pinned on taskbar"),
+                    ("Nandu", "uses_hardware_printer", "Pantum P2500 Series", "Laser printer for bordered A4 printing"),
+                ]
+                for src, rel, tgt, desc in relations:
+                    cursor.execute(
+                        "INSERT INTO memory_relations (source_name, relation_type, target_name, description) VALUES (?, ?, ?, ?)",
+                        (src, rel, tgt, desc)
                     )
 
             conn.commit()
@@ -158,14 +214,12 @@ class MAGEngine:
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            # 1. Direct substring match
             cursor.execute(
                 "DELETE FROM semantic_memories WHERE content LIKE ? OR tags LIKE ?",
                 (f"%{clean}%", f"%{clean}%")
             )
             deleted = cursor.rowcount
 
-            # 2. If nothing deleted and query has multiple words, match on significant keywords (>3 chars)
             if deleted == 0:
                 words = [w.strip(".,'\"") for w in clean.split() if len(w.strip(".,'\"")) >= 4 and w.lower() not in {"from", "your", "that", "this", "only", "about", "with", "game", "rules"}]
                 if words:
@@ -188,6 +242,104 @@ class MAGEngine:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM semantic_memories ORDER BY id ASC LIMIT ?", (limit,))
             return [dict(row) for row in cursor.fetchall()]
+
+    # ── Graph-Augmented Memory (Knowledge Graph) ───────────────
+
+    def add_relation(
+        self,
+        source: str,
+        relation: str,
+        target: str,
+        description: str = "",
+        confidence: float = 1.0
+    ) -> int:
+        """Record an entity-to-entity relationship in the Knowledge Graph."""
+        src_clean = source.strip()
+        rel_clean = relation.strip()
+        tgt_clean = target.strip()
+        if not src_clean or not tgt_clean:
+            return -1
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO memory_relations (source_name, relation_type, target_name, description, confidence) VALUES (?, ?, ?, ?, ?)",
+                (src_clean, rel_clean, tgt_clean, description.strip(), confidence)
+            )
+            conn.commit()
+            rel_id = cursor.lastrowid
+            logger.info(f"[MAG-Graph] Recorded relation #{rel_id}: ({src_clean}) -[{rel_clean}]-> ({tgt_clean})")
+            self._invalidate_cag_cache()
+            return rel_id
+
+    def traverse_entity_graph(self, start_entity: str, depth: int = 2) -> List[Dict[str, Any]]:
+        """Multi-hop knowledge graph traversal starting from an entity."""
+        clean_start = start_entity.strip().lower()
+        visited_entities: Set[str] = {clean_start}
+        frontier: Set[str] = {clean_start}
+        all_relations: List[Dict[str, Any]] = []
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for _ in range(depth):
+                if not frontier:
+                    break
+                next_frontier: Set[str] = set()
+                for entity in list(frontier):
+                    cursor.execute(
+                        "SELECT * FROM memory_relations WHERE LOWER(source_name) LIKE ? OR LOWER(target_name) LIKE ? OR LOWER(description) LIKE ?",
+                        (f"%{entity}%", f"%{entity}%", f"%{entity}%")
+                    )
+                    rows = cursor.fetchall()
+                    for r in rows:
+                        d = dict(r)
+                        if d not in all_relations:
+                            all_relations.append(d)
+                            src = d["source_name"].lower()
+                            tgt = d["target_name"].lower()
+                            if src not in visited_entities:
+                                visited_entities.add(src)
+                                next_frontier.add(src)
+                            if tgt not in visited_entities:
+                                visited_entities.add(tgt)
+                                next_frontier.add(tgt)
+                frontier = next_frontier
+
+        return all_relations
+
+    def get_entity_subgraph_prompt(self, user_query: str) -> str:
+        """Scan query for entity keywords and generate multi-hop graph context."""
+        q_tokens = [w.lower() for w in re.findall(r"\w+", user_query) if len(w) > 2]
+        if not q_tokens:
+            return ""
+
+        stop_words = {"what", "which", "how", "when", "where", "why", "who", "does", "have", "with", "from", "that", "this", "tell", "show", "is", "are"}
+        meaningful_tokens = [w for w in q_tokens if w not in stop_words]
+
+        found_relations = []
+        seen_ids = set()
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for token in meaningful_tokens:
+                cursor.execute(
+                    "SELECT * FROM memory_relations WHERE LOWER(source_name) LIKE ? OR LOWER(target_name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(relation_type) LIKE ?",
+                    (f"%{token}%", f"%{token}%", f"%{token}%", f"%{token}%")
+                )
+                for r in cursor.fetchall():
+                    d = dict(r)
+                    if d["id"] not in seen_ids:
+                        seen_ids.add(d["id"])
+                        found_relations.append(d)
+
+        if not found_relations:
+            return ""
+
+        lines = ["[KNOWLEDGE GRAPH RELATIONS (MAG-GRAPH)]"]
+        for r in found_relations[:8]:
+            desc = f" ({r['description']})" if r.get('description') else ""
+            lines.append(f"• ({r['source_name']}) —[{r['relation_type']}]—> ({r['target_name']}){desc}")
+        return "\n".join(lines) + "\n"
 
     # ── Procedural Memory (Habits & Rules) ─────────────────────
 
@@ -307,6 +459,8 @@ class MAGEngine:
                         if len(digits) >= 10:
                             return digits
 
+        search_tokens = alias_map.get(target, [target])
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT content, tags, category FROM semantic_memories WHERE category IN ('contact', 'family', 'friends_profile', 'profile', 'NICKNAMES', 'family_profile') ORDER BY CASE WHEN category = 'contact' THEN 1 ELSE 2 END, id DESC")
@@ -379,7 +533,7 @@ class MAGEngine:
         return [item[1] for item in scored[:limit]]
 
     def get_mag_prompt_injection(self, user_query: str) -> str:
-        """Generate formatted dynamic long-term memory & procedural habit context for LLM prompt injection."""
+        """Generate formatted dynamic long-term memory, procedural habit, and knowledge graph context for LLM prompt injection."""
         q_lower = user_query.lower()
         broad_keywords = ["everything", "all", "know about me", "who am i", "about me", "my details", "full profile", "my profile"]
         is_broad = any(kw in q_lower for kw in broad_keywords)
@@ -401,6 +555,11 @@ class MAGEngine:
                     seen.add(c.lower())
                     lines.append(f"• [{m['category'].upper()}] {c}")
             sections.append("\n".join(lines))
+
+        # Check for matching Knowledge Graph relationships (multi-hop)
+        graph_prompt = self.get_entity_subgraph_prompt(user_query)
+        if graph_prompt:
+            sections.append(graph_prompt.strip())
 
         # Check for matching procedural habits & execution rules
         proc_rules = self.get_matching_procedural_rules(user_query)

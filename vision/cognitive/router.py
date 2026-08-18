@@ -47,8 +47,40 @@ DOMAIN_KEYWORD_MAP = {
         "tools": ["open_application", "get_current_time_and_date", "get_system_stats", "read_screen", "get_battery_status", "get_hardware_health"]
     },
     "memory": {
-        "keywords": ["remember", "memory", "memories", "recall", "forget", "know about me", "details", "my details", "about me", "age", "born", "birthday", "who am i", "my name", "college", "address", "my address", "mother", "father", "friends", "cache", "stats", "list memories", "clear cache"],
-        "tools": ["remember_fact", "recall_memory", "forget_memory", "list_all_memories", "get_cache_stats", "clear_system_cache"]
+        "keywords": [
+            "remember", "memory", "memories", "recall", "forget", "know about me", "details",
+            "my details", "about me", "age", "born", "birthday", "who am i", "my name",
+            "college", "address", "my address", "mother", "father", "friends", "cache", "stats",
+            "list memories", "clear cache", "knowledge graph", "relationship", "relations",
+            "connected to", "how is", "related to", "learn rule", "procedural rule", "past events", "history"
+        ],
+        "tools": [
+            "remember_fact", "recall_memory", "forget_memory", "list_all_memories",
+            "get_cache_stats", "clear_system_cache", "query_knowledge_graph",
+            "add_entity_relation", "learn_user_rule", "list_procedural_rules", "search_past_events"
+        ]
+    },
+    "briefing": {
+        "keywords": [
+            "morning briefing", "daily briefing", "briefing", "daily routine", "today briefing",
+            "morning routine", "daily summary", "what is on my plate today", "quick status", "how does my day look"
+        ],
+        "tools": [
+            "get_daily_morning_briefing", "get_quick_daily_status", "get_college_timetable",
+            "get_mid_exam_schedule", "get_current_time_and_date"
+        ]
+    },
+    "code_execution": {
+        "keywords": [
+            "run code", "execute code", "run java", "compile java", "run python", "run program",
+            "run script", "compile", "javac", "g++", "gcc", "stdin", "give input", "fix error",
+            "fix the error", "debug code", "code error", "exception", "traceback", "fix bug",
+            "repair code", "java project", "run this code"
+        ],
+        "tools": [
+            "run_code_with_input", "diagnose_and_fix_code_error", "compile_and_run_java_project",
+            "execute_terminal_command", "run_python_code"
+        ]
     },
     "media": {
         "keywords": [

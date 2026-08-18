@@ -1,7 +1,7 @@
 """
 Memory management and user recall tools for VISION AI.
 Allows the user to explicitly store, recall, search, delete, and synchronize personal memories,
-habits, procedural rules, and episodic event logs.
+habits, procedural rules, episodic event logs, and the Entity Knowledge Graph.
 """
 
 from typing import Optional
@@ -61,6 +61,29 @@ def list_all_memories() -> str:
     for m in memories:
         lines.append(f"- #{m['id']} [{m['category'].upper()}]: {m['content']}")
     return "\n".join(lines)
+
+
+@tool(name="query_knowledge_graph", description="Perform multi-hop traversal on the Knowledge Graph starting from an entity (e.g. 'Nandini', 'Hyderabad Server', 'Aditya College').")
+def query_knowledge_graph(entity_name: str, depth: int = 2) -> str:
+    """Traverse knowledge graph relations connected to an entity."""
+    relations = mag_engine.traverse_entity_graph(entity_name, depth=depth)
+    if not relations:
+        return f"No knowledge graph relations found for entity '{entity_name}'."
+
+    lines = [f"Knowledge Graph Relations for '{entity_name}' (Depth {depth}):"]
+    for r in relations:
+        desc = f" — {r['description']}" if r.get('description') else ""
+        lines.append(f"- ({r['source_name']}) --[{r['relation_type']}]--> ({r['target_name']}){desc}")
+    return "\n".join(lines)
+
+
+@tool(name="add_entity_relation", description="Add an entity-to-entity relationship edge to the Knowledge Graph (e.g. source='Nandini', relation='owns_device', target='MacBook').")
+def add_entity_relation(source: str, relation: str, target: str, description: str = "") -> str:
+    """Add a relation edge to the Knowledge Graph."""
+    rel_id = mag_engine.add_relation(source, relation, target, description)
+    if rel_id <= 0:
+        return "Error: Source and target entity names are required."
+    return f"Added knowledge graph relation #{rel_id}: ({source}) -[{relation}]-> ({target})."
 
 
 @tool(name="learn_user_rule", description="Save a procedural rule, habit, or instruction (e.g. trigger='youtube,media', rule='Always use Comet browser').")
