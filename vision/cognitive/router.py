@@ -123,20 +123,47 @@ DOMAIN_KEYWORD_MAP = {
             "restart_kpr_print_system", "ssh_execute_command", "open_interactive_ssh_terminal",
             "open_parking_logs_terminal"
         ]
+    },
+    "academic": {
+        "keywords": [
+            "timetable", "class", "classes", "schedule", "period", "lab", "assignment", "assignments",
+            "homework", "deadline", "submission", "due", "next class", "today class", "today classes",
+            "exam", "exams", "mid exam", "mid-1", "mid 1", "mid exams", "sessional", "dmdw", "atcd",
+            "a.java", "advanced java", "fsd", "thub", "edc", "computer networks", "aditya college",
+            "it section a", "room 221"
+        ],
+        "tools": [
+            "get_college_timetable", "get_mid_exam_schedule", "get_next_upcoming_class",
+            "add_college_assignment", "list_college_assignments", "mark_assignment_done",
+            "get_current_time_and_date"
+        ]
     }
 }
 
-# Core fallback tools when intent is ambiguous
+# Core fallback tools when general system intent is detected but ambiguous
 CORE_DEFAULT_TOOLS = [
     "open_application", "get_current_time_and_date", "get_system_stats",
-    "search_web", "show_desktop", "close_application"
+    "show_desktop", "close_application"
 ]
+
+CONVERSATIONAL_EXACT = {
+    "hi", "hello", "hey", "hey vision", "good morning", "good evening", "good night",
+    "how are you", "who are you", "what about you", "thank you", "thanks", "bye",
+    "goodbye", "see you", "i am his sister", "nice to meet you", "could you ask again",
+    "could you ask again please", "ask again", "yes", "no", "yeah", "ok", "okay"
+}
 
 
 class IntentRouter:
     def route_tools(self, user_query: str, all_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Filter down all registered tool schemas to only the most relevant tools."""
         q_lower = user_query.lower().strip()
+        
+        # 1. Pure conversational greetings / casual phrases don't need tools
+        if q_lower in CONVERSATIONAL_EXACT or (len(q_lower.split()) <= 4 and any(q_lower.startswith(g) for g in ["hi", "hello", "hey", "bye", "good morning", "how are you"])):
+            logger.debug(f"[Router] Conversational query detected -> 0 tools for query: '{user_query[:35]}...'")
+            return []
+
         matched_tool_names: Set[str] = set()
 
         for domain, info in DOMAIN_KEYWORD_MAP.items():
@@ -145,9 +172,16 @@ class IntentRouter:
                     matched_tool_names.update(info["tools"])
                     break
 
-        # If no specific domain matched, use curated core toolset
+        # If no specific domain matched, check if query contains any action intent
+        action_intent_words = ["open", "close", "launch", "run", "start", "show", "time", "date", "battery", "stats"]
+        has_action_intent = any(w in q_lower.split() for w in action_intent_words)
+
         if not matched_tool_names:
-            matched_tool_names.update(CORE_DEFAULT_TOOLS)
+            if has_action_intent:
+                matched_tool_names.update(CORE_DEFAULT_TOOLS)
+            else:
+                # Casual social chat / dialogue with no action intent: pass no tools
+                return []
 
         # Filter schema dicts
         schema_map = {

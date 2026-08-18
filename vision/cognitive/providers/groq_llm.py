@@ -99,6 +99,33 @@ class GroqLLMProvider(BaseLLMProvider):
             }
         except Exception as e:
             err_str = str(e)
+            # Automatic fallback if model is decommissioned / not found on Groq
+            if "model_not_found" in err_str or "does not exist" in err_str or "model_decommissioned" in err_str:
+                fallback_model = "openai/gpt-oss-120b"
+                if self.model != fallback_model:
+                    logger.warning(f"[GroqLLM] Model '{self.model}' unavailable on Groq. Auto-recovering with '{fallback_model}'.")
+                    self.model = fallback_model
+                    kwargs["model"] = fallback_model
+                    try:
+                        response = await self.client.chat.completions.create(**kwargs)
+                        duration_ms = (time.time() - start_time) * 1000
+                        self._update_stats(duration_ms)
+                        choice = response.choices[0]
+                        message_obj = choice.message
+                        tool_calls = None
+                        if message_obj.tool_calls:
+                            tool_calls = [tc.model_dump() for tc in message_obj.tool_calls]
+                        return {
+                            "role": "assistant",
+                            "content": message_obj.content,
+                            "tool_calls": tool_calls,
+                            "finish_reason": choice.finish_reason,
+                            "provider": self.name,
+                            "latency_ms": duration_ms
+                        }
+                    except Exception as e2:
+                        err_str = str(e2)
+
             # Check for self-healing tool call recovery on Groq 400
             if "failed_generation" in err_str or "tool_use_failed" in err_str:
                 recovered = self._recover_failed_tool_call(err_str)

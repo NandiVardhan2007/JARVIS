@@ -26,6 +26,60 @@ from vision.logger import logger
 from vision.core.reminder_daemon import reminder_manager
 
 
+def clean_text_for_speech(text: str) -> str:
+    """Normalize and clean LLM response text for natural, fluid spoken voice playback."""
+    if not text:
+        return ""
+    t = text.strip()
+
+    # If model returned raw JSON tool call payload
+    if t.startswith("{") and ("\"name\"" in t or "'name'" in t or "\"action\"" in t):
+        return "Action completed successfully, Nandu!"
+
+    # Remove thinking tags if model outputs <think>...</think>
+    t = re.sub(r'<think>.*?</think>', '', t, flags=re.DOTALL)
+
+    # Remove markdown code blocks ```...```
+    t = re.sub(r'```[\s\S]*?```', '', t)
+
+    # Remove inline code `...`
+    t = re.sub(r'`([^`]+)`', r'\1', t)
+
+    # Remove markdown links [text](url) -> text
+    t = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', t)
+
+    # Remove raw URLs
+    t = re.sub(r'https?://\S+', '', t)
+
+    # Remove markdown headers #, ##, ###
+    t = re.sub(r'^\s*#+\s*', '', t, flags=re.MULTILINE)
+
+    # Remove bold / italic markers **text**, *text*, _text_
+    t = re.sub(r'\*\*([^*]+)\*\*', r'\1', t)
+    t = re.sub(r'\*([^*]+)\*', r'\1', t)
+    t = re.sub(r'__([^_]+)__', r'\1', t)
+    t = re.sub(r'_([^_]+)_', r'\1', t)
+
+    # Convert markdown bullet points or numbered lists into natural spoken pauses
+    t = re.sub(r'^\s*[\*\-\+•]\s*', '', t, flags=re.MULTILINE)
+    t = re.sub(r'^\s*\d+\.\s*', '', t, flags=re.MULTILINE)
+
+    # Normalize smart quotes, dashes, and special typography
+    t = t.replace('\u2011', '-').replace('\u2013', '-').replace('\u2014', ' - ')
+    t = t.replace('\u2018', "'").replace('\u2019', "'")
+    t = t.replace('\u201c', '"').replace('\u201d', '"')
+
+    # Strip emoji and special decorative unicode symbols for clean voice synthesis
+    t = re.sub(r'[\U00010000-\U0010ffff]', '', t)
+    t = re.sub(r'[\u2600-\u27bf\u2300-\u23ff]', '', t)
+
+    # Normalize multiple whitespace / line breaks
+    t = re.sub(r'\n+', ' ', t)
+    t = re.sub(r'\s{2,}', ' ', t)
+
+    return t.strip()
+
+
 class VisionEngine:
     def __init__(self):
         self.tts = CartesiaTTS() if config.CARTESIA_API_KEY else None
@@ -47,6 +101,11 @@ class VisionEngine:
                     logger.error(f"[VisionEngine] Reminder voice synthesis error: {e}")
 
         asyncio.create_task(reminder_manager.start_daemon(speech_callback=_reminder_speaker))
+        
+        # Launch Autonomous Academic Timetable Watchdog Daemon
+        from vision.tools.academic_tools import start_academic_daemon
+        asyncio.create_task(start_academic_daemon(speech_callback=_reminder_speaker))
+        
         await event_bus.publish(VisionEvents.SYSTEM_STARTED)
 
     async def process_user_input(
@@ -177,25 +236,16 @@ class VisionEngine:
         except Exception as e:
             logger.debug(f"[VisionEngine] Auto fact extraction skipped: {e}")
 
-        # 9. Speech Synthesis Playback (Never synthesize raw JSON tool payloads)
-        if synthesize_voice and final_text and self.tts:
-            spoken_text = final_text.strip()
-            # If model returned raw JSON tool call as content
-            if spoken_text.startswith("{") and ("\"name\"" in spoken_text or "'name'" in spoken_text):
-                spoken_text = "Action completed successfully, Nandu!"
-            elif len(spoken_text) > 400:
-                # Keep spoken response punchy and natural for long text (e.g. take first 2 clean sentences)
-                sentences = re.split(r'(?<=[.!?])\s+', spoken_text)
-                if len(sentences) >= 2:
-                    spoken_text = f"{sentences[0]} {sentences[1]}"
-                else:
-                    spoken_text = spoken_text[:300].rstrip() + "..."
 
-            try:
-                audio_bytes = await self.tts.synthesize(spoken_text)
-                audio_player.play_wav_bytes(audio_bytes)
-            except Exception as e:
-                logger.error(f"[VisionEngine] Voice synthesis failed: {e}")
+        # 9. Speech Synthesis Playback (Synthesize clean, complete spoken text)
+        if synthesize_voice and final_text and self.tts:
+            spoken_text = clean_text_for_speech(final_text)
+            if spoken_text:
+                try:
+                    audio_bytes = await self.tts.synthesize(spoken_text)
+                    audio_player.play_wav_bytes(audio_bytes)
+                except Exception as e:
+                    logger.error(f"[VisionEngine] Voice synthesis failed: {e}")
 
         return {
             "session_id": session_id,

@@ -166,15 +166,91 @@ async def run_cli_mode():
             console.print(f"[bold red]Error: {e}[/bold red]\n")
 
 
+async def run_wakeword_mode():
+    """Ambient hands-free wake-word listening loop: Sits quietly until 'Hey VISION' is spoken."""
+    await vision_engine.initialize()
+    from vision.perception.wake_word import wake_word_engine
+
+    console.print("\n[bold green]VISION Hands-Free Wake-Word Mode Active![/bold green]")
+    console.print("[cyan]Say [bold white]'Hey VISION'[/bold white] from anywhere in the room to activate.[/cyan]")
+    console.print("[dim]Press Ctrl+C to exit.[/dim]\n")
+
+    session_id = "wakeword_session"
+    loop = asyncio.get_running_loop()
+
+    while True:
+        try:
+            # 1. Quiet ambient wake-word listener
+            with console.status("[bold cyan]Listening for 'Hey VISION'... (ambient)[/bold cyan]", spinner="pulse"):
+                detected = await loop.run_in_executor(None, wake_word_engine.listen_for_wake_word, 30.0)
+
+            if not detected:
+                await asyncio.sleep(0.1)
+                continue
+
+            console.print("\n[bold green]🎙️ Wake-Word Activated! Listening to your command...[/bold green]")
+
+            # 2. Record voice command after wake-word
+            with console.status("[bold green]Listening for command... (speak now)[/bold green]", spinner="dots"):
+                wav_bytes = await loop.run_in_executor(None, audio_stream.record_phrase)
+
+            if not wav_bytes:
+                console.print("[dim]No speech detected. Returning to ambient listening...[/dim]\n")
+                continue
+
+            # 3. Transcribe via Groq Whisper STT
+            with console.status("[bold yellow]Transcribing speech (Groq Whisper)...[/bold yellow]", spinner="dots"):
+                user_text = await stt.transcribe(wav_bytes)
+
+            if not user_text or len(user_text.strip()) < 2:
+                continue
+
+            console.print(f"[bold yellow]You > [/bold yellow]{user_text}")
+
+            if user_text.lower().strip() in ["exit", "quit", "goodbye", "bye"]:
+                farewell = "Goodbye, Nandu! Have a great day."
+                console.print(f"[bold cyan]VISION:[/bold cyan] {farewell}")
+                if vision_engine.tts:
+                    audio_bytes = await vision_engine.tts.synthesize(farewell)
+                    from vision.synthesis.player import audio_player
+                    audio_player.play_wav_bytes(audio_bytes)
+                break
+
+            # 4. Process command through LLM, execute tools, synthesize and speak back!
+            with console.status("[bold cyan]VISION is thinking & orchestrating...[/bold cyan]", spinner="dots"):
+                result = await vision_engine.process_user_input(
+                    user_text=user_text,
+                    session_id=session_id,
+                    channel="voice",
+                    synthesize_voice=True
+                )
+
+            console.print(f"[bold cyan]VISION ({result.get('provider', 'AI')} - {result.get('latency_ms', 0):.0f}ms):[/bold cyan]\n{result.get('response')}\n")
+
+        except KeyboardInterrupt:
+            console.print("\n[bold red]Stopping Wake-Word Mode...[/bold red]")
+            break
+        except Exception as e:
+            console.print(f"[bold red]Wake-word loop error: {e}[/bold red]\n")
+            await asyncio.sleep(1.0)
+
+
 def main():
     parser = argparse.ArgumentParser(description="VISION Autonomous AI System")
-    parser.add_argument("--mode", choices=["voice", "cli"], default="voice", help="Operating mode (default: voice)")
+    parser.add_argument(
+        "--mode",
+        choices=["voice", "wake", "cli"],
+        default="voice",
+        help="Operating mode: 'voice' (continuous direct voice), 'wake' (hands-free 'Hey VISION' trigger), or 'cli' (interactive text terminal)"
+    )
     args = parser.parse_args()
 
     print_banner()
 
     if args.mode == "cli":
         asyncio.run(run_cli_mode())
+    elif args.mode == "wake":
+        asyncio.run(run_wakeword_mode())
     else:
         asyncio.run(run_voice_mode())
 

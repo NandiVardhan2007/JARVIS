@@ -28,5 +28,6 @@ import vision.tools.reminder_tools
 import vision.tools.interview_tools
 import vision.tools.agent_execution_tools
 import vision.tools.remote_server_tools
+import vision.tools.academic_tools
 
 __all__ = ["tool", "tool_registry", "ToolRegistry"]

@@ -179,7 +179,7 @@ class MAGEngine:
     # ── Search & Context Retrieval ─────────────────────────────
 
     def search_memories(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Rank and return relevant memories matching user query."""
+        """Rank and return relevant memories matching user query with relationship and tag boosting."""
         clean_words = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2]
         if not clean_words:
             return self.list_all(limit=limit)
@@ -187,12 +187,27 @@ class MAGEngine:
         memories = self.list_all(limit=100)
         scored: List[tuple] = []
 
+        # Family / Relation keywords booster
+        rel_boost_words = {"sister", "nandini", "mother", "amma", "father", "nanna", "family", "peddananna", "peddamma", "friend", "pavan", "purnima"}
+        is_rel_query = any(w in rel_boost_words for w in clean_words)
+
         for m in memories:
             text = f"{m['category']} {m['content']} {m.get('tags', '')}".lower()
             score = 0
             for word in clean_words:
                 if word in text:
-                    score += 1
+                    score += 2
+                # Boost if matched in tags
+                if word in m.get("tags", "").lower():
+                    score += 3
+            
+            # Substantial boost for family/profile records when relation is queried
+            if is_rel_query and m["category"].lower() in {"family", "family_profile", "contact", "profile"}:
+                score += 6
+                # Extra boost if memory content explicitly mentions sister or Nandini
+                if "sister" in text or "nandini" in text:
+                    score += 10
+
             if score > 0:
                 scored.append((score, m))
 

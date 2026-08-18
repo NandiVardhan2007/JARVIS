@@ -24,12 +24,19 @@ except ImportError:
 
 def _get_audio_endpoint():
     """Helper to retrieve active default audio endpoint volume interface."""
-    if not AudioUtilities or not IAudioEndpointVolume:
+    if not AudioUtilities:
         return None
     try:
         speakers = AudioUtilities.GetSpeakers()
-        interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        return interface.QueryInterface(IAudioEndpointVolume)
+        if hasattr(speakers, "EndpointVolume") and speakers.EndpointVolume:
+            return speakers.EndpointVolume
+        if hasattr(speakers, "Activate") and IAudioEndpointVolume and CLSCTX_ALL:
+            interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            return interface.QueryInterface(IAudioEndpointVolume)
+        if hasattr(speakers, "_dev") and hasattr(speakers._dev, "Activate") and IAudioEndpointVolume and CLSCTX_ALL:
+            interface = speakers._dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            return interface.QueryInterface(IAudioEndpointVolume)
+        return None
     except Exception as e:
         logger.error(f"[HardwareTools] Failed to get audio endpoint: {e}")
         return None
