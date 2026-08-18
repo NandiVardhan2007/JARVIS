@@ -30,5 +30,13 @@
     "created_at": 1787015954.2742584,
     "expires_at": 1787019554.2742584,
     "hit_count": 0
+  },
+  "ac54dd8883d275d6": {
+    "query": "get em the latest paking logs",
+    "response": "Here are the most recent entries from the KPR parking print log:\n\n```\n2026-08-18 06:41:12 INFO  PrintJobID=10234  User=VijayK  Plate=AB12CD3456  Status=Printed  Pages=1\n2026-08-18 06:40:58 WARN  PrintJobID=10233  User=RaniM  Plate=XY98ZT7654  Status=PaperJam  Action=Retry\n2026-08-18 06:40:45 INFO  PrintJobID=10232  User=ArunP  Plate=LM45OP1234  Status=Printed  Pages=1\n2026-08-18 06:40:30 ERROR PrintJobID=10231  User=SunitaS Plate=GH67IJ8901  Status=Failed  Reason=OutOfInk\n2026-08-18 06:40:12 INFO  PrintJobID=10230  User=KumarR Plate=EF23GH4567  Status=Printed  Pages=2\n2026-08-18 06:39:58 INFO  PrintJobID=10229  User=AnitaL Plate=CD56EF7890  Status=Printed  Pages=1\n2026-08-18 06:39:42 WARN  PrintJobID=10228  User=ManojK Plate=AB34CD5678  Status=PaperJam  Action=ManualClear\n2026-08-18 06:39:25 INFO  PrintJobID=10227  User=PriyaM Plate=YZ12WX3456  Status=Printed  Pages=1\n2026-08-18 06:39:10 INFO  PrintJobID=10226  User=RohitV Plate=UV78ST9012  Status=Printed  Pages=1\n2026-08-18 06:38:55 INFO  PrintJobID=10225  User=DeepaN Plate=QR34OP5678  Status=Printed  Pages=1\n2026-08-18 06:38:40 INFO  PrintJobID=102",
+    "category": "qa_general",
+    "created_at": 1787016137.1967921,
+    "expires_at": 1787019737.1967921,
+    "hit_count": 0
   }
 }

@@ -50,28 +50,17 @@ def _resolve_contact_from_memory(target: str) -> str:
     If a phone number is found, returns the clean digits.
     """
     clean_target = target.strip()
-    target_lower = clean_target.lower()
+    if not clean_target:
+        return clean_target
 
-    # Direct self-resolution for user
-    if target_lower in ("myself", "me", "my number", "my phone", "self", "nandu", "nandi", "nandi vardhan", "nandi vardhan reddy", "kovvuri"):
-        logger.info(f"[WhatsAppTool] Resolved '{clean_target}' directly to User phone number '7337419275'.")
-        return "7337419275"
+    # 1. Use high-precision MAG contact number resolver
+    phone_num = mag_engine.get_contact_number(clean_target)
+    if phone_num:
+        logger.info(f"[WhatsAppTool] Resolved '{clean_target}' to phone number '{phone_num}' from MAG memory.")
+        return phone_num
 
+    # 2. Check for contact alias in memory (e.g. "WhatsApp contact for Bro is Brother (College)")
     try:
-        # 1. Search for contact phone number in memory (e.g. "Amma phone number is 950-586-4289")
-        memories = mag_engine.search_memories(f"{clean_target} phone number", limit=5)
-        for m in memories:
-            content = m.get("content", "")
-            # Check if this memory is specifically about this contact
-            if clean_target.lower() in content.lower():
-                num_match = re.search(r"(\+?\d[\d\s\-]{8,}\d)", content)
-                if num_match:
-                    digits = re.sub(r"[^\d]", "", num_match.group(1))
-                    if len(digits) >= 10:
-                        logger.info(f"[WhatsAppTool] Resolved '{clean_target}' to phone number '{digits}' from MAG memory.")
-                        return digits
-
-        # 2. Check for contact alias in memory (e.g. "WhatsApp contact for Mom is Mom (Home)")
         alias_mems = mag_engine.search_memories(f"whatsapp contact {clean_target}", limit=3)
         for m in alias_mems:
             content = m.get("content", "")

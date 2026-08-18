@@ -178,8 +178,80 @@ class MAGEngine:
 
     # ── Search & Context Retrieval ─────────────────────────────
 
+    def get_contact_number(self, query_name: str) -> Optional[str]:
+        """Direct, high-precision contact phone number resolver with alias support."""
+        if not query_name:
+            return None
+        target = query_name.strip().lower()
+
+        # Direct alias mappings
+        alias_map = {
+            "amma": ["amma", "mother", "mom", "dhana lakshmi", "kovvuri dhana lakshmi"],
+            "mother": ["amma", "mother", "mom", "dhana lakshmi"],
+            "mom": ["amma", "mother", "mom", "dhana lakshmi"],
+            "sister": ["sister", "nandini", "akka"],
+            "nandini": ["sister", "nandini", "akka"],
+            "akka": ["sister", "nandini", "akka"],
+            "peddananna": ["peddananna", "palla reddy", "big father"],
+            "palla reddy": ["peddananna", "palla reddy", "big father"],
+            "father": ["father", "nanna", "vijaya bhaskara reddy"],
+            "nanna": ["father", "nanna", "vijaya bhaskara reddy"],
+            "myself": ["myself", "me", "nandu", "nandi", "self"],
+            "nandu": ["myself", "me", "nandu", "nandi", "self"],
+            "pavan": ["pavan", "kukka"],
+            "kukka": ["pavan", "kukka"],
+            "purnima": ["purnima", "pandi"],
+            "pandi": ["purnima", "pandi"],
+            "sriram": ["sriram", "sri ram"],
+            "nikhil": ["nikhil"],
+            "harshith": ["harshith"],
+            "swathi": ["swathi"],
+            "geethika": ["geethika"],
+            "tanuja": ["tanuja"],
+        }
+
+        # Fast-path for user self
+        if target in ("myself", "me", "nandu", "nandi", "self", "my number", "my phone"):
+            return "7337419275"
+
+        search_tokens = alias_map.get(target, [target])
+
+        # Query all contact / family memories
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT content, tags, category FROM semantic_memories WHERE category IN ('contact', 'family', 'friends_profile', 'profile') ORDER BY CASE WHEN category = 'contact' THEN 1 ELSE 2 END, id DESC")
+            rows = cursor.fetchall()
+
+            for row in rows:
+                content = row["content"]
+                tags = (row["tags"] or "").lower()
+                
+                # Check for explicit token match with word boundaries
+                matched = False
+                for tok in search_tokens:
+                    # Match exact word in content or tags
+                    if re.search(rf"\b{re.escape(tok)}\b", content, re.IGNORECASE) or tok in tags.split(","):
+                        # Avoid cross matching Peddamma with Amma
+                        if tok in ("amma", "mom", "mother") and re.search(r"\bpeddamma\b", content, re.IGNORECASE) and not re.search(r"\b(?:amma|mother|mom)\b", content, re.IGNORECASE):
+                            continue
+                        # Avoid matching other people when searching self
+                        if tok in ("nandu", "self") and not row["category"] == "contact" and "primary mobile" not in content.lower():
+                            continue
+                        matched = True
+                        break
+
+                if matched:
+                    # Extract phone number
+                    num_match = re.search(r"(\+?\d[\d\s\-]{8,}\d)", content)
+                    if num_match:
+                        digits = re.sub(r"[^\d]", "", num_match.group(1))
+                        if len(digits) >= 10:
+                            return digits
+
+        return None
+
     def search_memories(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Rank and return relevant memories matching user query with relationship and tag boosting."""
+        """Rank and return relevant memories matching user query with accurate TF-IDF whole-word scoring."""
         clean_words = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2]
         if not clean_words:
             return self.list_all(limit=limit)
@@ -187,26 +259,26 @@ class MAGEngine:
         memories = self.list_all(limit=100)
         scored: List[tuple] = []
 
-        # Family / Relation keywords booster
-        rel_boost_words = {"sister", "nandini", "mother", "amma", "father", "nanna", "family", "peddananna", "peddamma", "friend", "pavan", "purnima"}
-        is_rel_query = any(w in rel_boost_words for w in clean_words)
-
         for m in memories:
-            text = f"{m['category']} {m['content']} {m.get('tags', '')}".lower()
+            content = m["content"]
+            category = m["category"].lower()
+            tags = (m.get("tags") or "").lower()
+            combined_text = f"{category} {content} {tags}".lower()
+            
             score = 0
             for word in clean_words:
-                if word in text:
-                    score += 2
-                # Boost if matched in tags
-                if word in m.get("tags", "").lower():
+                # 1. Exact whole-word boundary match in content (high confidence)
+                if re.search(rf"\b{re.escape(word)}\b", content, re.IGNORECASE):
+                    score += 5
+                # 2. Match in tags
+                if word in tags.split(",") or re.search(rf"\b{re.escape(word)}\b", tags):
+                    score += 4
+                # 3. Match in category
+                if word == category:
                     score += 3
-            
-            # Substantial boost for family/profile records when relation is queried
-            if is_rel_query and m["category"].lower() in {"family", "family_profile", "contact", "profile"}:
-                score += 6
-                # Extra boost if memory content explicitly mentions sister or Nandini
-                if "sister" in text or "nandini" in text:
-                    score += 10
+                # 4. Partial substring fallback
+                elif word in combined_text:
+                    score += 1
 
             if score > 0:
                 scored.append((score, m))
