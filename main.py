@@ -68,7 +68,7 @@ async def run_voice_mode():
     session_id = "voice_session"
 
     # Initial greeting speech
-    greeting = "VISION is online and ready. How can I assist you?"
+    greeting = "Yo Nandu! VISION is online and locked in. What's the move today, bro?"
     console.print(f"[bold cyan]VISION:[/bold cyan] {greeting}\n")
     try:
         if vision_engine.tts:

@@ -42,7 +42,7 @@ class AudioPlayer:
     def reset_interrupt(self):
         self._interrupted.clear()
 
-    def play_wav_bytes(self, audio_data: bytes, interruptible: bool = True) -> bool:
+    def play_wav_bytes(self, audio_data: bytes, interruptible: bool = True, force_reset: bool = False) -> bool:
         """
         Play WAV audio bytes synchronously with instant interruptibility.
         Returns True if played to completion, False if interrupted or error.
@@ -53,13 +53,22 @@ class AudioPlayer:
             logger.warning("[AudioPlayer] sounddevice or soundfile not installed. Skipping audio output.")
             return False
 
-        self.reset_interrupt()
+        if force_reset:
+            self.reset_interrupt()
+
+        # If already interrupted, do not start playing new chunks
+        if interruptible and self._interrupted.is_set():
+            return False
+
         with self._lock:
             self._is_playing = True
 
         try:
             with BytesIO(audio_data) as f:
                 data, fs = sf.read(f, dtype='float32')
+
+            if interruptible and self._interrupted.is_set():
+                return False
 
             # Use OutputStream or sd.play with polling for instant barge-in detection
             sd.play(data, fs)

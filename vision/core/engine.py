@@ -151,6 +151,20 @@ class VisionEngine:
     def __init__(self):
         self.tts = cartesia_tts
         self.is_running = False
+        self._current_speech_task: Optional[asyncio.Task] = None
+        self._current_speech_gen: int = 0
+
+    async def stop_speech(self):
+        """Immediately abort all active speech synthesis, streaming, and playback."""
+        self._current_speech_gen += 1
+        audio_player.stop()
+        if self._current_speech_task and not self._current_speech_task.done():
+            self._current_speech_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(self._current_speech_task), timeout=0.05)
+            except Exception:
+                pass
+            self._current_speech_task = None
 
     async def initialize(self):
         """Initialize engine components and background listeners."""
@@ -163,7 +177,7 @@ class VisionEngine:
             if self.tts:
                 try:
                     audio_bytes = await self.tts.synthesize(alert_text)
-                    audio_player.play_wav_bytes(audio_bytes)
+                    audio_player.play_wav_bytes(audio_bytes, force_reset=True)
                 except Exception as e:
                     logger.error(f"[VisionEngine] Reminder voice synthesis error: {e}")
 
@@ -191,15 +205,19 @@ class VisionEngine:
         if not spoken_text:
             return True
 
+        this_gen = self._current_speech_gen
+        if audio_player.is_interrupted():
+            return False
+
         # Fast path: For standard conversational turn, synthesize as a single fluid block
         if len(spoken_text) <= 350:
-            if audio_player.is_interrupted():
+            if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
                 return False
             try:
                 audio_bytes = await self.tts.synthesize(spoken_text)
-                if audio_bytes and not audio_player.is_interrupted():
-                    return await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True)
-                return True
+                if audio_bytes and not audio_player.is_interrupted() and self._current_speech_gen == this_gen:
+                    return await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True, False)
+                return False
             except Exception as e:
                 logger.error(f"[VisionEngine] Speech synthesis error: {e}")
                 return False
@@ -227,9 +245,9 @@ class VisionEngine:
         if len(chunks) == 1:
             try:
                 audio_bytes = await self.tts.synthesize(chunks[0])
-                if audio_bytes and not audio_player.is_interrupted():
-                    return await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True)
-                return True
+                if audio_bytes and not audio_player.is_interrupted() and self._current_speech_gen == this_gen:
+                    return await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True, False)
+                return False
             except Exception as e:
                 logger.error(f"[VisionEngine] Speech synthesis error: {e}")
                 return False
@@ -238,36 +256,40 @@ class VisionEngine:
         audio_queue: asyncio.Queue = asyncio.Queue(maxsize=3)
 
         async def _synthesize_producer():
-            for chunk in chunks:
-                if audio_player.is_interrupted():
-                    break
-                try:
-                    audio_data = await self.tts.synthesize(chunk)
-                    if audio_data:
-                        await audio_queue.put(audio_data)
-                except Exception as ex:
-                    logger.warning(f"[VisionEngine] Pipeline chunk synthesis error: {ex}")
-            await audio_queue.put(None)  # Sentinel to signal end of stream
+            try:
+                for chunk in chunks:
+                    if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
+                        break
+                    try:
+                        audio_data = await self.tts.synthesize(chunk)
+                        if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
+                            break
+                        if audio_data:
+                            await audio_queue.put(audio_data)
+                    except Exception as ex:
+                        logger.warning(f"[VisionEngine] Pipeline chunk synthesis error: {ex}")
+            finally:
+                await audio_queue.put(None)  # Sentinel to signal end of stream
 
         producer_task = asyncio.create_task(_synthesize_producer())
 
         try:
             while True:
-                if audio_player.is_interrupted():
+                if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
                     break
                 audio_bytes = await audio_queue.get()
                 if audio_bytes is None:
                     break
-                if audio_player.is_interrupted():
+                if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
                     break
-                completed = await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True)
+                completed = await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True, False)
                 if not completed:
                     break
         finally:
             if not producer_task.done():
                 producer_task.cancel()
 
-        return not audio_player.is_interrupted()
+        return not audio_player.is_interrupted() and self._current_speech_gen == this_gen
 
     async def _stream_and_speak(
         self,
@@ -280,54 +302,48 @@ class VisionEngine:
         a sentence boundary is detected — while the LLM is still generating.
 
         Returns the full accumulated response text.
-
-        Flow:
-          LLM token stream → sentence boundary detector → TTS synthesis queue → playback queue
-          Sentence N+1 is synthesized in the background while sentence N plays.
         """
         full_text = ""
         sentence_buffer = ""
-        # Regex for sentence-ending punctuation followed by space or end-of-stream
         sentence_end_re = re.compile(r'[.!?]\s+')
 
-        # Producer/consumer queue: producer feeds synthesized audio, consumer plays it
+        this_gen = self._current_speech_gen
+        audio_player.reset_interrupt()
+
         audio_queue: asyncio.Queue = asyncio.Queue(maxsize=4)
         producer_done = asyncio.Event()
 
         async def _tts_producer(text_queue: asyncio.Queue):
-            """Consume sentence text from text_queue, synthesize, push audio to audio_queue."""
             try:
                 while True:
                     sentence = await text_queue.get()
                     if sentence is None:  # Sentinel
                         break
-                    if audio_player.is_interrupted():
+                    if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
                         break
                     try:
                         audio_bytes = await self.tts.synthesize(sentence)
-                        if audio_bytes and not audio_player.is_interrupted():
+                        if audio_bytes and not audio_player.is_interrupted() and self._current_speech_gen == this_gen:
                             await audio_queue.put(audio_bytes)
                     except Exception as ex:
                         logger.warning(f"[VisionEngine] Stream TTS chunk error: {ex}")
             finally:
-                await audio_queue.put(None)  # Signal playback consumer to stop
+                await audio_queue.put(None)
 
         async def _playback_consumer():
-            """Consume audio from audio_queue and play sequentially."""
             try:
                 while True:
                     audio_bytes = await audio_queue.get()
                     if audio_bytes is None:
                         break
-                    if audio_player.is_interrupted():
+                    if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
                         break
-                    completed = await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True)
+                    completed = await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True, False)
                     if not completed:
                         break
             finally:
                 producer_done.set()
 
-        # Text queue feeds sentences to the TTS producer
         text_queue: asyncio.Queue = asyncio.Queue(maxsize=8)
         tts_task = asyncio.create_task(_tts_producer(text_queue))
         playback_task = asyncio.create_task(_playback_consumer())
@@ -338,7 +354,7 @@ class VisionEngine:
                 temperature=temperature,
                 max_tokens=max_tokens
             ):
-                if audio_player.is_interrupted():
+                if audio_player.is_interrupted() or self._current_speech_gen != this_gen:
                     break
 
                 full_text += token
@@ -349,10 +365,9 @@ class VisionEngine:
                     match = sentence_end_re.search(sentence_buffer)
                     if not match:
                         break
-                    # Extract the complete sentence up to and including the punctuation
-                    end_pos = match.start() + 1  # Include the punctuation mark
+                    end_pos = match.start() + 1
                     complete_sentence = sentence_buffer[:end_pos].strip()
-                    sentence_buffer = sentence_buffer[match.end():]  # Rest after the space
+                    sentence_buffer = sentence_buffer[match.end():]
 
                     if complete_sentence:
                         cleaned = clean_text_for_speech(complete_sentence)
@@ -361,7 +376,7 @@ class VisionEngine:
 
             # Flush any remaining text in the buffer
             remaining = sentence_buffer.strip()
-            if remaining and not audio_player.is_interrupted():
+            if remaining and not audio_player.is_interrupted() and self._current_speech_gen == this_gen:
                 cleaned = clean_text_for_speech(remaining)
                 if cleaned:
                     await text_queue.put(cleaned)
@@ -369,14 +384,11 @@ class VisionEngine:
         except Exception as e:
             logger.error(f"[VisionEngine] LLM streaming error: {e}")
         finally:
-            # Signal end of sentences
             await text_queue.put(None)
-            # Wait for playback to finish (or be interrupted)
             try:
                 await asyncio.wait_for(producer_done.wait(), timeout=120)
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, asyncio.CancelledError):
                 pass
-            # Cleanup
             if not tts_task.done():
                 tts_task.cancel()
             if not playback_task.done():
@@ -393,10 +405,11 @@ class VisionEngine:
     ) -> Dict[str, Any]:
         """Core multi-turn conversational loop with CAG caching, MAG memory, dynamic tool calling & pipelined voice."""
         start_time = time.time()
-        session: Session = session_manager.get_or_create(session_id=session_id, channel=channel)
         
-        # Reset any leftover barge-in flag for new turn
-        audio_player.reset_interrupt()
+        # Stop any active background speech from previous turns before processing new input
+        await self.stop_speech()
+
+        session: Session = session_manager.get_or_create(session_id=session_id, channel=channel)
 
         # 1. Record user message
         session.add_message(role="user", content=user_text)
@@ -413,7 +426,8 @@ class VisionEngine:
             await event_bus.publish(VisionEvents.LLM_RESPONSE_DONE, {"text": final_text, "session_id": session_id, "cached": True})
 
             if synthesize_voice and final_text:
-                asyncio.create_task(self.speak_pipelined(final_text))
+                audio_player.reset_interrupt()
+                await self.speak_pipelined(final_text)
 
             return {
                 "session_id": session_id,
@@ -463,7 +477,7 @@ class VisionEngine:
                 has_executed_tools = True
                 session.add_message(
                     role="assistant",
-                    content=response.get("content"),
+                    content=response.get("content") or "",
                     tool_calls=tool_calls
                 )
 
@@ -504,15 +518,13 @@ class VisionEngine:
             session.add_message(role="assistant", content=final_text)
             await event_bus.publish(VisionEvents.LLM_RESPONSE_DONE, {"text": final_text, "session_id": session_id})
 
-            # Pipelined Speech for tool results
+            # Spoken response for tool results
             if synthesize_voice and final_text:
-                asyncio.create_task(self.speak_pipelined(final_text))
+                audio_player.reset_interrupt()
+                await self.speak_pipelined(final_text)
 
         else:
             # ── Pure conversational: STREAM LLM + live TTS ──────────────
-            # Stream tokens from the LLM and start speaking each sentence
-            # as soon as it's complete — while the LLM is still generating.
-            # This cuts Time-to-First-Audio by 1-3 seconds.
             logger.info("[VisionEngine] Using streaming LLM → live TTS pipeline.")
 
             if synthesize_voice:
@@ -522,7 +534,6 @@ class VisionEngine:
                     max_tokens=1024
                 )
             else:
-                # No voice needed — still stream but just accumulate text
                 final_text = ""
                 async for token in load_balancer.stream_chat_completion(
                     messages=llm_messages,

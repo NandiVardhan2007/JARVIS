@@ -117,9 +117,8 @@ class AudioStreamManager:
                             # If VISION is speaking right now, trigger instant Barge-in!
                             try:
                                 from vision.synthesis.player import audio_player
-                                if audio_player.is_playing:
-                                    audio_player.stop()
-                                    logger.info("[AudioStream] 🛑 User Barge-in detected! Interrupted active speech playback.")
+                                audio_player.stop()
+                                logger.info("[AudioStream] 🛑 User speech detected! Aborted any active speech playback.")
                             except Exception:
                                 pass
                             # Prepend pre-roll buffer
