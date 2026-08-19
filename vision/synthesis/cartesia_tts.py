@@ -49,7 +49,10 @@ class CartesiaTTS(BaseTTS):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=10.0)
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=3.0),
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10, keepalive_expiry=60.0)
+            )
         return self._client
 
     async def synthesize(self, text: str, voice_id: Optional[str] = None) -> bytes:
