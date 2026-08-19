@@ -47,7 +47,7 @@ def print_banner():
     table.add_row("LLM Load Balancer", f"{len(load_balancer.providers)} endpoints ({config.VISION_LOAD_BALANCER_STRATEGY})")
     table.add_row("Primary LLM", f"Groq ({config.VISION_LLM_MODEL})")
     table.add_row("Fallback / Sub-Agents", f"NVIDIA NIM ({config.VISION_NIM_LLM_MODEL})")
-    table.add_row("TTS Engine", "Smart Multi-Tier (Cartesia Sonic-2 + 0ms Local Offline Fallback)")
+    table.add_row("TTS Engine", f"Cartesia Sonic-2 Neural TTS ({config.CARTESIA_VOICE_ID[:8]}...)")
     table.add_row("STT Engine", f"Smart STT (Groq {config.VISION_STT_MODEL} + Faster-Whisper)")
     table.add_row("Voice Pipeline", "Full-Duplex Interruption (Barge-in) & Pipelined TTFT <300ms")
     table.add_row("Registered Tools", f"{len(tool_registry.get_all_schemas())} tools active")

@@ -157,11 +157,9 @@ d:\VISION/
     │
     ├── synthesis/              # Speech Synthesis & Audio Playback Subsystem
     │   ├── base.py             # Abstract base synthesizer
-    │   ├── smart_tts.py        # Dual-pipeline coordinator (Cartesia -> Kokoro Fallback)
-    │   ├── cartesia_tts.py     # Ultra-fast cloud streaming neural TTS (Sonic-2)
-    │   ├── local_tts.py        # Offline zero-cloud Kokoro-82M ONNX neural speech engine
-    │   ├── piper_tts.py        # Piper TTS secondary offline fallback
-    │   └── player.py           # PyAudio non-blocking chunked audio player with barge-in polling
+    │   ├── cartesia_tts.py     # Ultra-fast cloud streaming neural TTS (Sonic-2) with key pool rotation
+    │   ├── smart_tts.py        # Cartesia TTS Router & backward-compatibility adapter
+    │   └── player.py           # Non-blocking chunked audio player with barge-in polling
     │
     ├── gateways/               # External Access & Web Gateway
     │   └── web/
@@ -287,60 +285,46 @@ d:\VISION/
 ### 4.6 Background Daemons & Event Bus
 * **Asynchronous EventBus (`event_bus.py`):**
   * Decouples the engine from the UI and daemons.
-  * Emits fine-grained events: `system.started`, `perception.vad.speech_start`, `cognition.tool.call`, `synthesis.tts.started`, etc.
-* **Reminder Daemon (`reminder_daemon.py`):**
-  * Persistent background worker checking SQLite reminders every 5 seconds.
-  * When a reminder matures, it interrupts the UI with an autonomous spoken announcement.
-* **Academic Watchdog (`academic_tools.py`):**
-  * Proactively alerts the user 15 minutes before an upcoming university class, lab session, or scheduled exam.
+All tools in VISION are decorated with `@tool` and auto-generate OpenAI/Groq function-calling JSON schemas.
+
+* **Registry (`registry.py`):** Central directory holding schemas, argument validation, and async invocation.
+* **Intent Routing (`router.py`):** Dynamically filters schemas to avoid context bloat in the LLM prompt.
+* **Multi-Agent Engine (`multi_agent_engine.py`):** Complex goals generate a DAG of sub-tasks executed by specialized agents with scoped tools.
 
 ---
 
-### 4.7 Glassmorphic Web Dashboard
-* **WebSocket Stream (`/ws`):**
-  * Real-time 60fps bidirectional telemetry stream for audio waveforms, memory hits, and live tool activity.
-* **Interactive Widgets:**
-  * Live CPU/RAM/Battery meters with color-coded gauge animations.
-  * Live Timetable Card showing the current day's subjects and upcoming classes.
-  * Active Reminder list with single-click dismiss.
-  * Memory inspector displaying facts learned by MAG and active CAG cache size.
+## 5. Getting Started & Setup
 
----
+### Prerequisites
+* Windows 10/11
+* Python 3.10+ (Recommended: Python 3.10 virtual environment)
+* FFmpeg installed and added to your system `PATH`.
+* Microphone & Speakers configured as default OS audio devices.
 
-## 5. Getting Started & Configuration
-
-### 5.1 Prerequisites
-* **Operating System:** Windows 10/11 (64-bit)
-* **Python Version:** Python 3.10 or 3.11
-* **Virtual Environment:** Recommended `.venv`
-
-### 5.2 Quick Setup
-1. Clone / Extract the repository into `d:\VISION`.
-2. Create and activate a virtual environment:
-   ```cmd
-   python -m venv .venv
-   .venv\Scripts\activate
+### Installation Steps
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/NandiVardhan2007/JARVIS.git
+   cd JARVIS
    ```
-3. Install required packages:
-   ```cmd
+2. Create and activate a Python virtual environment:
+   ```bash
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+3. Install required dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
-4. Copy the environment configuration template:
-   ```cmd
-   copy .env.example .env
+4. Install Playwright browser binaries:
+   ```bash
+   playwright install chromium
    ```
 5. Open `.env` and configure your API keys (e.g. `GROQ_API_KEY`, `CARTESIA_API_KEY`, etc.).
-
-### 5.3 Launching VISION
-Run the automated launcher:
-```cmd
-start.bat
-```
-*Or start manually:*
-```cmd
-python main.py
-```
-The server will start at `http://localhost:8000` and automatically open your default browser.
+6. Start VISION:
+   ```bash
+   .\start.bat
+   ```
 
 ---
 
@@ -351,8 +335,10 @@ The server will start at `http://localhost:8000` and automatically open your def
 | `GROQ_API_KEY` | `""` | Primary Groq API key for LLM and Whisper STT. |
 | `GROQ_API_KEYS` | `""` | Comma-separated secondary Groq keys for automatic load balancing. |
 | `CARTESIA_API_KEY` | `""` | Primary Cartesia API key for Sonic-2 streaming voice. |
-| `DEFAULT_TTS_PROVIDER` | `smart` | `smart` (Cartesia with Kokoro fallback) or `local` (100% offline Kokoro). |
-| `KOKORO_VOICE` | `af_bella` | Default local neural voice ID (`af_bella`, `am_adam`, `bf_emma`, etc.). |
+| `CARTESIA_API_KEYS` | `""` | Comma-separated Cartesia API keys for automatic failover/rotation. |
+| `CARTESIA_VOICE_ID` | `1259b7e3-cb8a-43df-9446-30971a46b8b0` | Cartesia voice identifier. |
+| `CARTESIA_SPEED` | `normal` | Cartesia voice speed (`slow`, `normal`, `fast`). |
+| `CARTESIA_MODEL_ID` | `sonic-2` | Cartesia voice model ID (`sonic-2`, `sonic-english`). |
 | `DEFAULT_LLM_PROVIDER` | `groq` | Default provider (`groq`, `openai`, `gemini`, `claude`, `ollama`). |
 | `WEB_PORT` | `8000` | Port for the FastAPI dashboard and WebSocket server. |
 | `ENABLE_AUTO_BROWSER` | `true` | Automatically open Chrome/Edge to the dashboard on launch. |
@@ -364,7 +350,7 @@ The server will start at `http://localhost:8000` and automatically open your def
 * **Issue: `Tool choice is none, but model called a tool (400)`**
   * *Resolution:* Handled by the self-healing recovery in `groq_llm.py` and the multi-turn loop in `engine.py`.
 * **Issue: `Cartesia 402 Insufficient credits`**
-  * *Resolution:* SmartTTS automatically falls back to the offline Kokoro-82M ONNX engine. You can also set `DEFAULT_TTS_PROVIDER=local` in `.env`.
+  * *Resolution:* Add additional backup Cartesia API keys into `CARTESIA_API_KEYS` in `.env` for automatic rotation.
 * **Issue: Playwright browser tools not working**
   * *Resolution:* Run `playwright install chromium` inside your `.venv`.
 * **Issue: Window snap shortcut not registering**

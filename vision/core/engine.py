@@ -17,7 +17,7 @@ from vision.tools.registry import tool_registry
 from vision.memory.working_memory import working_memory
 from vision.memory.mag_engine import mag_engine
 from vision.memory.cag_engine import cag_engine
-from vision.synthesis.smart_tts import smart_tts
+from vision.synthesis.cartesia_tts import cartesia_tts
 from vision.synthesis.player import audio_player
 from vision.config import config
 from vision.logger import logger
@@ -149,13 +149,13 @@ def clean_text_for_speech(text: str) -> str:
 
 class VisionEngine:
     def __init__(self):
-        self.tts = smart_tts
+        self.tts = cartesia_tts
         self.is_running = False
 
     async def initialize(self):
         """Initialize engine components and background listeners."""
         self.is_running = True
-        logger.info("[VisionEngine] Initialized successfully with Full-Duplex Smart TTS + MAG + CAG.")
+        logger.info("[VisionEngine] Initialized successfully with Full-Duplex Cartesia Neural TTS + MAG + CAG.")
         
         # Launch Autonomous Spoken Reminder Daemon
         async def _reminder_speaker(alert_text: str):

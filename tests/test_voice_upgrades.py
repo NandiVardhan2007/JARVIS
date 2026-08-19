@@ -1,16 +1,16 @@
 """
-Unit and integration tests for VISION Voice & Latency Upgrades:
+Unit and integration tests for VISION Cartesia Voice & Latency Upgrades:
 - Full-Duplex Interruption & Barge-in
-- SmartTTSEngine multi-tier failover
-- LocalTTS offline synthesis
+- CartesiaTTS streaming neural synthesis & multi-key failover
 - Pipelined sentence synthesis & chunking
+- Clean text speech normalization
 """
 
 import pytest
 import asyncio
+from unittest.mock import AsyncMock, patch, MagicMock
 from vision.synthesis.player import AudioPlayer, audio_player
-from vision.synthesis.local_tts import LocalTTS
-from vision.synthesis.smart_tts import SmartTTSEngine
+from vision.synthesis.cartesia_tts import CartesiaTTS, cartesia_tts
 from vision.core.engine import VisionEngine, clean_text_for_speech
 
 
@@ -26,31 +26,28 @@ async def test_audio_player_interrupt():
 
 
 @pytest.mark.asyncio
-async def test_local_tts_synthesis():
-    """Test that LocalTTS can synthesize text into valid audio bytes."""
-    import io
-    import soundfile as sf
-    local_engine = LocalTTS()
-    audio_bytes = await local_engine.synthesize("Testing VISION zero latency local TTS.")
-    assert isinstance(audio_bytes, bytes)
-    assert len(audio_bytes) > 100
-    with io.BytesIO(audio_bytes) as f:
-        data, sr = sf.read(f, dtype='float32')
-        assert len(data) > 0
-        assert sr in (16000, 22050, 24000, 44100, 48000)
+async def test_cartesia_tts_key_rotation():
+    """Test that CartesiaTTS automatically rotates keys upon quota exhaustion / 402 / 429."""
+    tts = CartesiaTTS(api_key="key1")
+    tts.api_keys = ["key1", "key2"]
+    tts.current_key_index = 0
 
+    mock_resp_fail = MagicMock()
+    mock_resp_fail.status_code = 402
+    mock_resp_fail.text = "Quota exceeded"
 
-@pytest.mark.asyncio
-async def test_use_cartesia_voice_toggle(monkeypatch):
-    """Test that toggling USE_CARTESIA_VOICE to False routes directly to LocalTTS."""
-    import vision.config
-    monkeypatch.setattr(vision.config.config, "USE_CARTESIA_VOICE", False)
-    smart_engine = SmartTTSEngine()
-    audio_bytes = await smart_engine.synthesize("Testing local toggle routing.")
-    assert isinstance(audio_bytes, bytes)
-    assert len(audio_bytes) > 100
+    mock_resp_ok = MagicMock()
+    mock_resp_ok.status_code = 200
+    mock_resp_ok.content = b"RIFF....WAVEfmt ...."
 
+    mock_client = AsyncMock()
+    mock_client.post.side_effect = [mock_resp_fail, mock_resp_ok]
 
+    with patch.object(tts, "_get_client", return_value=mock_client):
+        audio = await tts.synthesize("Hello world")
+        assert audio == b"RIFF....WAVEfmt ...."
+        # Should have rotated key
+        assert tts.current_key_index == 1
 
 
 def test_clean_text_for_speech():

@@ -60,12 +60,11 @@ class VisionConfig:
                 cart_keys.append(v)
         self.CARTESIA_API_KEYS: List[str] = list(dict.fromkeys([k for k in cart_keys if k]))
         self.CARTESIA_API_KEY: Optional[str] = self.CARTESIA_API_KEYS[0] if self.CARTESIA_API_KEYS else None
+        self.CARTESIA_MODEL_ID: str = os.getenv("CARTESIA_MODEL_ID", "sonic-2")
         self.CARTESIA_VOICE_ID: str = os.getenv("CARTESIA_VOICE_ID", "1259b7e3-cb8a-43df-9446-30971a46b8b0")
         self.CARTESIA_SPEED: str = os.getenv("CARTESIA_SPEED", "normal")
         self.CARTESIA_EMOTION: List[str] = ["positivity:high"]
-        self.USE_CARTESIA_VOICE: bool = os.getenv("USE_CARTESIA_VOICE", "true").lower() in ("true", "1", "yes", "t", "y")
-        self.VISION_LOCAL_TTS_ENGINE: str = os.getenv("VISION_LOCAL_TTS_ENGINE", "edge_tts").lower().strip()
-        self.VISION_LOCAL_TTS_VOICE: str = os.getenv("VISION_LOCAL_TTS_VOICE", "en-US-BrianNeural")
+        self.USE_CARTESIA_VOICE: bool = True
 
 
 

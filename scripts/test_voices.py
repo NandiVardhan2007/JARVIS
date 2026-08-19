@@ -1,6 +1,6 @@
 """
-Voice Audition & Preview Utility for VISION.
-Run this script to listen to voice samples and pick your favorite:
+Cartesia Sonic Neural Voice Audition & Preview Utility for VISION.
+Run this script to listen to Cartesia voice samples and test dynamic neural synthesis:
     python scripts/test_voices.py
 """
 
@@ -8,55 +8,50 @@ import asyncio
 import io
 import soundfile as sf
 import sounddevice as sd
-from vision.synthesis.player import audio_player
+from vision.config import config
+from vision.synthesis.cartesia_tts import CartesiaTTS
 
-VOICE_SAMPLES = [
-    # Edge-TTS Studio Neural Voices (Indistinguishable from real humans)
-    {"engine": "edge_tts", "voice": "en-US-BrianNeural", "label": "Edge-TTS: Brian (Deep, natural, authoritative - Recommended)"},
-    {"engine": "edge_tts", "voice": "en-US-GuyNeural", "label": "Edge-TTS: Guy (Crisp modern American assistant)"},
-    {"engine": "edge_tts", "voice": "en-GB-RyanNeural", "label": "Edge-TTS: Ryan (British Jarvis / Butler style)"},
-    {"engine": "edge_tts", "voice": "en-US-AndrewNeural", "label": "Edge-TTS: Andrew (Warm conversational male)"},
-    {"engine": "edge_tts", "voice": "en-US-AriaNeural", "label": "Edge-TTS: Aria (Natural expressive female)"},
-    {"engine": "edge_tts", "voice": "en-IN-PrabhatNeural", "label": "Edge-TTS: Prabhat (Indian English natural male)"},
-
-    # Kokoro-82M ONNX (100% Local Offline Neural)
-    {"engine": "kokoro", "voice": "bm_george", "label": "Kokoro-ONNX: George (British classic Jarvis)"},
-    {"engine": "kokoro", "voice": "am_adam", "label": "Kokoro-ONNX: Adam (Deep American male)"},
-    {"engine": "kokoro", "voice": "am_fenrir", "label": "Kokoro-ONNX: Fenrir (Cinematic deep male)"},
-    {"engine": "kokoro", "voice": "af_bella", "label": "Kokoro-ONNX: Bella (Smooth natural female)"},
+CARTESIA_VOICE_SAMPLES = [
+    {"id": "1259b7e3-cb8a-43df-9446-30971a46b8b0", "label": "VISION Default Jarvis / Smooth Conversational Male"},
+    {"id": "694f9389-aac1-45b6-b726-9d9369183238", "label": "Sarah (Natural Conversational Female)"},
+    {"id": "a0e99841-438c-4a64-b679-ae501e7d6091", "label": "Barbershop Man (Deep American Male)"},
+    {"id": "79a125e8-cd45-4c13-8a67-188112f4dd22", "label": "British Man (Refined Jarvis / Butler)"},
+    {"id": "248be419-c632-4f23-adf1-5324ed7dbf1d", "label": "California Girl (Dynamic Modern Female)"},
 ]
 
 
 async def preview_all():
-    from vision.synthesis.local_tts import local_tts
     print("=" * 60)
-    print("VISION Voice Audition: Testing Local & Studio Neural Voices")
+    print("VISION Cartesia Sonic-2 Voice Audition")
     print("=" * 60)
 
-    for item in VOICE_SAMPLES:
-        engine = item["engine"]
-        voice = item["voice"]
+    if not config.CARTESIA_API_KEY and not config.CARTESIA_API_KEYS:
+        print("[!] ERROR: No Cartesia API keys found in .env (CARTESIA_API_KEY).")
+        return
+
+    tts = CartesiaTTS()
+
+    for item in CARTESIA_VOICE_SAMPLES:
+        voice_id = item["id"]
         label = item["label"]
-        phrase = f"Hello Nandu! This is {label}. How can I assist you with VISION today?"
+        phrase = f"Hello Nandu! This is {label}. VISION is operating purely on Cartesia Sonic neural voice."
 
-        print(f"\n▶ Playing: {label}")
-        if engine == "edge_tts":
-            audio_bytes = await local_tts._synthesize_edge_tts(phrase, voice=voice)
-        else:
-            audio_bytes = await local_tts._synthesize_kokoro(phrase, voice=voice)
-
-        if audio_bytes:
-            with io.BytesIO(audio_bytes) as f:
-                data, fs = sf.read(f, dtype='float32')
-                sd.play(data, fs)
-                sd.wait()
-        else:
-            print("  [!] Failed to synthesize with this engine/voice.")
+        print(f"\n▶ Playing Cartesia Voice: {label} ({voice_id[:8]}...)")
+        try:
+            audio_bytes = await tts.synthesize(phrase, voice_id=voice_id)
+            if audio_bytes:
+                with io.BytesIO(audio_bytes) as f:
+                    data, fs = sf.read(f, dtype='float32')
+                    sd.play(data, fs)
+                    sd.wait()
+            else:
+                print("  [!] Failed to synthesize with this Cartesia voice.")
+        except Exception as e:
+            print(f"  [!] Synthesis error: {e}")
 
     print("\n" + "=" * 60)
-    print("To set your favorite voice, update .env with:")
-    print("  VISION_LOCAL_TTS_ENGINE=edge_tts   (or kokoro)")
-    print("  VISION_LOCAL_TTS_VOICE=en-US-BrianNeural   (or bm_george, etc.)")
+    print("To set your favorite Cartesia voice, update .env with:")
+    print(f"  CARTESIA_VOICE_ID={config.CARTESIA_VOICE_ID}")
     print("=" * 60)
 
 
