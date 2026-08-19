@@ -292,6 +292,38 @@ def type_text_into_application(text: str, target_app: Optional[str] = "Notepad",
     _ensure_and_focus_window(app)
     time.sleep(0.3)
 
+    # For Notepad: press Ctrl+N to create a fresh new document before writing,
+    # so new text never collides with previous notes already open.
+    if pyautogui and app.lower().strip() in ("notepad", "notepad.exe"):
+        pyautogui.hotkey("ctrl", "n")
+        time.sleep(0.4)  # Wait for "Do you want to save?" dialog or new doc
+        # If an unsaved-changes dialog appears, dismiss it by pressing "Don't Save" (Tab → Enter or Alt+N)
+        # Modern Notepad (Win11) uses Alt+N for "Don't Save", classic uses Tab+Enter
+        try:
+            dialog_hwnd = None
+            if win32gui:
+                def _find_dialog(hwnd, _):
+                    nonlocal dialog_hwnd
+                    if win32gui.IsWindowVisible(hwnd):
+                        cls = win32gui.GetClassName(hwnd)
+                        title = win32gui.GetWindowText(hwnd).lower()
+                        if cls == "#32770" or "save" in title or "notepad" in title and "want to save" in title:
+                            dialog_hwnd = hwnd
+                try:
+                    win32gui.EnumWindows(_find_dialog, None)
+                except Exception:
+                    pass
+            if dialog_hwnd:
+                logger.info("[InputTool] Detected unsaved-changes dialog after Ctrl+N. Dismissing with 'Don't Save'.")
+                pyautogui.hotkey("alt", "n")  # "Don't Save" in modern Notepad
+                time.sleep(0.3)
+            else:
+                # No dialog means either fresh Notepad or already saved — good to go
+                pass
+        except Exception:
+            pass
+        logger.info("[InputTool] Created new Notepad document (Ctrl+N) to avoid colliding with previous notes.")
+
     logger.info(f"[InputTool] Writing {len(text)} characters into '{app}' (mode: {typing_mode})...")
 
     # For documents, notes, summaries, or multi-line text: use instant clipboard paste
