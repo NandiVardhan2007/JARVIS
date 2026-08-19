@@ -124,6 +124,7 @@ def switch_to_window(app_name: str) -> str:
                     if w.isMinimized:
                         w.restore()
                     w.activate()
+                    time.sleep(0.15)
                     logger.info(f"[WindowTool] Focused window: '{w.title}'")
                     return f"Switched to '{w.title}'."
         except Exception as e:

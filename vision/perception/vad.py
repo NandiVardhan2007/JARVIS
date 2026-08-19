@@ -4,6 +4,7 @@ Provides deep-learning neural VAD (Silero) with automatic 16kHz resampling and a
 """
 
 from typing import Optional
+from vision.config import config
 from vision.logger import logger
 
 try:
@@ -20,12 +21,13 @@ except ImportError:
 
 
 class VADDetector:
-    def __init__(self, energy_threshold: float = 0.015, silero_threshold: float = 0.45):
+    def __init__(self, energy_threshold: float = 0.025, silero_threshold: float = None):
         self.energy_threshold = energy_threshold
-        self.silero_threshold = silero_threshold
+        self.silero_threshold = silero_threshold or getattr(config, "VISION_VAD_THRESHOLD", 0.55)
         self.model = None
         self.vad_iterator = None
         self._init_silero()
+
 
     def _init_silero(self):
         if load_silero_vad and torch:

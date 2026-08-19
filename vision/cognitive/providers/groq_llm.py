@@ -24,7 +24,8 @@ class GroqLLMProvider(BaseLLMProvider):
         self._total_latency_ms = 0.0
 
     def _recover_failed_tool_call(self, err_msg: str) -> Optional[List[Dict[str, Any]]]:
-        """Recover tool calls from Groq's failed_generation raw XML string."""
+        """Recover tool calls from Groq's failed_generation raw XML or JSON string."""
+        # 1. XML style: <function=name>{...}</function>
         m = re.search(r"<function=(\w+)>(.*?)(?:</function>|$)", err_msg, re.DOTALL)
         if not m:
             m = re.search(r"<function=(\w+)[\s\(]*(\{.*?\})[\s\)]*(?:>)?(?:</function>)?", err_msg, re.DOTALL)
@@ -44,7 +45,7 @@ class GroqLLMProvider(BaseLLMProvider):
                         pass
 
             call_id = f"call_recovered_{int(time.time() * 1000)}"
-            logger.info(f"[GroqLLM] Self-healed malformed tool call -> {func_name}({parsed_args})")
+            logger.info(f"[GroqLLM] Self-healed malformed XML tool call -> {func_name}({parsed_args})")
             return [{
                 "id": call_id,
                 "type": "function",
@@ -53,6 +54,41 @@ class GroqLLMProvider(BaseLLMProvider):
                     "arguments": json.dumps(parsed_args)
                 }
             }]
+
+        # 2. JSON style inside failed_generation (e.g. 'failed_generation': '{"name": "snap_window", "arguments": {"direction":"left"}}')
+        fg_match = re.search(r"failed_generation['\"]?\s*:\s*['\"](\{.*?\})['\"]", err_msg)
+        candidate_str = fg_match.group(1) if fg_match else None
+
+        if not candidate_str:
+            name_match = re.search(r'(\{\s*"(?:name|function)"\s*:\s*.*?\})', err_msg)
+            if name_match:
+                candidate_str = name_match.group(1)
+
+        if candidate_str:
+            candidate_str = candidate_str.replace('\\"', '"').replace("\\'", "'")
+            try:
+                data = json.loads(candidate_str)
+                func_name = data.get("name") or data.get("function", {}).get("name")
+                args = data.get("arguments") or data.get("parameters") or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        pass
+                if func_name:
+                    call_id = f"call_recovered_{int(time.time() * 1000)}"
+                    logger.info(f"[GroqLLM] Self-healed malformed JSON tool call -> {func_name}({args})")
+                    return [{
+                        "id": call_id,
+                        "type": "function",
+                        "function": {
+                            "name": func_name,
+                            "arguments": json.dumps(args) if isinstance(args, dict) else str(args)
+                        }
+                    }]
+            except Exception as e:
+                logger.debug(f"[GroqLLM] Could not parse candidate JSON tool call: {e}")
+
         return None
 
     async def chat_completion(

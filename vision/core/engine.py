@@ -17,10 +17,11 @@ from vision.tools.registry import tool_registry
 from vision.memory.working_memory import working_memory
 from vision.memory.mag_engine import mag_engine
 from vision.memory.cag_engine import cag_engine
-from vision.synthesis.cartesia_tts import CartesiaTTS
+from vision.synthesis.smart_tts import smart_tts
 from vision.synthesis.player import audio_player
 from vision.config import config
 from vision.logger import logger
+
 
 
 from vision.core.reminder_daemon import reminder_manager
@@ -148,13 +149,13 @@ def clean_text_for_speech(text: str) -> str:
 
 class VisionEngine:
     def __init__(self):
-        self.tts = CartesiaTTS() if config.CARTESIA_API_KEY else None
+        self.tts = smart_tts
         self.is_running = False
 
     async def initialize(self):
         """Initialize engine components and background listeners."""
         self.is_running = True
-        logger.info("[VisionEngine] Initialized successfully with MAG + CAG memory subsystems.")
+        logger.info("[VisionEngine] Initialized successfully with Full-Duplex Smart TTS + MAG + CAG.")
         
         # Launch Autonomous Spoken Reminder Daemon
         async def _reminder_speaker(alert_text: str):
@@ -174,6 +175,47 @@ class VisionEngine:
         
         await event_bus.publish(VisionEvents.SYSTEM_STARTED)
 
+    async def speak_pipelined(self, text: str) -> bool:
+        """
+        Segment response text into natural sentence clauses and stream synthesis/playback
+        in real time for ultra-low TTFT (< 300ms) with instant barge-in support.
+        """
+        if not text or not self.tts:
+            return True
+
+        # Clean text
+        spoken_text = clean_text_for_speech(text)
+        if not spoken_text:
+            return True
+
+        # Split text into sentence/clause segments while keeping natural flow
+        raw_sentences = re.split(r'(?<=[.!?\n])\s+', spoken_text)
+        sentences = [s.strip() for s in raw_sentences if s.strip()]
+
+        if not sentences:
+            return True
+
+        for idx, sentence in enumerate(sentences):
+            # Check if user interrupted via Barge-in
+            if audio_player.is_interrupted():
+                logger.info(f"[VisionEngine] Speech playback interrupted at sentence {idx+1}/{len(sentences)}.")
+                return False
+
+            try:
+                audio_bytes = await self.tts.synthesize(sentence)
+                if not audio_bytes:
+                    continue
+
+                # Play sentence chunk; play_wav_bytes polls for barge-in every 20ms
+                completed = await asyncio.to_thread(audio_player.play_wav_bytes, audio_bytes, True)
+                if not completed:
+                    logger.info("[VisionEngine] Playback aborted via Barge-in.")
+                    return False
+            except Exception as e:
+                logger.error(f"[VisionEngine] Sentence synthesis error: {e}")
+
+        return True
+
     async def process_user_input(
         self,
         user_text: str,
@@ -181,10 +223,13 @@ class VisionEngine:
         channel: str = "web",
         synthesize_voice: bool = True
     ) -> Dict[str, Any]:
-        """Core multi-turn conversational loop with CAG caching, MAG memory, and dynamic tool calling."""
+        """Core multi-turn conversational loop with CAG caching, MAG memory, dynamic tool calling & pipelined voice."""
         start_time = time.time()
         session: Session = session_manager.get_or_create(session_id=session_id, channel=channel)
         
+        # Reset any leftover barge-in flag for new turn
+        audio_player.reset_interrupt()
+
         # 1. Record user message
         session.add_message(role="user", content=user_text)
         await event_bus.publish(VisionEvents.USER_QUERY_RECEIVED, {"text": user_text, "session_id": session_id})
@@ -199,12 +244,8 @@ class VisionEngine:
             session.add_message(role="assistant", content=final_text)
             await event_bus.publish(VisionEvents.LLM_RESPONSE_DONE, {"text": final_text, "session_id": session_id, "cached": True})
 
-            if synthesize_voice and final_text and self.tts:
-                try:
-                    audio_bytes = await self.tts.synthesize(final_text)
-                    audio_player.play_wav_bytes(audio_bytes)
-                except Exception as e:
-                    logger.error(f"[VisionEngine] Voice synthesis failed: {e}")
+            if synthesize_voice and final_text:
+                asyncio.create_task(self.speak_pipelined(final_text))
 
             return {
                 "session_id": session_id,
@@ -228,18 +269,29 @@ class VisionEngine:
         all_tool_schemas = tool_registry.get_all_schemas()
         relevant_tools = router.route_tools(user_text, all_tool_schemas)
 
-        # 5. LLM Load Balancer Call
-        response = await load_balancer.chat_completion(
-            messages=llm_messages,
-            tools=relevant_tools if relevant_tools else None,
-            temperature=0.6,
-            max_tokens=1024
-        )
-
-        # 6. Handle Function/Tool Calls
-        tool_calls = response.get("tool_calls")
+        # 5. Multi-Turn LLM & Tool Execution Loop
         has_executed_tools = False
-        if tool_calls:
+        max_tool_turns = 5
+        turn_count = 0
+        response: Dict[str, Any] = {}
+
+        while turn_count < max_tool_turns:
+            turn_count += 1
+            llm_messages = [{"role": "system", "content": system_content}] + session.get_messages_for_llm(max_history=15)
+
+            # Keep relevant tools available so the model can chain multiple actions
+            response = await load_balancer.chat_completion(
+                messages=llm_messages,
+                tools=relevant_tools if relevant_tools else None,
+                temperature=0.6,
+                max_tokens=1024
+            )
+
+            tool_calls = response.get("tool_calls")
+            if not tool_calls:
+                # Conversational response or completed tool cycle
+                break
+
             has_executed_tools = True
             session.add_message(
                 role="assistant",
@@ -279,16 +331,10 @@ class VisionEngine:
                     content=str(tool_result)
                 )
 
-            # Re-prompt LLM with tool execution result for final response
-            updated_messages = [{"role": "system", "content": system_content}] + session.get_messages_for_llm(max_history=15)
-            response = await load_balancer.chat_completion(
-                messages=updated_messages,
-                tools=None,
-                temperature=0.6,
-                max_tokens=800
-            )
+        final_text = response.get("content") or ""
+        if not final_text and has_executed_tools:
+            final_text = "Done. I have executed the requested actions."
 
-        final_text = response.get("content", "")
         session.add_message(role="assistant", content=final_text)
         await event_bus.publish(VisionEvents.LLM_RESPONSE_DONE, {"text": final_text, "session_id": session_id})
 
@@ -302,16 +348,9 @@ class VisionEngine:
         except Exception as e:
             logger.debug(f"[VisionEngine] Auto fact extraction skipped: {e}")
 
-
-        # 9. Speech Synthesis Playback (Synthesize clean, complete spoken text)
-        if synthesize_voice and final_text and self.tts:
-            spoken_text = clean_text_for_speech(final_text)
-            if spoken_text:
-                try:
-                    audio_bytes = await self.tts.synthesize(spoken_text)
-                    audio_player.play_wav_bytes(audio_bytes)
-                except Exception as e:
-                    logger.error(f"[VisionEngine] Voice synthesis failed: {e}")
+        # 9. Pipelined Speech Playback
+        if synthesize_voice and final_text:
+            asyncio.create_task(self.speak_pipelined(final_text))
 
         return {
             "session_id": session_id,
@@ -323,3 +362,4 @@ class VisionEngine:
 
 # Global Vision engine singleton
 vision_engine = VisionEngine()
+

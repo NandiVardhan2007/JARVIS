@@ -9,6 +9,30 @@ from vision.config import config
 from vision.logger import logger
 
 
+# Common Whisper hallucinations triggered by silence / background noise
+NOISE_HALLUCINATIONS = {
+    "thank you", "thank you.", "thanks", "thanks for watching", "thanks for watching.",
+    "subtitles by", "amara.org", "you", "you.", "bye", "bye.", "goodbye", "goodbye.",
+    "mm", "uh", "um", "yeah", "yeah.", "silence", "...", ".", "..", "?", "!",
+    "okay", "okay.", "ok", "ok.", "[music]", "[applause]", "[silence]", "[laughter]",
+    "reuters", "transcription by", "transcribed by", "vision", "jarvis"
+}
+
+
+def is_valid_speech_text(text: str) -> bool:
+    """Validate if transcribed text is authentic speech rather than a noise artifact."""
+    if not text:
+        return False
+    cleaned = text.strip().lower()
+    # Strip punctuation for check
+    stripped = "".join(c for c in cleaned if c.isalnum() or c.isspace()).strip()
+    if not stripped or len(stripped) < 2:
+        return False
+    if cleaned in NOISE_HALLUCINATIONS or stripped in NOISE_HALLUCINATIONS:
+        return False
+    return True
+
+
 class SmartSTTEngine(BaseSTT):
     """
     Intelligent STT router:
@@ -43,16 +67,20 @@ class SmartSTTEngine(BaseSTT):
 
         try:
             res = await primary.transcribe(audio_data, language=language, filename=filename, prompt=prompt)
-            if res and res.strip():
+            if res and is_valid_speech_text(res):
                 return res.strip()
+            elif res:
+                logger.debug(f"[SmartSTT] Filtered out noise hallucination: '{res}'")
         except Exception as e:
             logger.warning(f"[SmartSTT] Primary STT ({primary.name}) error: {e}. Attempting fallback...")
 
         if fallback:
             try:
                 res = await fallback.transcribe(audio_data, language=language, filename=filename, prompt=prompt)
-                if res and res.strip():
+                if res and is_valid_speech_text(res):
                     return res.strip()
+                elif res:
+                    logger.debug(f"[SmartSTT] Fallback filtered out noise hallucination: '{res}'")
             except Exception as e:
                 logger.error(f"[SmartSTT] Fallback STT ({fallback.name}) failed: {e}")
 
@@ -61,4 +89,5 @@ class SmartSTTEngine(BaseSTT):
 
 smart_stt = SmartSTTEngine()
 
-__all__ = ["BaseSTT", "GroqSTT", "LocalWhisperSTT", "local_stt", "SmartSTTEngine", "smart_stt"]
+__all__ = ["BaseSTT", "GroqSTT", "LocalWhisperSTT", "local_stt", "SmartSTTEngine", "smart_stt", "is_valid_speech_text"]
+

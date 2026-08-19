@@ -63,6 +63,12 @@ class VisionConfig:
         self.CARTESIA_VOICE_ID: str = os.getenv("CARTESIA_VOICE_ID", "1259b7e3-cb8a-43df-9446-30971a46b8b0")
         self.CARTESIA_SPEED: str = os.getenv("CARTESIA_SPEED", "normal")
         self.CARTESIA_EMOTION: List[str] = ["positivity:high"]
+        self.USE_CARTESIA_VOICE: bool = os.getenv("USE_CARTESIA_VOICE", "true").lower() in ("true", "1", "yes", "t", "y")
+        self.VISION_LOCAL_TTS_ENGINE: str = os.getenv("VISION_LOCAL_TTS_ENGINE", "edge_tts").lower().strip()
+        self.VISION_LOCAL_TTS_VOICE: str = os.getenv("VISION_LOCAL_TTS_VOICE", "en-US-BrianNeural")
+
+
+
 
         # ── OpenRouter Key Pool ──────────────────────────────
         self.OPENROUTER_API_KEYS: List[str] = _get_list("OPENROUTER_API_KEYS")
@@ -76,6 +82,19 @@ class VisionConfig:
         self.VISION_STT_ENGINE: str = os.getenv("VISION_STT_ENGINE", "groq")
         self.VISION_STT_MODEL: str = os.getenv("VISION_STT_MODEL", "whisper-large-v3-turbo")
         self.VISION_LOCAL_STT_MODEL: str = os.getenv("VISION_LOCAL_STT_MODEL", "small.en")
+        try:
+            self.VISION_VAD_THRESHOLD: float = float(os.getenv("VISION_VAD_THRESHOLD", "0.55"))
+        except (ValueError, TypeError):
+            self.VISION_VAD_THRESHOLD = 0.55
+        try:
+            self.VISION_MIN_SPEECH_DURATION_SEC: float = float(os.getenv("VISION_MIN_SPEECH_DURATION_SEC", "0.45"))
+        except (ValueError, TypeError):
+            self.VISION_MIN_SPEECH_DURATION_SEC = 0.45
+        try:
+            self.VISION_SILENCE_TIMEOUT_SEC: float = float(os.getenv("VISION_SILENCE_TIMEOUT_SEC", "0.9"))
+        except (ValueError, TypeError):
+            self.VISION_SILENCE_TIMEOUT_SEC = 0.9
+
 
         # ── Multimodal Vision & Gemini ───────────────────────
         self.GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
