@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from vision.gateways.web.routes import router as api_router
+from vision.gateways.web.realtime import router as realtime_router
 from vision.core.engine import vision_engine
 from vision.core.event_bus import event_bus
 from vision.constants import VisionEvents
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
+app.include_router(realtime_router)
 
 
 @app.on_event("startup")

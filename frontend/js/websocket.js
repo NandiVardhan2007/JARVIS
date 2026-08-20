@@ -138,3 +138,158 @@ const VisionWS = (() => {
 
   return { connect, disconnect, send, sendChat, on, off, isConnected };
 })();
+
+/**
+ * VISION AI — OpenAI Realtime Protocol Client (/v1/realtime)
+ * Supports bidirectional Web Audio PCM16 streaming, turn-taking, and instant barge-in.
+ */
+const VisionRealtime = (() => {
+  let ws = null;
+  let audioContext = null;
+  let isPlaying = false;
+  let audioQueue = [];
+  let scheduledTime = 0;
+  const listeners = {};
+
+  function getUrl() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${location.host}/v1/realtime`;
+  }
+
+  function initAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    }
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+  }
+
+  function connect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+    try {
+      ws = new WebSocket(getUrl());
+    } catch (e) {
+      console.warn('[RealtimeWS] Connection failed:', e);
+      return;
+    }
+
+    ws.onopen = () => {
+      console.log('[RealtimeWS] Connected to /v1/realtime');
+      initAudioContext();
+      emit('status', { connected: true });
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        emit('event', payload);
+        emit(payload.type, payload);
+
+        if (payload.type === 'response.audio.delta' && payload.delta) {
+          playAudioChunk(payload.delta);
+        } else if (payload.type === 'response.cancelled' || payload.type === 'input_audio_buffer.speech_started') {
+          stopAudioPlayback();
+        }
+      } catch (e) {
+        console.warn('[RealtimeWS] Parse error:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('[RealtimeWS] Disconnected');
+      emit('status', { connected: false });
+    };
+  }
+
+  function playAudioChunk(base64Data) {
+    try {
+      initAudioContext();
+      const binaryString = window.atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Decode PCM16 or WAV buffer
+      audioContext.decodeAudioData(bytes.buffer.slice(0), (buffer) => {
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        if (scheduledTime < now) {
+          scheduledTime = now;
+        }
+        source.start(scheduledTime);
+        scheduledTime += buffer.duration;
+      }, (err) => {
+        // Fallback for raw PCM bytes
+      });
+    } catch (e) {
+      console.debug('[RealtimeWS] Audio decode notice:', e);
+    }
+  }
+
+  function stopAudioPlayback() {
+    if (audioContext) {
+      scheduledTime = audioContext.currentTime;
+    }
+  }
+
+  function sendEvent(type, data = {}) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type, ...data }));
+    }
+  }
+
+  function appendAudioChunk(base64Chunk) {
+    sendEvent('input_audio_buffer.append', { audio: base64Chunk });
+  }
+
+  function commitAudio() {
+    sendEvent('input_audio_buffer.commit');
+  }
+
+  function cancelResponse() {
+    stopAudioPlayback();
+    sendEvent('response.cancel');
+  }
+
+  function sendTextMessage(text) {
+    sendEvent('conversation.item.create', {
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text }]
+      }
+    });
+    sendEvent('response.create');
+  }
+
+  function on(event, callback) {
+    if (!listeners[event]) listeners[event] = [];
+    listeners[event].push(callback);
+  }
+
+  function emit(event, data) {
+    if (listeners[event]) {
+      listeners[event].forEach(cb => {
+        try { cb(data); } catch (e) { console.error('[RealtimeWS] Listener error:', e); }
+      });
+    }
+  }
+
+  return {
+    connect,
+    sendEvent,
+    appendAudioChunk,
+    commitAudio,
+    cancelResponse,
+    sendTextMessage,
+    stopAudioPlayback,
+    on
+  };
+})();

@@ -50,6 +50,7 @@
       vertical-align: middle;
       flex-shrink: 0;
     }
+    .icon-xs { width: 12px; height: 12px; }
     .icon-sm { width: 14px; height: 14px; }
     .icon-md { width: 18px; height: 18px; }
     .icon-lg { width: 22px; height: 22px; }
@@ -324,6 +325,33 @@
       font-size: 0.7rem; font-family: var(--mono); text-transform: uppercase;
       letter-spacing: 0.14em; color: var(--cyan);
       display: flex; align-items: center; gap: 7px;
+    }
+    .transcriptions-header-actions {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .transcriptions-copy-btn {
+      font-size: 0.62rem; font-family: var(--mono); font-weight: 600;
+      color: var(--cyan); background: rgba(0, 242, 254, 0.08);
+      border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px;
+      padding: 2px 8px; display: flex; align-items: center; gap: 4px;
+      cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      text-transform: uppercase; letter-spacing: 0.05em; outline: none;
+    }
+    .transcriptions-copy-btn:hover {
+      background: rgba(0, 242, 254, 0.22);
+      border-color: rgba(0, 242, 254, 0.7);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.35);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+    .transcriptions-copy-btn:active {
+      transform: scale(0.95);
+    }
+    .transcriptions-copy-btn.copied {
+      background: rgba(0, 255, 136, 0.18);
+      border-color: rgba(0, 255, 136, 0.6);
+      color: var(--green);
+      box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
     }
     .live-pulse-badge {
       font-size: 0.6rem; font-family: var(--mono); color: var(--green);
@@ -648,7 +676,13 @@
             <i data-lucide="message-square" class="icon-sm"></i>
             <span>LIVE TRANSCRIPTIONS</span>
           </div>
-          <div class="live-pulse-badge">STREAM</div>
+          <div class="transcriptions-header-actions">
+            <button class="transcriptions-copy-btn" id="copy-transcripts-btn" title="Copy entire chat transcript as JSON" aria-label="Copy chat transcript as JSON">
+              <i data-lucide="copy" class="icon-xs"></i>
+              <span class="copy-btn-text">COPY JSON</span>
+            </button>
+            <div class="live-pulse-badge">STREAM</div>
+          </div>
         </div>
         
         <div class="transcriptions-list" id="transcriptions-stream">
@@ -1262,6 +1296,14 @@
         e.preventDefault();
         executeCommandText();
       });
+
+      const copyTranscriptsBtn = document.getElementById('copy-transcripts-btn');
+      if (copyTranscriptsBtn) {
+        copyTranscriptsBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          copyTranscriptsAsJSON();
+        });
+      }
     }
 
     // ── Manual Push-to-Talk / Click-to-Speak Toggle ──
@@ -1478,10 +1520,11 @@
         const now = Date.now();
 
         // ── Adaptive Dynamic Noise Floor Tracking ──
-        if (!isUserSpeaking) {
+        if (!isUserSpeaking && agentState !== 'speaking') {
           ambientNoiseFloor = ambientNoiseFloor * 0.96 + rms * 0.04;
         }
-        const dynamicSpeechThreshold = Math.max(0.016, Math.min(0.065, ambientNoiseFloor * 2.7));
+        const isAgentSpeaking = (agentState === 'speaking' || speechTimeout !== null);
+        const dynamicSpeechThreshold = isAgentSpeaking ? 0.022 : Math.max(0.015, Math.min(0.055, ambientNoiseFloor * 2.4));
 
         // 1. Detect User Speech Start with Multi-Frame Confirmation & Barge-in
         if (rms > dynamicSpeechThreshold) {
@@ -1489,14 +1532,15 @@
           lastSpeechTime = now;
 
           // Immediate speech interruption if VISION is talking
-          if (agentState === 'speaking' || speechTimeout) {
+          if (isAgentSpeaking) {
             if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
             fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
             isProcessing = false;
             setAgentState('listening');
           }
 
-          if (consecutiveSpeechFrames >= REQUIRED_SPEECH_FRAMES && !isUserSpeaking && !isProcessing) {
+          if (consecutiveSpeechFrames >= REQUIRED_SPEECH_FRAMES && !isUserSpeaking) {
+            isProcessing = false;
             isUserSpeaking = true;
             speechStartTime = now;
             setAgentState('listening');
@@ -1710,13 +1754,32 @@
     }
 
     // ── Log to Live Transcriptions Stream (Right side card) ──
+    const transcriptHistory = [
+      {
+        speaker: 'ai',
+        label: 'VISION',
+        text: 'VISION is online. Continuous hands-free VAD speech recognition is active.',
+        time: 'System',
+        timestamp: new Date().toISOString()
+      }
+    ];
+
     function logTranscript(speaker, label, text) {
       const stream = document.getElementById('transcriptions-stream');
       const entry = document.createElement('div');
       entry.className = `transcript-entry ${speaker}`;
 
-      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const now = new Date();
+      const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const speakerIcon = speaker === 'user' ? 'user' : 'bot';
+
+      transcriptHistory.push({
+        speaker: speaker,
+        label: label,
+        text: text,
+        time: time,
+        timestamp: now.toISOString()
+      });
 
       entry.innerHTML = `
         <div class="transcript-meta">
@@ -1731,6 +1794,96 @@
       stream.prepend(entry);
       while (stream.children.length > 25) stream.lastChild.remove();
       refreshIcons();
+    }
+
+    // ── Copy Live Transcriptions as JSON ──
+    async function copyTranscriptsAsJSON() {
+      const copyBtn = document.getElementById('copy-transcripts-btn');
+      
+      let exportList = [];
+      if (transcriptHistory && transcriptHistory.length > 0) {
+        exportList = transcriptHistory.map((item, idx) => ({
+          index: idx + 1,
+          speaker: item.speaker,
+          label: item.label,
+          text: item.text,
+          time: item.time,
+          timestamp: item.timestamp || new Date().toISOString()
+        }));
+      } else {
+        const stream = document.getElementById('transcriptions-stream');
+        if (stream) {
+          const domEntries = Array.from(stream.querySelectorAll('.transcript-entry')).reverse();
+          exportList = domEntries.map((el, idx) => {
+            const speaker = el.classList.contains('user') ? 'user' : 'ai';
+            const label = el.querySelector('.transcript-speaker span')?.textContent?.trim() || (speaker === 'user' ? 'You' : 'VISION');
+            const time = el.querySelector('.transcript-time')?.textContent?.trim() || '';
+            const text = el.querySelector('.transcript-text')?.textContent?.trim() || '';
+            return {
+              index: idx + 1,
+              speaker,
+              label,
+              text,
+              time,
+              timestamp: new Date().toISOString()
+            };
+          });
+        }
+      }
+
+      const payload = {
+        exported_at: new Date().toISOString(),
+        total_messages: exportList.length,
+        session_id: 'vision_hud_session',
+        transcripts: exportList
+      };
+
+      const jsonStr = JSON.stringify(payload, null, 2);
+
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(jsonStr);
+          copied = true;
+        } else {
+          throw new Error('Clipboard API unavailable');
+        }
+      } catch (e) {
+        try {
+          const tempArea = document.createElement('textarea');
+          tempArea.value = jsonStr;
+          tempArea.setAttribute('readonly', '');
+          tempArea.style.position = 'fixed';
+          tempArea.style.left = '-9999px';
+          document.body.appendChild(tempArea);
+          tempArea.focus();
+          tempArea.select();
+          copied = document.execCommand('copy');
+          document.body.removeChild(tempArea);
+        } catch (err) {
+          copied = false;
+        }
+      }
+
+      if (copyBtn) {
+        if (copied) {
+          copyBtn.classList.add('copied');
+          copyBtn.innerHTML = `<i data-lucide="check" class="icon-xs"></i><span class="copy-btn-text">COPIED JSON!</span>`;
+          refreshIcons();
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+            copyBtn.innerHTML = `<i data-lucide="copy" class="icon-xs"></i><span class="copy-btn-text">COPY JSON</span>`;
+            refreshIcons();
+          }, 2000);
+        } else {
+          copyBtn.innerHTML = `<i data-lucide="alert-circle" class="icon-xs"></i><span class="copy-btn-text">FAILED</span>`;
+          refreshIcons();
+          setTimeout(() => {
+            copyBtn.innerHTML = `<i data-lucide="copy" class="icon-xs"></i><span class="copy-btn-text">COPY JSON</span>`;
+            refreshIcons();
+          }, 2000);
+        }
+      }
     }
 
     function setupWebSocketListeners() {

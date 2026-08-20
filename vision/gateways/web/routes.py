@@ -247,7 +247,10 @@ async def stop_audio_playback():
     """Immediately stop TTS speech playback on server (Barge-In)."""
     try:
         from vision.synthesis.player import audio_player
+        from vision.core.engine import vision_engine
         audio_player.stop()
+        if hasattr(vision_engine, "stop_speech"):
+            await vision_engine.stop_speech()
         return {"status": "stopped"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}

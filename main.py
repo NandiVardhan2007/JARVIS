@@ -80,12 +80,17 @@ async def run_voice_mode():
 
     loop = asyncio.get_running_loop()
     consecutive_mic_failures = 0
+    pending_wav_bytes = None
 
     while True:
         try:
-            # 1. Record voice phrase on microphone in executor thread
-            with console.status("[bold green]Listening for speech... (speak now)[/bold green]", spinner="dots"):
-                wav_bytes = await loop.run_in_executor(None, audio_stream.record_phrase)
+            # 1. Record voice phrase on microphone if not already captured from interruption
+            if pending_wav_bytes is None:
+                with console.status("[bold green]Listening for speech... (speak now)[/bold green]", spinner="dots"):
+                    wav_bytes = await loop.run_in_executor(None, audio_stream.record_phrase)
+            else:
+                wav_bytes = pending_wav_bytes
+                pending_wav_bytes = None
 
             if not wav_bytes:
                 consecutive_mic_failures += 1
@@ -119,15 +124,42 @@ async def run_voice_mode():
                 break
 
             # 3. Process query through LLM, execute tools, synthesize and speak back!
-            with console.status("[bold cyan]VISION is thinking & orchestrating...[/bold cyan]", spinner="dots"):
-                result = await vision_engine.process_user_input(
+            # Run in full-duplex: while VISION is speaking, listen concurrently on the mic
+            process_task = asyncio.create_task(
+                vision_engine.process_user_input(
                     user_text=user_text,
                     session_id=session_id,
                     channel="voice",
                     synthesize_voice=True
                 )
+            )
 
-            console.print(f"[bold cyan]VISION ({result.get('provider', 'AI')} - {result.get('latency_ms', 0):.0f}ms):[/bold cyan]\n{result.get('response')}\n")
+            # Wait a moment for LLM processing / speech start before launching mic listener
+            await asyncio.sleep(0.15)
+            listen_task = loop.run_in_executor(None, audio_stream.record_phrase)
+
+            done, pending = await asyncio.wait(
+                [process_task, listen_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if process_task in done:
+                try:
+                    result = process_task.result()
+                    console.print(f"[bold cyan]VISION ({result.get('provider', 'AI')} - {result.get('latency_ms', 0):.0f}ms):[/bold cyan]\n{result.get('response')}\n")
+                except Exception as ex:
+                    console.print(f"[bold red]VISION error: {ex}[/bold red]\n")
+                # Now wait for user's next spoken phrase
+                pending_wav_bytes = await listen_task
+            else:
+                # listen_task returned first -> User interrupted while VISION was speaking!
+                pending_wav_bytes = listen_task.result()
+                try:
+                    await vision_engine.stop_speech()
+                    result = await process_task
+                    console.print(f"[bold cyan]VISION [Interrupted]:[/bold cyan]\n{result.get('response')}\n")
+                except Exception:
+                    pass
 
         except KeyboardInterrupt:
             console.print("\n[bold red]Stopping Voice Mode...[/bold red]")

@@ -74,6 +74,8 @@ class AudioStreamManager:
             pre_roll_chunks = int(0.35 * (native_rate / self.chunk_size))  # ~350ms pre-roll
             pre_roll = deque(maxlen=max(2, pre_roll_chunks))
 
+            from vision.synthesis.player import audio_player
+
             with sd.InputStream(
                 samplerate=native_rate,
                 channels=native_channels,
@@ -82,16 +84,20 @@ class AudioStreamManager:
             ) as stream:
                 self._mic_error_logged = False
                 
-                # Calibrate ambient noise floor for first 5 chunks (~200ms)
-                for _ in range(5):
-                    c_data, _ = stream.read(self.chunk_size)
-                    c_rms = float(np.sqrt(np.mean(c_data**2)))
-                    ambient_rms_samples.append(c_rms)
-                    pre_roll.append(c_data.copy())
+                # Calibrate ambient noise floor for first 5 chunks (~200ms) only if audio_player is NOT playing
+                is_currently_playing = getattr(audio_player, "is_playing", False)
+                if not is_currently_playing:
+                    for _ in range(5):
+                        c_data, _ = stream.read(self.chunk_size)
+                        c_rms = float(np.sqrt(np.mean(c_data**2)))
+                        ambient_rms_samples.append(c_rms)
+                        pre_roll.append(c_data.copy())
 
-                if ambient_rms_samples:
-                    avg_ambient = float(np.mean(ambient_rms_samples))
-                    calibrated_energy_threshold = max(0.018, avg_ambient * 2.2)
+                    if ambient_rms_samples:
+                        avg_ambient = float(np.mean(ambient_rms_samples))
+                        calibrated_energy_threshold = max(0.015, min(0.045, avg_ambient * 1.8))
+                else:
+                    calibrated_energy_threshold = energy_threshold or 0.018
 
                 while True:
                     if time.time() - start_time > max_duration:
@@ -103,24 +109,40 @@ class AudioStreamManager:
                     # Convert to int16 bytes for VAD check
                     int16_chunk = (data * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
                     
-                    # True human speech requires both:
-                    # 1) Energy exceeds calibrated ambient background noise
-                    # 2) Silero Neural VAD confirms human vocal frequencies
-                    is_voice = vad_detector.is_speech(int16_chunk, native_rate)
-                    speech_active = (rms > calibrated_energy_threshold) and is_voice
+                    # Check Silero neural speech probability
+                    speech_prob = vad_detector.get_speech_probability(int16_chunk, native_rate)
+                    is_voice = speech_prob > vad_detector.silero_threshold
+                    is_playing = getattr(audio_player, "is_playing", False)
+
+                    # During active TTS playback, prioritize Silero neural probability for instant barge-in
+                    if is_playing:
+                        speech_active = (speech_prob > 0.40) or (rms > 0.025 and is_voice)
+                    else:
+                        speech_active = (rms > calibrated_energy_threshold) and is_voice
 
                     if speech_active:
                         consecutive_speech_count += 1
-                        # Require at least 3 consecutive speech chunks (~180ms) of sustained voice
-                        if not is_speaking and consecutive_speech_count >= 3:
+                        # When VISION is speaking, interrupt immediately on first confirmed vocal frame
+                        required_consecutive = 1 if is_playing else 2
+
+                        if not is_speaking and consecutive_speech_count >= required_consecutive:
                             is_speaking = True
-                            # If VISION is speaking right now, trigger instant Barge-in!
+                            # Instant Barge-In: Cut speaker output and cancel backend generation
                             try:
-                                from vision.synthesis.player import audio_player
                                 audio_player.stop()
-                                logger.info("[AudioStream] 🛑 User speech detected! Aborted any active speech playback.")
-                            except Exception:
-                                pass
+                                logger.info(f"[AudioStream] 🛑 User speech detected (prob={speech_prob:.2f})! Aborted active speech playback.")
+                                from vision.core.engine import vision_engine
+                                if hasattr(vision_engine, "stop_speech"):
+                                    import asyncio
+                                    try:
+                                        cur_loop = asyncio.get_event_loop()
+                                        if cur_loop.is_running():
+                                            cur_loop.create_task(vision_engine.stop_speech())
+                                    except Exception:
+                                        pass
+                            except Exception as ex:
+                                logger.debug(f"[AudioStream] Barge-in stop notice: {ex}")
+
                             # Prepend pre-roll buffer
                             frames.extend(list(pre_roll))
 
