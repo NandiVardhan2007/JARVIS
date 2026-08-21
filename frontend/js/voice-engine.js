@@ -19,11 +19,11 @@ const VisionVoice = (() => {
   let isManualRecording = false;
   let speechTimeout = null;
 
-  // VAD Tuning
-  let ambientNoiseFloor = 0.008;
+  // VAD Tuning - Robust Noise & Hallucination Suppression
+  let ambientNoiseFloor = 0.015;
   let consecutiveSpeechFrames = 0;
-  const REQUIRED_SPEECH_FRAMES = 1;
-  const MIN_SPEECH_DURATION_MS = 350;
+  const REQUIRED_SPEECH_FRAMES = 4; // 160ms continuous voice energy required
+  const MIN_SPEECH_DURATION_MS = 700; // Minimum 700ms spoken audio
 
   const API_BASE = (window.location.origin.startsWith('http')) ? '' : 'http://localhost:8000';
 
@@ -61,38 +61,38 @@ const VisionVoice = (() => {
   function setAgentState(state, customSubtitle = null) {
     if (isMuted && state !== 'muted') state = 'muted';
 
-    VisionOrb.setState(state);
+    if (typeof VisionOrb !== 'undefined' && VisionOrb.setState) VisionOrb.setState(state);
 
     if (state === 'muted') {
-      statusText.textContent = 'MUTED (NOT LISTENING)';
-      statusDot.className = 'status-dot muted';
+      if (statusText) statusText.textContent = 'MUTED (NOT LISTENING)';
+      if (statusDot) statusDot.className = 'status-dot muted';
       if (orbHitbox) orbHitbox.classList.add('muted');
       if (micBtn) { micBtn.classList.add('muted'); micBtn.classList.remove('listening'); }
       if (mainMicIcon) mainMicIcon.innerHTML = `<i data-lucide="mic-off" class="icon-md"></i>`;
     } else if (state === 'idle') {
-      statusText.textContent = 'ONLINE';
-      statusDot.className = 'status-dot';
+      if (statusText) statusText.textContent = 'ONLINE';
+      if (statusDot) statusDot.className = 'status-dot';
       if (orbHitbox) orbHitbox.classList.remove('muted');
       if (micBtn) { micBtn.classList.remove('muted'); micBtn.classList.remove('listening'); }
       if (mainMicIcon) mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
     } else if (state === 'listening') {
-      statusText.textContent = 'RECORDING SPEECH';
-      statusDot.className = 'status-dot';
+      if (statusText) statusText.textContent = 'RECORDING SPEECH';
+      if (statusDot) statusDot.className = 'status-dot';
       if (orbHitbox) orbHitbox.classList.remove('muted');
       if (micBtn) { micBtn.classList.remove('muted'); micBtn.classList.add('listening'); }
       if (mainMicIcon) mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
     } else if (state === 'thinking') {
-      statusText.textContent = 'NEURAL REASONING';
-      statusDot.className = 'status-dot busy';
+      if (statusText) statusText.textContent = 'NEURAL REASONING';
+      if (statusDot) statusDot.className = 'status-dot busy';
       if (orbHitbox) orbHitbox.classList.remove('muted');
       if (micBtn) { micBtn.classList.remove('muted'); micBtn.classList.remove('listening'); }
     } else if (state === 'executing') {
-      statusText.textContent = 'EXECUTING ACTIONS';
-      statusDot.className = 'status-dot busy';
+      if (statusText) statusText.textContent = 'EXECUTING ACTIONS';
+      if (statusDot) statusDot.className = 'status-dot busy';
       if (orbHitbox) orbHitbox.classList.remove('muted');
     } else if (state === 'speaking') {
-      statusText.textContent = 'VOICE ACTIVE';
-      statusDot.className = 'status-dot';
+      if (statusText) statusText.textContent = 'VOICE ACTIVE';
+      if (statusDot) statusDot.className = 'status-dot';
       if (orbHitbox) orbHitbox.classList.remove('muted');
       if (micBtn) micBtn.classList.remove('muted');
     }
@@ -118,13 +118,25 @@ const VisionVoice = (() => {
     }
 
     document.addEventListener('keydown', (e) => {
-      if (document.activeElement === cmdInput) return;
-      if (e.key === 'm' || e.key === 'M') {
+      // Ignore all global hotkeys when typing inside any input, textarea, or editable element
+      const active = document.activeElement;
+      const isTyping = active && (
+        active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        active.isContentEditable ||
+        active.tagName === 'SELECT'
+      );
+      if (isTyping) return;
+
+      if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         toggleMute();
-      } else if (e.code === 'Space' && !isProcessing) {
-        e.preventDefault();
-        toggleManualRecord();
+      } else if (e.code === 'Space' && !isProcessing && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const voicePage = document.getElementById('page-voice');
+        if (voicePage && voicePage.classList.contains('active')) {
+          e.preventDefault();
+          toggleManualRecord();
+        }
       }
     });
 
@@ -330,7 +342,7 @@ const VisionVoice = (() => {
       }
 
       const isAgentSpeaking = (VisionOrb.getState() === 'speaking' || speechTimeout !== null);
-      const dynamicThreshold = isAgentSpeaking ? 0.022 : Math.max(0.015, Math.min(0.055, ambientNoiseFloor * 2.4));
+      const dynamicThreshold = isAgentSpeaking ? 0.055 : Math.max(0.038, Math.min(0.09, ambientNoiseFloor * 3.2));
 
       if (rms > dynamicThreshold) {
         consecutiveSpeechFrames++;
@@ -387,7 +399,8 @@ const VisionVoice = (() => {
     const blob = new Blob(recordedChunks, { type: mimeType });
     recordedChunks = [];
 
-    if (blob.size < 600) {
+    // Reject tiny audio chunks (under 2KB is noise/empty)
+    if (blob.size < 2000) {
       if (!isProcessing) setAgentState(isMuted ? 'muted' : 'idle');
       return;
     }
@@ -403,7 +416,15 @@ const VisionVoice = (() => {
       const data = await res.json();
       const text = (data.text || '').trim();
 
-      if (text.length >= 2) {
+      // Whisper Hallucination Filter
+      const noiseHallucinations = [
+        'thank you', 'thank you.', 'thanks', 'thanks.', 'thanks for watching', 'thanks for watching.',
+        'you', 'you.', 'subtitles by', 'amara.org', 'bye', 'bye.', 'goodbye', 'goodbye.', 'okay', 'okay.',
+        'ok', 'ok.', 'silence', '...', '.', 'mm', 'uh', 'um', 'yeah', 'yeah.', 'yep', 'yep.'
+      ];
+      const cleanLower = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+
+      if (text.length >= 3 && !noiseHallucinations.includes(text.toLowerCase()) && !noiseHallucinations.includes(cleanLower)) {
         VisionTranscript.logTranscript('user', 'You (Spoken)', text);
         await sendToVision(text);
       } else {

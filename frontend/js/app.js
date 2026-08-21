@@ -65,10 +65,7 @@ const VisionApp = (() => {
     // 16. Start Uptime Counter
     startUptimeCounter();
 
-    // 17. MutationObserver for icons
-    setupIconObserver();
-
-    // 18. Set up gauge SVGs
+    // 17. Set up gauge SVGs
     initGauges();
 
     console.log('[VISION] App init complete');
@@ -81,27 +78,38 @@ const VisionApp = (() => {
     const statusText = document.getElementById('splash-status-text');
     if (!splash) return;
 
+    function dismissSplash() {
+      splash.classList.add('hidden');
+      setTimeout(() => { splash.style.display = 'none'; }, 500);
+    }
+
+    // Click or key to immediately dismiss
+    splash.addEventListener('click', dismissSplash);
+    document.addEventListener('keydown', dismissSplash, { once: true });
+
+    // Hard fallback: never get stuck on splash under any circumstances
+    const fallbackTimer = setTimeout(dismissSplash, 1500);
+
     const stages = [
-      { progress: 15, text: 'Initializing Neural Core...' },
-      { progress: 35, text: 'Establishing WebSocket...' },
-      { progress: 55, text: 'Loading 3D Quantum Engine...' },
-      { progress: 72, text: 'Activating Voice Pipeline...' },
-      { progress: 88, text: 'Calibrating Agent Subsystems...' },
+      { progress: 30, text: 'Initializing Neural Core...' },
+      { progress: 65, text: 'Loading 3D Quantum Engine...' },
+      { progress: 90, text: 'Activating Voice Pipeline...' },
       { progress: 100, text: 'VISION Online — Welcome.' }
     ];
 
     let i = 0;
     function nextStage() {
       if (i >= stages.length) {
-        setTimeout(() => { splash.classList.add('hidden'); }, 600);
+        clearTimeout(fallbackTimer);
+        setTimeout(dismissSplash, 200);
         return;
       }
       if (progressFill) progressFill.style.width = stages[i].progress + '%';
       if (statusText) statusText.textContent = stages[i].text;
       i++;
-      setTimeout(nextStage, 320 + Math.random() * 180);
+      setTimeout(nextStage, 140);
     }
-    setTimeout(nextStage, 400);
+    setTimeout(nextStage, 80);
   }
 
   // ── Icons ──
@@ -109,25 +117,6 @@ const VisionApp = (() => {
     if (window.lucide && lucide.createIcons) {
       lucide.createIcons();
     }
-  }
-
-  function setupIconObserver() {
-    const observer = new MutationObserver((mutations) => {
-      let needsRefresh = false;
-      for (const m of mutations) {
-        if (m.type === 'childList' && m.addedNodes.length > 0) {
-          for (const node of m.addedNodes) {
-            if (node.nodeType === 1 && (node.querySelector?.('[data-lucide]') || node.hasAttribute?.('data-lucide'))) {
-              needsRefresh = true;
-              break;
-            }
-          }
-        }
-        if (needsRefresh) break;
-      }
-      if (needsRefresh) initIcons();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   // ── SVG Gauges ──
@@ -335,7 +324,8 @@ const VisionApp = (() => {
   function startTelemetry() {
     async function fetchTelemetry() {
       try {
-        const res = await fetch('/api/telemetry');
+        const res = await fetch('/api/system/stats');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         updateVitals(data);
       } catch (err) {
@@ -350,13 +340,13 @@ const VisionApp = (() => {
   }
 
   function updateVitals(data) {
-    const cpu = data.cpu_percent || 0;
-    const ramUsed = data.ram_used_gb || 0;
-    const ramTotal = data.ram_total_gb || 0;
-    const ramPct = ramTotal ? Math.round((ramUsed / ramTotal) * 100) : 0;
-    const batteryPct = data.battery_percent;
-    const batteryPlugged = data.battery_plugged;
-    const disk = data.disk_usage_percent || 0;
+    const cpu = (data.cpu && data.cpu.percent) || 0;
+    const ramUsed = (data.ram && data.ram.used_gb) || 0;
+    const ramTotal = (data.ram && data.ram.total_gb) || 0;
+    const ramPct = (data.ram && data.ram.percent) || 0;
+    const batteryPct = data.battery ? data.battery.percent : null;
+    const batteryPlugged = data.battery ? data.battery.power_plugged : false;
+    const disk = (data.storage && data.storage[0]) ? data.storage[0].percent : 0;
 
     // Voice HUD vitals
     setText('cpu-stat', `${cpu}%`);
@@ -377,29 +367,17 @@ const VisionApp = (() => {
     setText('gauge-bat-val', batteryPct != null ? `${batteryPct}%` : 'N/A');
 
     setText('stat-cpu-val', `${cpu}%`);
-    setText('stat-cpu-label', `CPU (${data.cpu_cores || '?'} cores)`);
+    setText('stat-cpu-label', `CPU (${data.cpu?.core_count || '?'} cores)`);
     setText('stat-ram-val', `${ramPct}% — ${ramUsed.toFixed(1)} / ${ramTotal.toFixed(1)} GB`);
     setText('stat-ram-label', 'RAM');
     setText('stat-bat-val', batteryPct != null ? `${batteryPct}% ${batteryPlugged ? '⚡ Charging' : '🔋'}` : 'AC Power');
     setText('stat-bat-label', 'Battery');
     setText('stat-disk-val', `${disk}%`);
     setText('stat-disk-label', 'Disk Usage');
-    setText('sys-uptime', data.system_uptime ? `Up: ${data.system_uptime}` : '--');
-
-    // Memory nodes
-    if (data.memory_count != null) {
-      setText('memory-nodes-stat', `${data.memory_count} Memories`);
-      setBarWidth('nodes-bar', Math.min(100, (data.memory_count / 500) * 100));
-    }
-
-    // Tools count
-    if (data.tools_count != null) {
-      setText('active-tools-count', `${data.tools_count} Tools`);
-      setText('tools-count', data.tools_count);
-    }
+    setText('sys-uptime', data.uptime_seconds ? formatUptime(data.uptime_seconds) : '--');
 
     // CPU cores bar chart
-    if (data.cpu_per_core) renderCpuCores(data.cpu_per_core);
+    if (data.cpu && data.cpu.cores) renderCpuCores(data.cpu.cores);
 
     // Top processes
     if (data.top_processes) renderProcessTable(data.top_processes);
@@ -408,21 +386,25 @@ const VisionApp = (() => {
     if (data.load_balancer) {
       setText('lb-strategy', data.load_balancer.strategy || '--');
       setText('lb-primary', data.load_balancer.primary_model || '--');
-      setText('lb-providers', data.load_balancer.endpoint_count ? `${data.load_balancer.endpoint_count} active` : '--');
-    }
-
-    // Network
-    if (data.network) {
-      setText('net-sent', formatBytes(data.network.bytes_sent));
-      setText('net-recv', formatBytes(data.network.bytes_recv));
+      setText('lb-providers', data.load_balancer.provider_count ? `${data.load_balancer.provider_count} endpoints` : '--');
     }
 
     // Storage
-    if (data.disk_partitions) renderStorage(data.disk_partitions);
+    if (data.storage) renderStorage(data.storage);
 
     // Sidebar online
     const dot = document.getElementById('sidebar-status-dot');
     if (dot) dot.classList.remove('offline');
+  }
+
+  function formatUptime(secs) {
+    if (!secs) return '--';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
   }
 
   function renderCpuCores(cores) {
@@ -507,6 +489,22 @@ const VisionApp = (() => {
   function setBarWidth(id, pct) {
     const el = document.getElementById(id);
     if (el) el.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  }
+
+  function updateGauge(containerId, percent, strokeColor = 'var(--primary)') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const fill = container.querySelector('.gauge-fill, .donut-fill');
+    if (!fill) return;
+
+    const radius = parseFloat(fill.getAttribute('r')) || 35;
+    const circumference = 2 * Math.PI * radius;
+    const clamped = Math.min(100, Math.max(0, percent));
+    const offset = circumference - (clamped / 100) * circumference;
+
+    fill.style.strokeDasharray = `${circumference}`;
+    fill.style.strokeDashoffset = `${offset}`;
+    if (strokeColor) fill.style.stroke = strokeColor;
   }
 
   function formatBytes(bytes) {

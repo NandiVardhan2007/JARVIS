@@ -552,11 +552,14 @@
 
 /* ── Orb Hitbox ──────────────────────────────────────────────── */
 .orb-hitbox {
-  width: 220px;
-  height: 220px;
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
   cursor: pointer;
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 10;
   transition: filter var(--dur-slow) var(--ease-out);
 }
@@ -568,11 +571,118 @@
   text-align: center;
   position: relative;
   z-index: 10;
+  background: var(--bg-glass);
+  padding: 6px 18px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 #waveform-canvas {
   display: block;
   margin: 0 auto;
+}
+
+
+/* ── Neural Knowledge Graph ────────────────────────────────── */
+.graph-canvas-container {
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  user-select: none;
+  touch-action: none;
+}
+
+#knowledge-graph-canvas {
+  touch-action: none;
+  user-select: none;
+}
+
+.graph-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(13, 17, 28, 0.94);
+  border: 1px solid var(--border-default);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: var(--sp-2-5) var(--sp-3-5);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  transform: translate(-50%, -115%);
+  z-index: 30;
+  min-width: 180px;
+  max-width: 260px;
+}
+
+.graph-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.graph-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-1-5);
+}
+
+.graph-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+  flex-shrink: 0;
+}
+
+.graph-tooltip-title {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  font-family: var(--font-sans);
+}
+
+.graph-tooltip-count {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  background: var(--primary-dim);
+  color: var(--primary);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+}
+
+.graph-tooltip-body {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+.graph-legend {
+  position: absolute;
+  bottom: var(--sp-3);
+  right: var(--sp-3);
+  pointer-events: none;
+  background: rgba(10, 15, 29, 0.75);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  z-index: 10;
 }
 
 

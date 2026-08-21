@@ -156,8 +156,8 @@ const VisionTranscript = (() => {
     const waveCtx = waveformCanvas.getContext('2d');
     if (!waveCtx) return;
 
-    const agentState = VisionOrb.getState();
-    const audioFrequencyData = VisionOrb.getAudioData();
+    const agentState = (typeof VisionOrb !== 'undefined' && VisionOrb.getState) ? VisionOrb.getState() : 'idle';
+    const audioFrequencyData = (typeof VisionOrb !== 'undefined' && VisionOrb.getAudioData) ? VisionOrb.getAudioData() : null;
     const isSpeaking = (agentState === 'speaking');
     const isListening = (agentState === 'listening');
     const targetAmp = (isSpeaking || isListening) ? 1.0 : 0.0;

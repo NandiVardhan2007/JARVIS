@@ -1,6 +1,6 @@
 /**
- * VISION AI — 3D Quantum Energy Orb (Three.js)
- * Performance-gated particle sphere with state-reactive animations
+ * VISION AI — 3D Quantum Plasma Supernova Orb (Three.js)
+ * Restored from canonical master version with exact gyroscopic gimbal rings
  */
 
 const VisionOrb = (() => {
@@ -19,8 +19,8 @@ const VisionOrb = (() => {
       return;
     }
 
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const width = container.clientWidth || window.innerWidth;
+    const height = container.clientHeight || window.innerHeight;
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
@@ -33,23 +33,25 @@ const VisionOrb = (() => {
     orbGroup = new THREE.Group();
     scene.add(orbGroup);
 
+    // High-precision radial particle glow texture
     const pTexture = createParticleTexture();
 
-    // ── 1. Quantum Particle Matrix (2,500 Nodes) ──
-    const particleCount = 2500;
+    // ── 1. High-Density Quantum Particle Matrix (4,000 Nodes) ──
+    const particleCount = 4000;
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
     const originalPositions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     const phases = new Float32Array(particleCount);
 
-    const colCyan    = new THREE.Color(0x22d3ee);
-    const colBlue    = new THREE.Color(0x6366f1);
-    const colPurple  = new THREE.Color(0x8b5cf6);
+    const colCyan    = new THREE.Color(0x00f2fe);
+    const colBlue    = new THREE.Color(0x38bdf8);
+    const colPurple  = new THREE.Color(0x7f00ff);
     const colMagenta = new THREE.Color(0xec4899);
-    const colGreen   = new THREE.Color(0x34d399);
+    const colGreen   = new THREE.Color(0x00ff88);
 
     for (let i = 0; i < particleCount; i++) {
+      // Golden Ratio Fibonacci distribution with compact volumetric thickness
       const phi = Math.acos(-1 + (2 * i) / particleCount);
       const theta = Math.sqrt(particleCount * Math.PI) * phi;
 
@@ -70,6 +72,7 @@ const VisionOrb = (() => {
 
       phases[i] = Math.random() * Math.PI * 2;
 
+      // Rich Multi-stop Chromatic Gradient
       let mixedColor;
       const norm = i / particleCount;
       if (norm < 0.35) {
@@ -103,8 +106,8 @@ const VisionOrb = (() => {
     particleSphere = new THREE.Points(geometry, particleMat);
     orbGroup.add(particleSphere);
 
-    // ── 2. Corona Dust (800 Particles) ──
-    const dustCount = 800;
+    // ── 2. Ethereal Cosmic Corona Dust (1,200 Floating Star Particles) ──
+    const dustCount = 1200;
     const dustGeo = new THREE.BufferGeometry();
     const dustPos = new Float32Array(dustCount * 3);
     const dustColors = new Float32Array(dustCount * 3);
@@ -121,8 +124,13 @@ const VisionOrb = (() => {
       const y = r * Math.sin(phi) * Math.sin(theta);
       const z = r * Math.cos(phi);
 
-      dustPos[i * 3] = x; dustPos[i * 3 + 1] = y; dustPos[i * 3 + 2] = z;
-      dustOrig[i * 3] = x; dustOrig[i * 3 + 1] = y; dustOrig[i * 3 + 2] = z;
+      dustPos[i * 3]     = x;
+      dustPos[i * 3 + 1] = y;
+      dustPos[i * 3 + 2] = z;
+
+      dustOrig[i * 3]     = x;
+      dustOrig[i * 3 + 1] = y;
+      dustOrig[i * 3 + 2] = z;
 
       const dustCol = Math.random() > 0.5 ? colCyan : colPurple;
       dustColors[i * 3]     = dustCol.r;
@@ -146,14 +154,14 @@ const VisionOrb = (() => {
     coronaDust = new THREE.Points(dustGeo, dustMat);
     orbGroup.add(coronaDust);
 
-    // ── 3. Plasma Core ──
+    // ── 3. Concentric White-Hot Supernova Plasma Nucleus (Direct Center) ──
     const coreCanvas = document.createElement('canvas');
     coreCanvas.width = 128; coreCanvas.height = 128;
     const cctx = coreCanvas.getContext('2d');
     const cgrad = cctx.createRadialGradient(64, 64, 0, 64, 64, 64);
     cgrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    cgrad.addColorStop(0.2, 'rgba(34, 211, 238, 0.95)');
-    cgrad.addColorStop(0.55, 'rgba(99, 102, 241, 0.45)');
+    cgrad.addColorStop(0.2, 'rgba(0, 242, 254, 0.95)');
+    cgrad.addColorStop(0.55, 'rgba(127, 0, 255, 0.45)');
     cgrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     cctx.fillStyle = cgrad;
     cctx.fillRect(0, 0, 128, 128);
@@ -169,11 +177,11 @@ const VisionOrb = (() => {
     plasmaCore.scale.set(0.92, 0.92, 0.92);
     orbGroup.add(plasmaCore);
 
-    // ── 4. Gyroscopic Rings ──
+    // ── 4. Concentric Holographic Gyroscopic Gimbal Rings ──
     const ringConfigs = [
-      { radius: 1.10, color: 0x22d3ee, tiltX: 1.28, tiltY: 0.20, spinSpeed: 0.0035 },
-      { radius: 1.22, color: 0x6366f1, tiltX: 0.45, tiltY: 1.15, spinSpeed: -0.0030 },
-      { radius: 1.35, color: 0x8b5cf6, tiltX: 0.85, tiltY: -0.75, spinSpeed: 0.0025 }
+      { radius: 1.10, color: 0x00f2fe, tiltX: 1.28, tiltY: 0.20, spinSpeed: 0.0035 },
+      { radius: 1.22, color: 0x7f00ff, tiltX: 0.45, tiltY: 1.15, spinSpeed: -0.0030 },
+      { radius: 1.35, color: 0x38bdf8, tiltX: 0.85, tiltY: -0.75, spinSpeed: 0.0025 }
     ];
 
     ringConfigs.forEach((cfg, idx) => {
@@ -193,6 +201,7 @@ const VisionOrb = (() => {
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringPivot.add(ringMesh);
 
+      // Glowing Photon Satellite
       const satGeo = new THREE.SphereGeometry(0.024, 16, 16);
       const satMat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
@@ -215,7 +224,15 @@ const VisionOrb = (() => {
 
     window.addEventListener('resize', onWindowResize);
 
-    // Performance gating: pause when tab hidden or orb not visible
+    // Continuous resize observer for sidebar collapse/expand transitions
+    if (window.ResizeObserver && container) {
+      const ro = new ResizeObserver(() => {
+        onWindowResize();
+      });
+      ro.observe(container);
+    }
+
+    // Performance gating: pause when tab hidden
     document.addEventListener('visibilitychange', () => {
       isVisible = !document.hidden;
       if (isVisible && !animationFrameId) animate();
@@ -230,8 +247,8 @@ const VisionOrb = (() => {
     const ctx = canvas.getContext('2d');
     const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
     grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.2, 'rgba(34,211,238,0.95)');
-    grad.addColorStop(0.55, 'rgba(99,102,241,0.45)');
+    grad.addColorStop(0.2, 'rgba(0,242,254,0.95)');
+    grad.addColorStop(0.55, 'rgba(127,0,255,0.45)');
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 64, 64);
@@ -240,9 +257,12 @@ const VisionOrb = (() => {
 
   function onWindowResize() {
     if (!camera || !renderer) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const container = document.getElementById('canvas-container');
+    const width = container ? (container.clientWidth || window.innerWidth) : window.innerWidth;
+    const height = container ? (container.clientHeight || window.innerHeight) : window.innerHeight;
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height);
   }
 
   function animate() {
@@ -293,10 +313,12 @@ const VisionOrb = (() => {
       particleSphere.rotation.y += rotSpeed;
     }
 
-    // ── 2. Corona Dust ──
-    if (coronaDust) { coronaDust.rotation.y -= 0.0008; }
+    // ── 2. Ethereal Corona Dust ──
+    if (coronaDust) {
+      coronaDust.rotation.y -= 0.0008;
+    }
 
-    // ── 3. Plasma Core ──
+    // ── 3. Plasma Core Pulse ──
     if (plasmaCore) {
       const baseScale = 0.92;
       let corePulse = baseScale * (1.0 + Math.sin(noiseVal * 1.3) * 0.07);
@@ -308,7 +330,7 @@ const VisionOrb = (() => {
       plasmaCore.material.opacity = (agentState === 'thinking' || agentState === 'speaking') ? 0.95 : (agentState === 'muted' ? 0.35 : 0.85);
     }
 
-    // ── 4. Gyroscopic Rings ──
+    // ── 4. Concentric Gyroscopic Orbiting ──
     let mult = (agentState === 'thinking' || agentState === 'executing') ? 2.2 : (agentState === 'muted' ? 0.3 : 1.0);
 
     outerRings.forEach(r => {

@@ -7,7 +7,8 @@
 #app-shell {
   display: flex;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
+  max-width: 100vw;
   overflow: hidden;
   position: relative;
   background: var(--bg-root);
@@ -45,6 +46,11 @@
   flex-shrink: 0;
 }
 
+#sidebar.collapsed .sidebar-header {
+  padding: var(--sp-4) 0;
+  justify-content: center;
+}
+
 .sidebar-logo {
   width: 36px;
   height: 36px;
@@ -60,6 +66,10 @@
   color: white;
   box-shadow: 0 0 18px var(--primary-glow);
   position: relative;
+}
+
+#sidebar.collapsed .sidebar-logo {
+  margin: 0 auto;
 }
 
 .sidebar-logo::after {
@@ -85,7 +95,12 @@
   transition: opacity var(--dur-normal) var(--ease-out);
 }
 
-#sidebar.collapsed .sidebar-brand { opacity: 0; pointer-events: none; width: 0; }
+#sidebar.collapsed .sidebar-brand {
+  display: none;
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+}
 
 .sidebar-brand-name {
   font-size: var(--fs-lg);
@@ -109,10 +124,27 @@
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--sp-3);
   display: flex;
   flex-direction: column;
   gap: var(--sp-0-5);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#sidebar.collapsed .sidebar-nav {
+  padding: var(--sp-3) var(--sp-1-5);
+  gap: var(--sp-1);
+  align-items: center;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
 
 .nav-section-label {
@@ -131,7 +163,7 @@
 }
 
 #sidebar.collapsed .nav-section-label {
-  opacity: 0; height: 0; padding: 0; margin: 0; overflow: hidden;
+  display: none;
 }
 
 .nav-item {
@@ -175,6 +207,51 @@
   box-shadow: 0 0 8px var(--primary-glow);
 }
 
+#sidebar.collapsed .nav-item {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+}
+
+#sidebar.collapsed .nav-item.active::before {
+  left: -4px;
+  height: 24px;
+  width: 3px;
+}
+
+/* Floating Glass Tooltip in Collapsed Sidebar */
+#sidebar.collapsed .nav-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(13, 17, 28, 0.94);
+  border: 1px solid var(--border-default);
+  backdrop-filter: blur(12px);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  padding: 5px 11px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+#sidebar.collapsed .nav-item:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(2px);
+}
+
 .nav-icon {
   width: 20px;
   height: 20px;
@@ -190,7 +267,9 @@
   transition: opacity var(--dur-normal) var(--ease-out);
 }
 
-#sidebar.collapsed .nav-label { opacity: 0; width: 0; }
+#sidebar.collapsed .nav-label {
+  display: none;
+}
 
 .nav-badge {
   margin-left: auto;
@@ -203,13 +282,19 @@
   font-family: var(--font-mono);
 }
 
-#sidebar.collapsed .nav-badge { display: none; }
+#sidebar.collapsed .nav-badge {
+  display: none;
+}
 
 /* Sidebar Footer */
 .sidebar-footer {
   padding: var(--sp-3);
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+#sidebar.collapsed .sidebar-footer {
+  padding: var(--sp-3) var(--sp-1-5);
 }
 
 .sidebar-toggle {
@@ -234,33 +319,24 @@
   color: var(--text-primary);
 }
 
-/* Sidebar status strip */
-.sidebar-status {
-  padding: var(--sp-3) var(--sp-4);
-  border-top: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  flex-shrink: 0;
+#sidebar.collapsed .sidebar-toggle {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0 auto;
 }
 
-.sidebar-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
-  animation: statusPulse 2.5s ease-in-out infinite;
+#sidebar.collapsed .sidebar-toggle .nav-label {
+  display: none;
 }
 
-.sidebar-status-dot.offline {
-  background: var(--danger);
-  box-shadow: 0 0 8px var(--danger-glow);
-  animation: none;
+#sidebar.collapsed .sidebar-toggle i,
+#sidebar.collapsed .sidebar-toggle svg {
+  transform: rotate(180deg);
+  transition: transform var(--dur-normal) var(--ease-out);
 }
+
+
 
 
 /* ── Main Content Area ───────────────────────────────────────── */
@@ -487,6 +563,10 @@
   flex-direction: column;
 }
 
+#page-voice {
+  overflow: hidden !important;
+}
+
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -516,7 +596,7 @@
 .page-body {
   flex: 1;
   padding: 0 var(--sp-6) var(--sp-6);
-  overflow-y: auto;
+  overflow: visible;
 }
 
 
@@ -534,42 +614,57 @@
 .grid-3-1 { grid-template-columns: 3fr 1fr; }
 
 
-/* ── Voice HUD Layout (3-Column) ─────────────────────────────── */
+/* ── Voice HUD Layout ─────────────────────────────────────────── */
 .voice-hud-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr var(--voice-panel-width);
-  gap: var(--sp-4);
-  height: 100%;
-  padding: var(--sp-4) var(--sp-5);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  position: relative;
+  padding: var(--sp-4) var(--sp-5);
+  pointer-events: none;
+  z-index: 5;
 }
 
 .voice-left-panel {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+  width: 280px;
+  max-width: 280px;
   height: 100%;
   justify-content: center;
-  z-index: 5;
+  pointer-events: auto;
+  z-index: 6;
 }
 
 .voice-center {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--sp-3);
-  z-index: 4;
-  position: relative;
+  justify-content: flex-end;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.voice-center .orb-hitbox,
+.voice-center .voice-waveform-wrap {
+  pointer-events: auto;
 }
 
 .voice-right-panel {
+  width: var(--voice-panel-width);
+  max-width: var(--voice-panel-width);
   height: 100%;
   max-height: calc(100vh - var(--topbar-height) - var(--sp-8));
-  z-index: 5;
   display: flex;
   flex-direction: column;
+  pointer-events: auto;
+  z-index: 6;
 }
 
 
