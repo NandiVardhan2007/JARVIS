@@ -1,14 +1,22 @@
 /**
  * VISION AI — Dashboard Module
- * Real-time system stats with animated SVG gauges, polling every 3s
+ * Detailed system stats with SVG gauges, polling via /api/system/stats
+ * Note: Basic telemetry (cpu/ram/battery) is also fetched by app.js via /api/telemetry.
+ *       This module provides the richer /api/system/stats endpoint data for the dashboard page.
  */
 
 const VisionDashboard = (() => {
   let pollTimer = null;
   const POLL_INTERVAL = 3000;
   let lastStats = null;
+  let isPageActive = false;
 
   function init() {
+    // Dashboard starts inactive; polling begins when user navigates to it
+  }
+
+  function refresh() {
+    isPageActive = true;
     fetchStats();
     startPolling();
   }
@@ -20,6 +28,7 @@ const VisionDashboard = (() => {
 
   function stopPolling() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    isPageActive = false;
   }
 
   async function fetchStats() {
@@ -30,7 +39,6 @@ const VisionDashboard = (() => {
       lastStats = stats;
       renderStats(stats);
     } catch (err) {
-      // Silently retry on next poll
       console.debug('[Dashboard] Stats fetch failed:', err.message);
     }
   }
@@ -38,14 +46,14 @@ const VisionDashboard = (() => {
   function renderStats(s) {
     // ── Stat Cards ──
     updateText('stat-cpu-val', `${s.cpu.percent}%`);
-    updateText('stat-cpu-label', `${s.cpu.core_count} cores @ ${s.cpu.frequency_ghz} GHz`);
+    updateText('stat-cpu-label', `CPU (${s.cpu.core_count} cores @ ${s.cpu.frequency_ghz} GHz)`);
 
-    updateText('stat-ram-val', `${s.ram.percent}%`);
-    updateText('stat-ram-label', `${s.ram.used_gb} / ${s.ram.total_gb} GB`);
+    updateText('stat-ram-val', `${s.ram.percent}% — ${s.ram.used_gb} / ${s.ram.total_gb} GB`);
+    updateText('stat-ram-label', 'RAM');
 
     if (s.battery) {
-      updateText('stat-bat-val', `${s.battery.percent}%`);
-      updateText('stat-bat-label', s.battery.power_plugged ? '⚡ Plugged In' : '🔋 On Battery');
+      updateText('stat-bat-val', `${s.battery.percent}% ${s.battery.power_plugged ? '⚡ Charging' : '🔋'}`);
+      updateText('stat-bat-label', 'Battery');
     } else {
       updateText('stat-bat-val', 'N/A');
       updateText('stat-bat-label', 'No battery');
@@ -54,13 +62,20 @@ const VisionDashboard = (() => {
     const mainDisk = s.storage && s.storage[0];
     if (mainDisk) {
       updateText('stat-disk-val', `${mainDisk.percent}%`);
-      updateText('stat-disk-label', `${mainDisk.used_gb} / ${mainDisk.total_gb} GB`);
+      updateText('stat-disk-label', `Disk — ${mainDisk.used_gb} / ${mainDisk.total_gb} GB`);
     }
 
     // ── SVG Gauges ──
-    updateGauge('gauge-cpu', s.cpu.percent);
-    updateGauge('gauge-ram', s.ram.percent);
-    updateGauge('gauge-bat', s.battery ? s.battery.percent : 0);
+    if (typeof VisionApp !== 'undefined') {
+      const cpuColor = s.cpu.percent > 80 ? 'var(--danger)' : (s.cpu.percent > 50 ? 'var(--warning)' : 'var(--primary)');
+      const ramColor = s.ram.percent > 80 ? 'var(--danger)' : 'var(--secondary)';
+      const batPct = s.battery ? s.battery.percent : 0;
+      const batColor = (s.battery && s.battery.percent < 20) ? 'var(--danger)' : 'var(--accent)';
+
+      VisionApp.updateGauge('gauge-cpu', s.cpu.percent, cpuColor);
+      VisionApp.updateGauge('gauge-ram', s.ram.percent, ramColor);
+      VisionApp.updateGauge('gauge-bat', batPct, batColor);
+    }
 
     // ── Gauge Value Text ──
     updateText('gauge-cpu-val', `${Math.round(s.cpu.percent)}%`);
@@ -84,30 +99,11 @@ const VisionDashboard = (() => {
     updateText('sys-uptime', formatUptime(s.uptime_seconds));
 
     // ── Load Balancer ──
-    updateText('lb-strategy', s.load_balancer.strategy);
-    updateText('lb-primary', s.load_balancer.primary_model);
-    updateText('lb-providers', `${s.load_balancer.provider_count} endpoints`);
-  }
-
-  function updateGauge(id, percent) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const circle = el.querySelector('.gauge-fill');
-    if (!circle) return;
-
-    const radius = parseFloat(circle.getAttribute('r'));
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (percent / 100) * circumference;
-
-    circle.style.strokeDasharray = circumference;
-    circle.style.strokeDashoffset = offset;
-
-    // Dynamic color based on value
-    let color;
-    if (percent < 50) color = '#00d4aa';
-    else if (percent < 75) color = '#ff9f43';
-    else color = '#ff6b6b';
-    circle.style.stroke = color;
+    if (s.load_balancer) {
+      updateText('lb-strategy', s.load_balancer.strategy);
+      updateText('lb-primary', s.load_balancer.primary_model);
+      updateText('lb-providers', `${s.load_balancer.provider_count} endpoints`);
+    }
   }
 
   function renderCoreBars(cores) {
@@ -115,16 +111,8 @@ const VisionDashboard = (() => {
     if (!container || !cores) return;
 
     container.innerHTML = cores.map((val, i) => {
-      let color;
-      if (val < 50) color = 'var(--accent-secondary)';
-      else if (val < 75) color = 'var(--accent-warning)';
-      else color = 'var(--accent-danger)';
-
-      return `
-        <div class="core-bar-wrapper" data-tooltip="Core ${i}: ${val}%">
-          <div class="core-bar" style="height: ${Math.max(val, 3)}%; background: ${color};"></div>
-        </div>
-      `;
+      const color = val > 80 ? 'var(--danger)' : (val > 50 ? 'var(--warning)' : 'var(--primary)');
+      return `<div style="flex:1; height:${Math.max(val, 3)}%; background:${color}; border-radius:3px 3px 0 0; transition: height 0.8s var(--ease-out);" title="Core ${i}: ${val}%"></div>`;
     }).join('');
   }
 
@@ -134,9 +122,9 @@ const VisionDashboard = (() => {
 
     tbody.innerHTML = procs.map(p => `
       <tr>
-        <td style="color: var(--text-primary); font-weight: 500;">${escapeHtml(p.name)}</td>
-        <td><span class="badge badge-info">${p.cpu}%</span></td>
-        <td>${p.mem_mb} MB</td>
+        <td class="truncate" style="max-width:180px; color: var(--text-primary); font-weight: 500;">${escapeHtml(p.name)}</td>
+        <td class="font-mono">${p.cpu}%</td>
+        <td class="font-mono">${p.mem_mb} MB</td>
       </tr>
     `).join('');
   }
@@ -152,13 +140,14 @@ const VisionDashboard = (() => {
           <span class="text-xs text-muted">${d.free_gb} GB free</span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${d.percent}%; ${d.percent > 85 ? 'background: linear-gradient(90deg, var(--accent-warning), var(--accent-danger));' : ''}"></div>
+          <div class="progress-fill" style="width: ${d.percent}%; ${d.percent > 85 ? 'background: var(--danger);' : ''}"></div>
         </div>
       </div>
     `).join('');
   }
 
   function formatUptime(secs) {
+    if (!secs) return '--';
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
@@ -178,5 +167,5 @@ const VisionDashboard = (() => {
     return el.innerHTML;
   }
 
-  return { init, startPolling, stopPolling, fetchStats };
+  return { init, refresh, startPolling, stopPolling, fetchStats };
 })();

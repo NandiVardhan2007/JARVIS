@@ -1,80 +1,176 @@
 /**
- * VISION AI — Main Application Controller
- * Router, theme, initialization, particles, command palette, toasts, event feed
+ * VISION AI — App Shell Orchestrator v2.0
+ * Page routing, sidebar, splash, command palette, telemetry, icon management
  */
 
 const VisionApp = (() => {
-  let currentPage = 'chat';
-  const eventFeed = [];
+  let currentPage = 'voice';
+  let bootStartTime = null;
+  let uptimeInterval = null;
+  let telemetryInterval = null;
+  let connectionStartTime = Date.now();
+
+  // Module instances (loaded externally)
+  const modules = {};
 
   function init() {
-    // Boot sequence
-    showSplash();
+    bootStartTime = Date.now();
+    console.log('[VISION] App init started');
 
-    // Initialize WebSocket
-    VisionWS.connect();
-    VisionWS.on('status', updateConnectionStatus);
-    VisionWS.on('tool_event', (data) => addEvent('tool', `${data.tool} called`));
+    // 1. Boot Splash
+    runSplashSequence();
 
-    // Navigation
-    document.querySelectorAll('.nav-item[data-page]').forEach(item => {
-      item.addEventListener('click', () => navigate(item.dataset.page));
-    });
+    // 2. Initialize Lucide Icons
+    initIcons();
 
-    // Sidebar toggle
-    const toggleBtn = document.getElementById('sidebar-toggle');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        document.getElementById('sidebar').classList.toggle('collapsed');
-      });
-    }
+    // 3. Set up navigation
+    setupNavigation();
 
-    // Command palette
+    // 4. Set up sidebar collapse
+    setupSidebar();
+
+    // 5. Set up command palette
     setupCommandPalette();
 
-    // Keyboard shortcuts
-    document.addEventListener('keydown', handleKeyboard);
+    // 6. Set up keyboard shortcuts
+    setupKeyboardShortcuts();
 
-    // Start particles on splash
-    initParticles();
+    // 7. Init 3D Orb
+    if (typeof VisionOrb !== 'undefined') VisionOrb.init();
+
+    // 8. Init Voice Engine
+    if (typeof VisionVoice !== 'undefined') VisionVoice.init();
+
+    // 9. Init Transcript module
+    if (typeof VisionTranscript !== 'undefined') VisionTranscript.init();
+
+    // 10. Init Task Tracker
+    if (typeof VisionTaskTracker !== 'undefined') VisionTaskTracker.init();
+
+    // 11. Init Chat Module
+    if (typeof VisionChat !== 'undefined') VisionChat.init();
+
+    // 12. Init Dashboard
+    if (typeof VisionDashboard !== 'undefined') VisionDashboard.init();
+
+    // 13. Init Memory Module
+    if (typeof VisionMemory !== 'undefined') VisionMemory.init();
+
+    // 14. Init Tools Module
+    if (typeof VisionTools !== 'undefined') VisionTools.init();
+
+    // 15. Start Telemetry Loop
+    startTelemetry();
+
+    // 16. Start Uptime Counter
+    startUptimeCounter();
+
+    // 17. MutationObserver for icons
+    setupIconObserver();
+
+    // 18. Set up gauge SVGs
+    initGauges();
+
+    console.log('[VISION] App init complete');
   }
 
-  function showSplash() {
+  // ── Splash Screen ──
+  function runSplashSequence() {
     const splash = document.getElementById('splash-screen');
-    const progressFill = document.querySelector('.splash-progress-fill');
+    const progressFill = document.getElementById('splash-progress-fill');
     const statusText = document.getElementById('splash-status-text');
+    if (!splash) return;
 
-    const steps = [
-      { pct: 15, text: 'Connecting to VISION engine...' },
-      { pct: 35, text: 'Loading AI subsystems...' },
-      { pct: 55, text: 'Initializing memory (MAG + CAG)...' },
-      { pct: 75, text: 'Registering tool modules...' },
-      { pct: 90, text: 'Establishing WebSocket...' },
-      { pct: 100, text: 'VISION Online!' },
+    const stages = [
+      { progress: 15, text: 'Initializing Neural Core...' },
+      { progress: 35, text: 'Establishing WebSocket...' },
+      { progress: 55, text: 'Loading 3D Quantum Engine...' },
+      { progress: 72, text: 'Activating Voice Pipeline...' },
+      { progress: 88, text: 'Calibrating Agent Subsystems...' },
+      { progress: 100, text: 'VISION Online — Welcome.' }
     ];
 
     let i = 0;
-    const interval = setInterval(() => {
-      if (i >= steps.length) {
-        clearInterval(interval);
-        setTimeout(() => {
-          splash.classList.add('hidden');
-          // Initialize modules after splash
-          VisionChat.init();
-          VisionDashboard.init();
-          VisionMemory.init();
-          VisionTools.init();
-          navigate('chat');
-        }, 600);
+    function nextStage() {
+      if (i >= stages.length) {
+        setTimeout(() => { splash.classList.add('hidden'); }, 600);
         return;
       }
-      if (progressFill) progressFill.style.width = steps[i].pct + '%';
-      if (statusText) statusText.textContent = steps[i].text;
+      if (progressFill) progressFill.style.width = stages[i].progress + '%';
+      if (statusText) statusText.textContent = stages[i].text;
       i++;
-    }, 400);
+      setTimeout(nextStage, 320 + Math.random() * 180);
+    }
+    setTimeout(nextStage, 400);
   }
 
-  function navigate(page) {
+  // ── Icons ──
+  function initIcons() {
+    if (window.lucide && lucide.createIcons) {
+      lucide.createIcons();
+    }
+  }
+
+  function setupIconObserver() {
+    const observer = new MutationObserver((mutations) => {
+      let needsRefresh = false;
+      for (const m of mutations) {
+        if (m.type === 'childList' && m.addedNodes.length > 0) {
+          for (const node of m.addedNodes) {
+            if (node.nodeType === 1 && (node.querySelector?.('[data-lucide]') || node.hasAttribute?.('data-lucide'))) {
+              needsRefresh = true;
+              break;
+            }
+          }
+        }
+        if (needsRefresh) break;
+      }
+      if (needsRefresh) initIcons();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // ── SVG Gauges ──
+  function initGauges() {
+    ['gauge-cpu', 'gauge-ram', 'gauge-bat'].forEach(id => {
+      const svg = document.getElementById(id);
+      if (!svg) return;
+      const fill = svg.querySelector('.gauge-fill');
+      if (!fill) return;
+      const radius = 40;
+      const circumference = 2 * Math.PI * radius;
+      fill.style.strokeDasharray = circumference;
+      fill.style.strokeDashoffset = circumference;
+      fill.style.stroke = 'var(--primary)';
+      fill.dataset.circumference = circumference;
+    });
+  }
+
+  function updateGauge(id, percent, color) {
+    const svg = document.getElementById(id);
+    if (!svg) return;
+    const fill = svg.querySelector('.gauge-fill');
+    if (!fill) return;
+    const circumference = parseFloat(fill.dataset.circumference);
+    if (!circumference) return;
+    const offset = circumference - (percent / 100) * circumference;
+    fill.style.strokeDashoffset = offset;
+    if (color) fill.style.stroke = color;
+  }
+
+  // ── Navigation ──
+  function setupNavigation() {
+    document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+      item.addEventListener('click', () => {
+        navigateTo(item.dataset.page);
+      });
+    });
+  }
+
+  function navigateTo(page) {
+    if (currentPage === page) return;
+    currentPage = page;
+
     // Update nav items
     document.querySelectorAll('.nav-item[data-page]').forEach(item => {
       item.classList.toggle('active', item.dataset.page === page);
@@ -85,288 +181,353 @@ const VisionApp = (() => {
       p.classList.toggle('active', p.id === `page-${page}`);
     });
 
-    currentPage = page;
-
-    // Re-render knowledge graph on memory page
-    if (page === 'memory') {
-      setTimeout(() => VisionMemory.fetchMemoryData(), 100);
-    }
-    // Refresh stats when navigating to dashboard
-    if (page === 'dashboard') {
-      VisionDashboard.fetchStats();
+    // Trigger data refresh for page
+    if (page === 'dashboard' && typeof VisionDashboard !== 'undefined') {
+      VisionDashboard.refresh();
+    } else if (page === 'memory' && typeof VisionMemory !== 'undefined') {
+      VisionMemory.refresh();
+    } else if (page === 'tools' && typeof VisionTools !== 'undefined') {
+      VisionTools.refresh();
     }
   }
 
-  function updateConnectionStatus(data) {
-    const dot = document.getElementById('ws-status-dot');
-    const text = document.getElementById('ws-status-text');
-    if (dot) {
-      dot.classList.toggle('offline', !data.connected);
-    }
-    if (text) {
-      text.textContent = data.connected ? 'Connected' : 'Disconnected';
-    }
+  // ── Sidebar ──
+  function setupSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const collapseBtn = document.getElementById('sidebar-collapse-btn');
+    if (!sidebar || !collapseBtn) return;
+
+    collapseBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+      const isCollapsed = sidebar.classList.contains('collapsed');
+      collapseBtn.querySelector('.nav-label').textContent = isCollapsed ? '' : 'Collapse';
+      const iconEl = collapseBtn.querySelector('[data-lucide]');
+      if (iconEl) {
+        iconEl.setAttribute('data-lucide', isCollapsed ? 'panel-left-open' : 'panel-left-close');
+        initIcons();
+      }
+    });
   }
 
   // ── Command Palette ──
   function setupCommandPalette() {
-    const trigger = document.getElementById('cmd-palette-trigger');
     const palette = document.getElementById('command-palette');
     const input = document.getElementById('cmd-palette-input');
     const results = document.getElementById('cmd-palette-results');
+    const trigger = document.getElementById('cmd-palette-trigger');
+    if (!palette || !input) return;
 
     if (trigger) {
       trigger.addEventListener('click', () => openCommandPalette());
     }
 
-    if (palette) {
-      palette.addEventListener('click', (e) => {
-        if (e.target === palette) closeCommandPalette();
-      });
-    }
-
-    if (input) {
-      input.addEventListener('input', () => {
-        renderPaletteResults(input.value.trim());
-      });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeCommandPalette();
-        if (e.key === 'Enter') {
-          const selected = results.querySelector('.cmd-palette-item.selected') || results.querySelector('.cmd-palette-item');
-          if (selected) selected.click();
-        }
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          navigatePaletteItems(e.key === 'ArrowDown' ? 1 : -1);
-        }
-      });
-    }
-  }
-
-  function openCommandPalette() {
-    const palette = document.getElementById('command-palette');
-    const input = document.getElementById('cmd-palette-input');
-    if (palette) {
-      palette.classList.add('visible');
-      if (input) { input.value = ''; input.focus(); }
-      renderPaletteResults('');
-    }
-  }
-
-  function closeCommandPalette() {
-    const palette = document.getElementById('command-palette');
-    if (palette) palette.classList.remove('visible');
-  }
-
-  function renderPaletteResults(query) {
-    const results = document.getElementById('cmd-palette-results');
-    if (!results) return;
-
     const commands = [
-      { icon: '💬', label: 'Chat with VISION', action: () => navigate('chat') },
-      { icon: '📊', label: 'System Dashboard', action: () => navigate('dashboard') },
-      { icon: '🧠', label: 'Memory Explorer', action: () => navigate('memory') },
-      { icon: '🔧', label: 'Tool Launcher', action: () => navigate('tools') },
-      { icon: '📸', label: 'Take Screenshot', action: () => takeScreenshot() },
-      { icon: '🔄', label: 'Refresh Stats', action: () => { VisionDashboard.fetchStats(); showToast('Stats refreshed', 'success'); } },
-      { icon: '🧹', label: 'Clear Chat', action: () => clearChat() },
-      { icon: '➕', label: 'Add Memory', action: () => { navigate('memory'); setTimeout(() => document.getElementById('memory-add-btn')?.click(), 200); } },
+      { icon: 'radio', label: 'Voice HUD', action: () => navigateTo('voice') },
+      { icon: 'message-square', label: 'Open Chat', action: () => navigateTo('chat') },
+      { icon: 'bar-chart-3', label: 'Dashboard', action: () => navigateTo('dashboard') },
+      { icon: 'brain', label: 'Memory Explorer', action: () => navigateTo('memory') },
+      { icon: 'wrench', label: 'Tools', action: () => navigateTo('tools') },
+      { icon: 'check-square', label: 'Task Tracker', action: () => {
+        const modal = document.getElementById('task-tracker-modal');
+        if (modal) { modal.classList.add('active'); VisionTaskTracker.fetchTaskDashboard(); }
+      }},
+      { icon: 'mic', label: 'Toggle Mute', action: () => VisionVoice.toggleMute() },
+      { icon: 'radio', label: 'Toggle Hands-Free', action: () => VisionVoice.toggleHandsFree() },
     ];
 
-    const q = query.toLowerCase();
-    const filtered = q ? commands.filter(c => c.label.toLowerCase().includes(q)) : commands;
+    let selectedIdx = 0;
 
-    results.innerHTML = filtered.map((c, i) => `
-      <div class="cmd-palette-item ${i === 0 ? 'selected' : ''}" data-index="${i}">
-        <span class="cmd-palette-item-icon">${c.icon}</span>
-        <span class="cmd-palette-item-label">${c.label}</span>
-      </div>
-    `).join('');
+    function openCommandPalette() {
+      palette.classList.add('visible');
+      input.value = '';
+      input.focus();
+      renderCommands(commands);
+    }
 
-    results.querySelectorAll('.cmd-palette-item').forEach((el, i) => {
-      el.addEventListener('click', () => {
-        filtered[i].action();
-        closeCommandPalette();
+    function closeCommandPalette() {
+      palette.classList.remove('visible');
+      input.value = '';
+    }
+
+    function renderCommands(cmds) {
+      if (!results) return;
+      results.innerHTML = cmds.map((c, i) => `
+        <div class="cmd-palette-item ${i === selectedIdx ? 'selected' : ''}" data-cmd-idx="${i}">
+          <span class="cmd-palette-item-icon"><i data-lucide="${c.icon}" class="icon-sm"></i></span>
+          <span class="cmd-palette-item-label">${c.label}</span>
+        </div>
+      `).join('');
+      initIcons();
+
+      results.querySelectorAll('.cmd-palette-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.cmdIdx);
+          if (cmds[idx]) cmds[idx].action();
+          closeCommandPalette();
+        });
       });
+    }
+
+    input.addEventListener('input', () => {
+      const q = input.value.toLowerCase().trim();
+      const filtered = q ? commands.filter(c => c.label.toLowerCase().includes(q)) : commands;
+      selectedIdx = 0;
+      renderCommands(filtered);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const items = results.querySelectorAll('.cmd-palette-item');
+      if (e.key === 'ArrowDown') { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, items.length - 1); highlightItem(items); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); highlightItem(items); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = input.value.toLowerCase().trim();
+        const filtered = q ? commands.filter(c => c.label.toLowerCase().includes(q)) : commands;
+        if (filtered[selectedIdx]) filtered[selectedIdx].action();
+        closeCommandPalette();
+      }
+      else if (e.key === 'Escape') { closeCommandPalette(); }
+    });
+
+    function highlightItem(items) {
+      items.forEach((el, i) => el.classList.toggle('selected', i === selectedIdx));
+    }
+
+    palette.addEventListener('click', (e) => {
+      if (e.target === palette) closeCommandPalette();
+    });
+
+    // Global open shortcut
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (palette.classList.contains('visible')) closeCommandPalette();
+        else openCommandPalette();
+      }
     });
   }
 
-  function navigatePaletteItems(dir) {
-    const results = document.getElementById('cmd-palette-results');
-    if (!results) return;
-    const items = results.querySelectorAll('.cmd-palette-item');
-    let idx = [...items].findIndex(i => i.classList.contains('selected'));
-    items.forEach(i => i.classList.remove('selected'));
-    idx = (idx + dir + items.length) % items.length;
-    items[idx]?.classList.add('selected');
-  }
+  // ── Keyboard Shortcuts ──
+  function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      const cmdInput = document.getElementById('command-input');
+      const chatInput = document.getElementById('chat-input');
+      const isInInput = (document.activeElement === cmdInput || document.activeElement === chatInput || document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA');
+      if (isInInput) return;
 
-  // ── Particles ──
-  function initParticles() {
-    const canvas = document.getElementById('particle-canvas');
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    let particles = [];
-    const PARTICLE_COUNT = 50;
-
-    function resize() {
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
-      canvas.style.width = window.innerWidth + 'px';
-      canvas.style.height = window.innerHeight + 'px';
-      ctx.scale(dpr, dpr);
-    }
-
-    function createParticle() {
-      return {
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        size: Math.random() * 2 + 0.5,
-        opacity: Math.random() * 0.3 + 0.1,
-      };
-    }
-
-    resize();
-    window.addEventListener('resize', resize);
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particles.push(createParticle());
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-      particles.forEach(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-
-        if (p.x < 0 || p.x > window.innerWidth) p.vx *= -1;
-        if (p.y < 0 || p.y > window.innerHeight) p.vy *= -1;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(108, 99, 255, ${p.opacity})`;
-        ctx.fill();
-      });
-
-      // Draw subtle connections
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(108, 99, 255, ${0.06 * (1 - dist / 120)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
+      if (e.key === 'Escape') {
+        // Close modals
+        const taskModal = document.getElementById('task-tracker-modal');
+        if (taskModal?.classList.contains('active')) { taskModal.classList.remove('active'); return; }
+        const cmdPalette = document.getElementById('command-palette');
+        if (cmdPalette?.classList.contains('visible')) { cmdPalette.classList.remove('visible'); return; }
       }
 
-      // Only animate while splash is visible
-      const splash = document.getElementById('splash-screen');
-      if (splash && !splash.classList.contains('hidden')) {
-        requestAnimationFrame(draw);
-      } else {
-        // Fade out canvas
-        canvas.style.transition = 'opacity 1s';
-        canvas.style.opacity = '0';
-        setTimeout(() => { canvas.style.display = 'none'; }, 1000);
+      if (e.key === '1') navigateTo('voice');
+      if (e.key === '2') navigateTo('chat');
+      if (e.key === '3') navigateTo('dashboard');
+      if (e.key === '4') navigateTo('memory');
+      if (e.key === '5') navigateTo('tools');
+    });
+  }
+
+  // ── Telemetry ──
+  function startTelemetry() {
+    async function fetchTelemetry() {
+      try {
+        const res = await fetch('/api/telemetry');
+        const data = await res.json();
+        updateVitals(data);
+      } catch (err) {
+        // Server likely offline, show offline state
+        const dot = document.getElementById('sidebar-status-dot');
+        if (dot) dot.classList.add('offline');
       }
     }
 
-    requestAnimationFrame(draw);
+    fetchTelemetry();
+    telemetryInterval = setInterval(fetchTelemetry, 3000);
   }
 
-  // ── Screenshot ──
-  async function takeScreenshot() {
-    try {
-      const res = await fetch('/api/vision/screenshot');
-      if (!res.ok) throw new Error('Failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const win = window.open();
-      win.document.write(`<img src="${url}" style="max-width:100%;">`);
-      showToast('Screenshot captured!', 'success');
-    } catch (err) {
-      showToast('Screenshot failed', 'error');
+  function updateVitals(data) {
+    const cpu = data.cpu_percent || 0;
+    const ramUsed = data.ram_used_gb || 0;
+    const ramTotal = data.ram_total_gb || 0;
+    const ramPct = ramTotal ? Math.round((ramUsed / ramTotal) * 100) : 0;
+    const batteryPct = data.battery_percent;
+    const batteryPlugged = data.battery_plugged;
+    const disk = data.disk_usage_percent || 0;
+
+    // Voice HUD vitals
+    setText('cpu-stat', `${cpu}%`);
+    setText('ram-stat', `${ramUsed.toFixed(1)} / ${ramTotal.toFixed(1)} GB`);
+    setText('battery-stat', batteryPct != null ? `${batteryPct}% ${batteryPlugged ? '⚡' : '🔋'}` : 'AC Power');
+
+    setBarWidth('cpu-bar', cpu);
+    setBarWidth('ram-bar', ramPct);
+    setBarWidth('battery-bar', batteryPct || 100);
+
+    // Dashboard gauges
+    updateGauge('gauge-cpu', cpu, cpu > 80 ? 'var(--danger)' : (cpu > 50 ? 'var(--warning)' : 'var(--primary)'));
+    updateGauge('gauge-ram', ramPct, ramPct > 80 ? 'var(--danger)' : 'var(--secondary)');
+    updateGauge('gauge-bat', batteryPct || 100, batteryPct && batteryPct < 20 ? 'var(--danger)' : 'var(--accent)');
+
+    setText('gauge-cpu-val', `${cpu}%`);
+    setText('gauge-ram-val', `${ramPct}%`);
+    setText('gauge-bat-val', batteryPct != null ? `${batteryPct}%` : 'N/A');
+
+    setText('stat-cpu-val', `${cpu}%`);
+    setText('stat-cpu-label', `CPU (${data.cpu_cores || '?'} cores)`);
+    setText('stat-ram-val', `${ramPct}% — ${ramUsed.toFixed(1)} / ${ramTotal.toFixed(1)} GB`);
+    setText('stat-ram-label', 'RAM');
+    setText('stat-bat-val', batteryPct != null ? `${batteryPct}% ${batteryPlugged ? '⚡ Charging' : '🔋'}` : 'AC Power');
+    setText('stat-bat-label', 'Battery');
+    setText('stat-disk-val', `${disk}%`);
+    setText('stat-disk-label', 'Disk Usage');
+    setText('sys-uptime', data.system_uptime ? `Up: ${data.system_uptime}` : '--');
+
+    // Memory nodes
+    if (data.memory_count != null) {
+      setText('memory-nodes-stat', `${data.memory_count} Memories`);
+      setBarWidth('nodes-bar', Math.min(100, (data.memory_count / 500) * 100));
     }
+
+    // Tools count
+    if (data.tools_count != null) {
+      setText('active-tools-count', `${data.tools_count} Tools`);
+      setText('tools-count', data.tools_count);
+    }
+
+    // CPU cores bar chart
+    if (data.cpu_per_core) renderCpuCores(data.cpu_per_core);
+
+    // Top processes
+    if (data.top_processes) renderProcessTable(data.top_processes);
+
+    // Load Balancer
+    if (data.load_balancer) {
+      setText('lb-strategy', data.load_balancer.strategy || '--');
+      setText('lb-primary', data.load_balancer.primary_model || '--');
+      setText('lb-providers', data.load_balancer.endpoint_count ? `${data.load_balancer.endpoint_count} active` : '--');
+    }
+
+    // Network
+    if (data.network) {
+      setText('net-sent', formatBytes(data.network.bytes_sent));
+      setText('net-recv', formatBytes(data.network.bytes_recv));
+    }
+
+    // Storage
+    if (data.disk_partitions) renderStorage(data.disk_partitions);
+
+    // Sidebar online
+    const dot = document.getElementById('sidebar-status-dot');
+    if (dot) dot.classList.remove('offline');
   }
 
-  // ── Clear Chat ──
-  function clearChat() {
-    const container = document.getElementById('chat-messages');
-    if (container) container.innerHTML = '';
-    showToast('Chat cleared', 'info');
+  function renderCpuCores(cores) {
+    const container = document.getElementById('cpu-cores');
+    if (!container || !cores) return;
+
+    container.innerHTML = cores.map((pct, i) => {
+      const color = pct > 80 ? 'var(--danger)' : (pct > 50 ? 'var(--warning)' : 'var(--primary)');
+      return `<div style="flex:1;height:${Math.max(4, pct)}%;background:${color};border-radius:3px 3px 0 0;transition:height 0.8s var(--ease-out);" title="Core ${i}: ${pct}%"></div>`;
+    }).join('');
   }
 
-  // ── Toast System ──
-  function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
+  function renderProcessTable(procs) {
+    const tbody = document.getElementById('proc-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = procs.slice(0, 8).map(p => `
+      <tr>
+        <td class="truncate" style="max-width:180px;">${escapeHtml(p.name || 'Unknown')}</td>
+        <td class="font-mono">${(p.cpu || 0).toFixed(1)}%</td>
+        <td class="font-mono">${(p.memory || 0).toFixed(1)}%</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderStorage(partitions) {
+    const container = document.getElementById('storage-list');
     if (!container) return;
-
-    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
-      <span class="toast-text">${message}</span>
-      <button class="toast-close" onclick="this.parentElement.classList.add('removing'); setTimeout(() => this.parentElement.remove(), 300);">✕</button>
-    `;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-      if (toast.parentElement) {
-        toast.classList.add('removing');
-        setTimeout(() => toast.remove(), 300);
-      }
-    }, 4000);
-  }
-
-  // ── Event Feed ──
-  function addEvent(type, text) {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    eventFeed.unshift({ type, text, time });
-    if (eventFeed.length > 50) eventFeed.pop();
-    renderEventFeed();
-  }
-
-  function renderEventFeed() {
-    const container = document.getElementById('event-feed');
-    if (!container) return;
-
-    container.innerHTML = eventFeed.slice(0, 20).map(e => `
-      <div class="event-item">
-        <div class="event-dot ${e.type}"></div>
-        <span class="event-text">${e.text}</span>
-        <span class="event-time">${e.time}</span>
+    container.innerHTML = partitions.slice(0, 4).map(p => `
+      <div class="stat-row" style="margin-bottom:8px;">
+        <div class="stat-label-row">
+          <span class="text-xs text-muted">${escapeHtml(p.mountpoint || p.device)}</span>
+          <span class="text-xs font-mono">${p.percent || 0}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${p.percent || 0}%;${p.percent > 85 ? 'background:var(--danger);' : ''}"></div>
+        </div>
       </div>
     `).join('');
   }
 
-  // ── Keyboard Shortcuts ──
-  function handleKeyboard(e) {
-    // Ctrl+K → Command Palette
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-      e.preventDefault();
-      openCommandPalette();
-    }
-    // Escape → close palette
-    if (e.key === 'Escape') {
-      closeCommandPalette();
-    }
+  // ── Uptime Counter ──
+  function startUptimeCounter() {
+    uptimeInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - connectionStartTime) / 1000);
+      const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+      const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      const formatted = `${h}:${m}:${s}`;
+      setText('telemetry-uptime', formatted);
+      setText('sidebar-uptime', formatted);
+    }, 1000);
   }
 
-  return { init, navigate, showToast, addEvent, openCommandPalette };
-})();
+  // ── Toast Notifications ──
+  function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
 
-// Boot on DOM ready
-document.addEventListener('DOMContentLoaded', VisionApp.init);
+    const icons = { success: 'check-circle', error: 'alert-circle', warning: 'alert-triangle', info: 'info' };
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon"><i data-lucide="${icons[type] || 'info'}" class="icon-sm"></i></span>
+      <span class="toast-message">${escapeHtml(message)}</span>
+      <div class="toast-progress" style="animation-duration:${duration}ms;"></div>
+    `;
+    container.appendChild(toast);
+    initIcons();
+
+    setTimeout(() => {
+      toast.classList.add('exiting');
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
+
+  // ── Helpers ──
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  function setBarWidth(id, pct) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes) return '0 MB';
+    const gb = bytes / (1024 * 1024 * 1024);
+    if (gb > 1) return `${gb.toFixed(1)} GB`;
+    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s; return d.innerHTML;
+  }
+
+  // Auto-init on DOMContentLoaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  return { init, navigateTo, showToast, updateGauge };
+})();

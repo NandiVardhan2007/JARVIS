@@ -31,9 +31,6 @@ const VisionChat = (() => {
     if (sendBtn) sendBtn.addEventListener('click', sendMessage);
     if (micBtn) micBtn.addEventListener('click', toggleVoiceInput);
 
-    // Listen for WebSocket chat responses
-    VisionWS.on('chat_response', handleChatResponse);
-
     addWelcomeMessage();
   }
 
@@ -77,9 +74,8 @@ const VisionChat = (() => {
         appendMessage('assistant', `⚠️ Error: ${data.detail}`);
       }
 
-      // Push event to feed
-      if (window.VisionApp && window.VisionApp.addEvent) {
-        window.VisionApp.addEvent('llm', `Response from ${data.provider || 'AI'} (${Math.round(data.latency_ms || 0)}ms)`);
+      if (typeof VisionApp !== 'undefined' && VisionApp.showToast) {
+        // Optionally log event
       }
     } catch (err) {
       hideTyping();
@@ -139,7 +135,6 @@ const VisionChat = (() => {
       rendered += chars.slice(i, i + chunkSize).join('');
       bubbleContent.innerHTML = formatMarkdown(rendered);
       scrollToBottom();
-      // Variable speed: faster for spaces, slower for punctuation
       const lastChar = chars[Math.min(i + chunkSize - 1, chars.length - 1)];
       const delay = '.!?'.includes(lastChar) ? 30 : ' \n'.includes(lastChar) ? 8 : 5;
       await sleep(delay);
@@ -175,7 +170,6 @@ const VisionChat = (() => {
       </div>
     `;
 
-    // Set time for user messages immediately
     if (isUser) {
       const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       div.querySelector('.msg-meta').textContent = time;
@@ -229,16 +223,15 @@ const VisionChat = (() => {
     if (!micBtn) return;
 
     if (micBtn.classList.contains('recording')) {
-      // Stop recording (would stop MediaRecorder in real implementation)
       micBtn.classList.remove('recording');
-      VisionApp.showToast('Voice input stopped', 'info');
+      if (typeof VisionApp !== 'undefined') VisionApp.showToast('Voice input stopped', 'info');
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micBtn.classList.add('recording');
-      VisionApp.showToast('🎙️ Listening... Speak now!', 'info');
+      if (typeof VisionApp !== 'undefined') VisionApp.showToast('🎙️ Listening... Speak now!', 'info');
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       const chunks = [];
@@ -258,10 +251,10 @@ const VisionChat = (() => {
           const data = await res.json();
           if (data.text && data.text.trim()) {
             inputField.value = data.text;
-            VisionApp.showToast('✅ Transcribed!', 'success');
+            if (typeof VisionApp !== 'undefined') VisionApp.showToast('✅ Transcribed!', 'success');
           }
         } catch (err) {
-          VisionApp.showToast('Transcription failed', 'error');
+          if (typeof VisionApp !== 'undefined') VisionApp.showToast('Transcription failed', 'error');
         }
       };
 
@@ -269,21 +262,17 @@ const VisionChat = (() => {
 
       // Auto-stop after 10 seconds
       setTimeout(() => {
-        if (mediaRecorder.state === 'recording') {
-          mediaRecorder.stop();
-        }
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
       }, 10000);
 
       // Click to stop early
       micBtn.onclick = () => {
-        if (mediaRecorder.state === 'recording') {
-          mediaRecorder.stop();
-        }
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
         micBtn.onclick = toggleVoiceInput;
       };
 
     } catch (err) {
-      VisionApp.showToast('Microphone access denied', 'error');
+      if (typeof VisionApp !== 'undefined') VisionApp.showToast('Microphone access denied', 'error');
     }
   }
 

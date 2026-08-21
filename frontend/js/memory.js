@@ -8,7 +8,6 @@ const VisionMemory = (() => {
   let allMemories = [];
   let allEvents = [];
   let cagStats = {};
-  let graphRelations = [];
 
   function init() {
     searchInput = document.getElementById('memory-search');
@@ -18,7 +17,9 @@ const VisionMemory = (() => {
 
     const addBtn = document.getElementById('memory-add-btn');
     if (addBtn) addBtn.addEventListener('click', showAddMemoryForm);
+  }
 
+  function refresh() {
     fetchMemoryData();
   }
 
@@ -92,7 +93,7 @@ const VisionMemory = (() => {
       html += `<div class="memory-group">
         <div class="memory-group-header">
           <span>${icon} ${cat}</span>
-          <span class="badge badge-info">${items.length}</span>
+          <span class="badge badge-primary">${items.length}</span>
         </div>`;
 
       items.forEach(m => {
@@ -101,7 +102,9 @@ const VisionMemory = (() => {
             <div class="memory-content">${escapeHtml(m.content)}</div>
             <div class="memory-meta">
               ${m.tags ? `<span class="memory-tags">${m.tags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('')}</span>` : ''}
-              <button class="btn-icon memory-delete" data-query="${escapeHtml(m.content.substring(0, 40))}" title="Forget this memory" style="width:24px;height:24px;font-size:12px;">✕</button>
+              <button class="btn-icon memory-delete" data-query="${escapeHtml(m.content.substring(0, 40))}" title="Forget this memory" style="width:24px;height:24px;">
+                <i data-lucide="x" class="icon-xs"></i>
+              </button>
             </div>
           </div>
         `;
@@ -111,6 +114,7 @@ const VisionMemory = (() => {
     });
 
     container.innerHTML = html;
+    refreshIcons();
 
     // Attach delete handlers
     container.querySelectorAll('.memory-delete').forEach(btn => {
@@ -124,10 +128,10 @@ const VisionMemory = (() => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query })
           });
-          VisionApp.showToast('Memory forgotten', 'success');
+          if (typeof VisionApp !== 'undefined') VisionApp.showToast('Memory forgotten', 'success');
           fetchMemoryData();
         } catch (err) {
-          VisionApp.showToast('Failed to forget', 'error');
+          if (typeof VisionApp !== 'undefined') VisionApp.showToast('Failed to forget', 'error');
         }
       });
     });
@@ -184,6 +188,7 @@ const VisionMemory = (() => {
     const circ = 2 * Math.PI * radius;
     circle.style.strokeDasharray = circ;
     circle.style.strokeDashoffset = circ - (percent / 100) * circ;
+    circle.style.stroke = 'var(--primary)';
   }
 
   function renderKnowledgeGraph() {
@@ -199,13 +204,7 @@ const VisionMemory = (() => {
     canvas.style.height = rect.height + 'px';
     ctx.scale(dpr, dpr);
 
-    // Fetch knowledge graph relations
-    fetch('/api/memory/stats').then(r => r.json()).then(data => {
-      const memories = data.semantic_memories || [];
-      drawMiniGraph(ctx, rect.width, rect.height, memories);
-    }).catch(() => {
-      drawMiniGraph(ctx, rect.width, rect.height, []);
-    });
+    drawMiniGraph(ctx, rect.width, rect.height, allMemories);
   }
 
   function drawMiniGraph(ctx, w, h, memories) {
@@ -222,7 +221,7 @@ const VisionMemory = (() => {
 
     const catKeys = Object.keys(categories);
     if (catKeys.length === 0) {
-      ctx.fillStyle = '#555566';
+      ctx.fillStyle = '#52525b';
       ctx.font = '13px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Knowledge graph will appear here', w / 2, h / 2);
@@ -236,20 +235,20 @@ const VisionMemory = (() => {
     // Draw central node (VISION)
     ctx.beginPath();
     ctx.arc(centerX, centerY, 24, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(108, 99, 255, 0.2)';
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
     ctx.fill();
-    ctx.strokeStyle = '#6c63ff';
+    ctx.strokeStyle = '#6366f1';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.fillStyle = '#e8e6f0';
+    ctx.fillStyle = '#fafafa';
     ctx.font = 'bold 11px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('NANDU', centerX, centerY);
 
-    // Draw category nodes in a circle
-    const colors = ['#6c63ff', '#00d4aa', '#ff9f43', '#3b82f6', '#f472b6', '#22d3ee', '#ff6b6b', '#a78bfa'];
+    // Draw category nodes
+    const colors = ['#6366f1', '#06b6d4', '#f59e0b', '#3b82f6', '#ec4899', '#22d3ee', '#ef4444', '#8b5cf6'];
 
     catKeys.forEach((cat, i) => {
       const angle = (i / catKeys.length) * Math.PI * 2 - Math.PI / 2;
@@ -269,21 +268,21 @@ const VisionMemory = (() => {
       // Draw node
       ctx.beginPath();
       ctx.arc(x, y, nodeRadius, 0, Math.PI * 2);
-      ctx.fillStyle = color + '30';
+      ctx.fillStyle = color + '25';
       ctx.fill();
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
       // Label
-      ctx.fillStyle = '#8a8a9a';
+      ctx.fillStyle = '#a1a1aa';
       ctx.font = '10px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText(cat.toUpperCase(), x, y + nodeRadius + 4);
 
       // Count
-      ctx.fillStyle = '#e8e6f0';
+      ctx.fillStyle = '#fafafa';
       ctx.font = 'bold 10px Inter, sans-serif';
       ctx.textBaseline = 'middle';
       ctx.fillText(categories[cat].count, x, y);
@@ -310,10 +309,12 @@ const VisionMemory = (() => {
     })
     .then(r => r.json())
     .then(() => {
-      VisionApp.showToast('Memory stored! 🧠', 'success');
+      if (typeof VisionApp !== 'undefined') VisionApp.showToast('Memory stored! 🧠', 'success');
       fetchMemoryData();
     })
-    .catch(() => VisionApp.showToast('Failed to store memory', 'error'));
+    .catch(() => {
+      if (typeof VisionApp !== 'undefined') VisionApp.showToast('Failed to store memory', 'error');
+    });
   }
 
   function formatTimeAgo(dateStr) {
@@ -337,6 +338,10 @@ const VisionMemory = (() => {
     return el.innerHTML;
   }
 
+  function refreshIcons() {
+    if (window.lucide && lucide.createIcons) lucide.createIcons();
+  }
+
   function debounce(fn, delay) {
     let timer;
     return (...args) => {
@@ -345,5 +350,5 @@ const VisionMemory = (() => {
     };
   }
 
-  return { init, fetchMemoryData };
+  return { init, refresh, fetchMemoryData };
 })();

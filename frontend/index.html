@@ -4,1323 +4,658 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VISION — Autonomous Multimodal AI Voice OS</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%236c63ff'/><circle cx='16' cy='16' r='6' fill='%2300f2fe'/></svg>">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- High-Performance Local Vendor Libraries -->
-  <script src="/js/vendor/three.min.js"></script>
-  <script src="/js/vendor/lucide.min.js"></script>
-  <script src="/js/vendor/chart.min.js"></script>
+  <meta name="description" content="VISION AI: An autonomous multimodal voice operating system with real-time speech recognition, task management, and intelligent system control.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%236366f1'/><circle cx='16' cy='16' r='6' fill='%2322d3ee'/></svg>">
+
+  <!-- CSS Design System -->
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/animations.css">
+
+  <!-- Vendor Libraries -->
+  <script src="js/vendor/three.min.js"></script>
+  <script src="js/vendor/lucide.min.js"></script>
+  <script src="js/vendor/chart.min.js"></script>
   <script>
-    window.THREE || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\\/script>');
-    window.lucide || document.write('<script src="https://unpkg.com/lucide@latest"><\\/script>');
-    window.Chart || document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\\/script>');
+    window.THREE  || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+    window.lucide  || document.write('<script src="https://unpkg.com/lucide@latest"><\/script>');
+    window.Chart   || document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>');
   </script>
-
-  <style>
-    /* ══════════════════════════════════════════════════════════════
-       VISION OS — 3D Holographic Hands-Free Voice Agent HUD
-       ══════════════════════════════════════════════════════════════ */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-
-    :root {
-      --bg: #030508;
-      --cyan: #00f2fe;
-      --cyan-glow: rgba(0, 242, 254, 0.4);
-      --purple: #7f00ff;
-      --neon-blue: #4facfe;
-      --amber: #ffaa00;
-      --red: #ff3366;
-      --green: #00ff88;
-      --text: #ffffff;
-      --text-dim: #8b9bb4;
-      --hud-bg: rgba(6, 12, 24, 0.78);
-      --hud-border: rgba(0, 242, 254, 0.18);
-      --font: 'Space Grotesk', -apple-system, sans-serif;
-      --mono: 'JetBrains Mono', monospace;
-    }
-
-    html, body {
-      width: 100vw; height: 100vh;
-      overflow: hidden;
-      background: var(--bg);
-      font-family: var(--font);
-      color: var(--text);
-    }
-
-    /* ── Official Lucide Icons Alignment ── */
-    .lucide, svg.icon {
-      width: 16px; height: 16px;
-      stroke-width: 2;
-      stroke: currentColor;
-      display: inline-block;
-      vertical-align: middle;
-      flex-shrink: 0;
-    }
-    .icon-xs { width: 12px; height: 12px; }
-    .icon-sm { width: 14px; height: 14px; }
-    .icon-md { width: 18px; height: 18px; }
-    .icon-lg { width: 22px; height: 22px; }
-
-    /* ── 3D Canvas ── */
-    #canvas-container {
-      position: absolute; inset: 0; z-index: 1;
-      width: 100%; height: 100%;
-    }
-    #canvas3d { width: 100%; height: 100%; display: block; }
-
-    /* ── Background Grid & Vignette ── */
-    .vignette {
-      position: absolute; inset: 0; z-index: 2; pointer-events: none;
-      background: radial-gradient(circle at center, transparent 30%, rgba(3, 5, 8, 0.75) 75%, #030508 100%);
-    }
-    .hud-grid {
-      position: absolute; inset: 0; z-index: 2; pointer-events: none;
-      background-image: 
-        linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
-      background-size: 50px 50px;
-      mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-      -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-    }
-
-    /* ── Main HUD Shell ── */
-    #hud-shell {
-      position: relative; z-index: 10;
-      width: 100vw; height: 100vh;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      padding: 16px 24px;
-      pointer-events: none;
-      overflow: hidden;
-      gap: 8px;
-    }
-    #hud-shell * { pointer-events: auto; }
-
-    /* ── Header ── */
-    .hud-header {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; z-index: 20;
-    }
-    .brand {
-      display: flex; align-items: center; gap: 12px;
-    }
-    .brand-core {
-      width: 32px; height: 32px; border-radius: 8px;
-      background: rgba(0, 242, 254, 0.1);
-      border: 1px solid var(--cyan);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--cyan);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
-    }
-    .brand-title {
-      font-size: 1.25rem; font-weight: 700; letter-spacing: 0.22em;
-      text-transform: uppercase;
-      background: linear-gradient(90deg, #ffffff, var(--cyan));
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .brand-tag {
-      font-size: 0.65rem; font-family: var(--mono); color: var(--cyan);
-      border: 1px solid var(--hud-border); border-radius: 20px;
-      padding: 2px 10px; background: rgba(0, 242, 254, 0.05);
-      letter-spacing: 0.1em;
-    }
-
-    .header-controls {
-      display: flex; align-items: center; gap: 10px;
-    }
-
-    /* Mute Toggle Button */
-    .mute-toggle-btn {
-      display: flex; align-items: center; gap: 7px;
-      background: rgba(255,255,255,0.06); border: 1px solid var(--hud-border);
-      border-radius: 30px; padding: 6px 14px;
-      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
-      color: var(--text-dim); cursor: pointer; transition: all 0.3s;
-    }
-    .mute-toggle-btn:hover {
-      background: rgba(255,255,255,0.1); color: #ffffff;
-    }
-    .mute-toggle-btn.muted {
-      background: rgba(255, 51, 102, 0.15); border-color: var(--red);
-      color: var(--red); box-shadow: 0 0 15px rgba(255, 51, 102, 0.35);
-      animation: mutePulse 1.5s infinite alternate;
-    }
-    @keyframes mutePulse {
-      from { transform: scale(1); }
-      to { transform: scale(1.03); }
-    }
-
-    .handsfree-toggle-btn {
-      display: flex; align-items: center; gap: 8px;
-      background: rgba(0, 255, 136, 0.1); border: 1px solid var(--green);
-      border-radius: 30px; padding: 6px 16px;
-      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
-      color: var(--green); cursor: pointer; transition: all 0.3s;
-      box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
-    }
-    .handsfree-toggle-btn.off {
-      background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2);
-      color: var(--text-dim); box-shadow: none;
-    }
-    .handsfree-toggle-btn:hover { transform: scale(1.04); }
-    .vad-indicator-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--green); box-shadow: 0 0 8px var(--green);
-      animation: vadGlow 1.5s infinite alternate;
-    }
-    .handsfree-toggle-btn.off .vad-indicator-dot {
-      background: var(--text-dim); box-shadow: none; animation: none;
-    }
-    @keyframes vadGlow {
-      from { transform: scale(0.9); opacity: 0.7; }
-      to { transform: scale(1.2); opacity: 1; }
-    }
-
-    .hud-status-badge {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--hud-bg); backdrop-filter: blur(12px);
-      border: 1px solid var(--hud-border); border-radius: 30px;
-      padding: 6px 16px; font-family: var(--mono); font-size: 0.72rem;
-      color: var(--text); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--green); box-shadow: 0 0 10px var(--green);
-    }
-    .status-dot.busy { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
-    .status-dot.muted { background: var(--red); box-shadow: 0 0 10px var(--red); }
-
-    /* ── Middle Stage ── */
-    .hud-middle {
-      display: grid;
-      grid-template-columns: 290px 1fr 330px;
-      align-items: center;
-      width: 100%; height: 100%;
-      position: relative;
-      overflow: hidden;
-      gap: 16px;
-    }
-
-    /* ── Left Column: System Vitals (Top) + Autonomous Monitor (Bottom) ── */
-    .left-hud-column {
-      display: flex; flex-direction: column; gap: 12px;
-      width: 290px; height: 100%; justify-content: center;
-      z-index: 15;
-    }
-
-    .telemetry-card {
-      background: var(--hud-bg); backdrop-filter: blur(16px);
-      border: 1px solid var(--hud-border); border-radius: 14px;
-      padding: 14px 16px;
-      display: flex; flex-direction: column; gap: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-      transition: all 0.3s;
-    }
-    .telemetry-card:hover {
-      border-color: rgba(0, 242, 254, 0.4);
-      box-shadow: 0 0 25px rgba(0, 242, 254, 0.15);
-    }
-    .card-title {
-      font-size: 0.68rem; font-family: var(--mono); text-transform: uppercase;
-      letter-spacing: 0.12em; color: var(--cyan);
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 2px;
-    }
-    .title-left { display: flex; align-items: center; gap: 6px; }
-    
-    .stat-row {
-      display: flex; flex-direction: column; gap: 3px;
-    }
-    .stat-label-row {
-      display: flex; justify-content: space-between; align-items: center;
-      font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono);
-    }
-    .stat-name-wrap { display: flex; align-items: center; gap: 5px; }
-    .stat-val { color: var(--text); font-weight: 600; }
-    .stat-bar-track {
-      width: 100%; height: 3px; border-radius: 2px;
-      background: rgba(255,255,255,0.06); overflow: hidden;
-    }
-    .stat-bar-fill {
-      height: 100%; border-radius: 2px;
-      background: linear-gradient(90deg, var(--neon-blue), var(--cyan));
-      transition: width 0.6s cubic-bezier(0.2, 0, 0, 1);
-    }
-
-    /* Left: Autonomous Monitor Card (Below System Vitals) */
-    .actions-card {
-      background: var(--hud-bg); backdrop-filter: blur(16px);
-      border: 1px solid var(--hud-border); border-radius: 14px;
-      padding: 14px 16px;
-      display: flex; flex-direction: column; gap: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-      max-height: 230px;
-    }
-    .actions-header {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding-bottom: 2px;
-    }
-    .actions-header-title {
-      font-size: 0.68rem; font-family: var(--mono); text-transform: uppercase;
-      letter-spacing: 0.12em; color: var(--cyan);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .actions-header-count {
-      font-size: 0.62rem; font-family: var(--mono); color: var(--text-dim);
-      background: rgba(0, 242, 254, 0.08); border-radius: 10px;
-      padding: 1px 7px; border: 1px solid rgba(0, 242, 254, 0.2);
-    }
-    .actions-list {
-      display: flex; flex-direction: column; gap: 6px;
-      overflow-y: auto; max-height: 170px;
-      padding-right: 2px;
-    }
-    .actions-list::-webkit-scrollbar { width: 3px; }
-    .actions-list::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.3); border-radius: 3px; }
-
-    .action-item {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 8px; padding: 6px 10px;
-      display: flex; gap: 8px; align-items: flex-start;
-      animation: fadeInAction 0.3s ease;
-    }
-    @keyframes fadeInAction {
-      from { opacity: 0; transform: translateX(8px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-    .action-icon-box {
-      width: 22px; height: 22px; border-radius: 6px;
-      background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.2);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--cyan); flex-shrink: 0; margin-top: 1px;
-    }
-    .action-content { flex: 1; min-width: 0; }
-    .action-name {
-      font-size: 0.72rem; font-weight: 600; color: var(--cyan);
-      font-family: var(--mono);
-    }
-    .action-desc {
-      font-size: 0.65rem; color: var(--text-dim); margin-top: 1px;
-      word-break: break-word; line-height: 1.25;
-    }
-
-    /* ── Right Column: Live Voice Transcriptions Stream & Integrated Input Bar ── */
-    .transcriptions-card {
-      width: 350px; height: 100%; max-height: 520px;
-      background: var(--hud-bg); backdrop-filter: blur(16px);
-      border: 1px solid var(--hud-border); border-radius: 16px;
-      padding: 14px 16px;
-      display: flex; flex-direction: column; gap: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-      z-index: 15; justify-self: end;
-      justify-content: space-between;
-    }
-    .transcriptions-card:hover {
-      border-color: rgba(0, 242, 254, 0.4);
-      box-shadow: 0 0 30px rgba(0, 242, 254, 0.15);
-    }
-    .transcriptions-header {
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 1px solid rgba(0, 242, 254, 0.12);
-      padding-bottom: 6px; flex-shrink: 0;
-    }
-    .transcriptions-header-title {
-      font-size: 0.7rem; font-family: var(--mono); text-transform: uppercase;
-      letter-spacing: 0.14em; color: var(--cyan);
-      display: flex; align-items: center; gap: 7px;
-    }
-    .transcriptions-header-actions {
-      display: flex; align-items: center; gap: 6px;
-    }
-    .transcriptions-copy-btn {
-      font-size: 0.62rem; font-family: var(--mono); font-weight: 600;
-      color: var(--cyan); background: rgba(0, 242, 254, 0.08);
-      border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px;
-      padding: 2px 8px; display: flex; align-items: center; gap: 4px;
-      cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      text-transform: uppercase; letter-spacing: 0.05em; outline: none;
-    }
-    .transcriptions-copy-btn:hover {
-      background: rgba(0, 242, 254, 0.22);
-      border-color: rgba(0, 242, 254, 0.7);
-      box-shadow: 0 0 12px rgba(0, 242, 254, 0.35);
-      color: #ffffff;
-      transform: translateY(-1px);
-    }
-    .transcriptions-copy-btn:active {
-      transform: scale(0.95);
-    }
-    .transcriptions-copy-btn.copied {
-      background: rgba(0, 255, 136, 0.18);
-      border-color: rgba(0, 255, 136, 0.6);
-      color: var(--green);
-      box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
-    }
-    .live-pulse-badge {
-      font-size: 0.6rem; font-family: var(--mono); color: var(--green);
-      background: rgba(0, 255, 136, 0.1); border-radius: 12px;
-      padding: 2px 8px; border: 1px solid rgba(0, 255, 136, 0.3);
-      display: flex; align-items: center; gap: 4px;
-    }
-    .live-pulse-badge::before {
-      content: ''; width: 5px; height: 5px; border-radius: 50%;
-      background: var(--green); animation: pulseDot 1s infinite alternate;
-    }
-    @keyframes pulseDot { from { opacity: 0.4; } to { opacity: 1; } }
-
-    .transcriptions-list {
-      display: flex; flex-direction: column; gap: 8px;
-      overflow-y: auto; flex: 1; min-height: 120px;
-      padding-right: 4px;
-    }
-    .transcriptions-list::-webkit-scrollbar { width: 4px; }
-    .transcriptions-list::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.3); border-radius: 4px; }
-
-    .transcript-entry {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
-      border-left: 3px solid var(--cyan);
-      border-radius: 8px; padding: 7px 9px;
-      display: flex; flex-direction: column; gap: 3px;
-      animation: fadeInTranscript 0.3s ease;
-    }
-    .transcript-entry.ai {
-      border-left-color: #c084fc;
-      background: rgba(127, 0, 255, 0.04);
-    }
-    @keyframes fadeInTranscript {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .transcript-meta {
-      display: flex; align-items: center; justify-content: space-between;
-      font-family: var(--mono); font-size: 0.62rem;
-    }
-    .transcript-speaker {
-      font-weight: 700; color: var(--cyan); display: flex; align-items: center; gap: 5px;
-    }
-    .transcript-entry.ai .transcript-speaker { color: #c084fc; }
-    .transcript-time { color: var(--text-dim); }
-    .transcript-text {
-      font-size: 0.76rem; line-height: 1.35; color: #e2ecf8;
-      word-break: break-word; user-select: text;
-    }
-
-    /* ── Integrated Sidebar Input Footer ── */
-    .transcriptions-footer {
-      display: flex; flex-direction: column; gap: 6px;
-      width: 100%; border-top: 1px solid rgba(0, 242, 254, 0.12);
-      padding-top: 8px; flex-shrink: 0;
-    }
-    .voice-command-bar {
-      width: 100%;
-      background: rgba(0, 242, 254, 0.04);
-      border: 1px solid rgba(0, 242, 254, 0.2);
-      border-radius: 30px;
-      padding: 3px 4px 3px 12px;
-      display: flex; align-items: center; gap: 6px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-      transition: all 0.25s;
-    }
-    .voice-command-bar:focus-within {
-      border-color: var(--cyan);
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
-    }
-    .hud-input {
-      flex: 1; background: transparent; border: none; outline: none;
-      color: #ffffff; font-family: var(--font); font-size: 0.85rem;
-      padding: 6px 0;
-    }
-    .hud-input::placeholder { color: var(--text-dim); font-size: 0.78rem; }
-
-    .hud-mic-btn {
-      width: 32px; height: 32px; border-radius: 50%; border: none;
-      background: linear-gradient(135deg, var(--cyan), var(--neon-blue));
-      color: #030508; font-size: 0.9rem; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s; flex-shrink: 0;
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
-    }
-    .hud-mic-btn:hover {
-      transform: scale(1.06); box-shadow: 0 0 20px rgba(0, 242, 254, 0.7);
-    }
-    .hud-mic-btn.listening {
-      background: linear-gradient(135deg, var(--red), #ff758c);
-      box-shadow: 0 0 20px rgba(255, 51, 102, 0.8);
-      animation: micPulse 1s infinite alternate;
-    }
-    .hud-mic-btn.muted {
-      background: #2a0812; border: 1px solid var(--red);
-      color: var(--red); box-shadow: none; animation: none;
-    }
-    @keyframes micPulse {
-      from { transform: scale(1); }
-      to { transform: scale(1.1); }
-    }
-
-    .hud-send-btn {
-      width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--hud-border);
-      background: rgba(255,255,255,0.05); color: var(--cyan);
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s; flex-shrink: 0;
-    }
-    .hud-send-btn:hover {
-      background: rgba(0, 242, 254, 0.15); border-color: var(--cyan);
-    }
-
-    .key-hints {
-      display: flex; gap: 8px; justify-content: center; font-family: var(--mono);
-      font-size: 0.6rem; color: var(--text-dim);
-    }
-    .key-hints kbd {
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 3px; padding: 1px 4px; color: var(--cyan);
-    }
-
-
-    /* ── Center Hologram Core Trigger & Subtitles ── */
-    .center-hud {
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center;
-      gap: 10px; pointer-events: none;
-      width: 100%; max-width: 520px;
-      margin: 0 auto;
-      text-align: center;
-      z-index: 12;
-    }
-    .orb-hitbox {
-      width: 250px; height: 250px; border-radius: 50%;
-      cursor: pointer; pointer-events: auto;
-      display: flex; align-items: center; justify-content: center;
-      position: relative;
-    }
-
-    /* ── Futuristic Holographic Voice Waveform (Below Orb) ── */
-    .voice-waveform-wrap {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(4, 9, 20, 0.75);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(0, 242, 254, 0.30);
-      border-radius: 24px;
-      padding: 4px 14px;
-      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 242, 254, 0.15);
-      z-index: 15;
-      pointer-events: auto;
-    }
-    #waveform-canvas {
-      display: block;
-      width: 260px;
-      height: 38px;
-    }
-
-    /* ── Task Tracker Header Button ── */
-    .task-tracker-btn {
-      display: flex; align-items: center; gap: 8px;
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(127, 0, 255, 0.2));
-      border: 1px solid rgba(0, 242, 254, 0.4);
-      border-radius: 30px; padding: 6px 16px;
-      font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
-      color: var(--cyan); cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
-    }
-    .task-tracker-btn:hover {
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.3), rgba(127, 0, 255, 0.4));
-      border-color: var(--cyan);
-      box-shadow: 0 0 25px rgba(0, 242, 254, 0.4);
-      transform: translateY(-1px) scale(1.03);
-    }
-
-    /* ── Task Tracker Modal & Glassmorphism HUD ── */
-    .task-modal-backdrop {
-      position: fixed; inset: 0; z-index: 100;
-      background: rgba(3, 5, 10, 0.82);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      display: none; align-items: center; justify-content: center;
-      padding: 20px;
-      animation: taskFadeIn 0.3s ease-out;
-    }
-    .task-modal-backdrop.active { display: flex; }
-    @keyframes taskFadeIn {
-      from { opacity: 0; transform: scale(0.97); }
-      to { opacity: 1; transform: scale(1); }
-    }
-
-    .task-modal-card {
-      width: 95vw; max-width: 1100px;
-      max-height: 90vh;
-      background: rgba(8, 14, 28, 0.92);
-      border: 1px solid rgba(0, 242, 254, 0.35);
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 242, 254, 0.18);
-      display: flex; flex-direction: column;
-      overflow: hidden;
-      pointer-events: auto;
-    }
-
-    .task-modal-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 22px;
-      background: rgba(13, 22, 44, 0.7);
-      border-bottom: 1px solid rgba(0, 242, 254, 0.18);
-      gap: 16px; flex-wrap: wrap;
-    }
-    .task-modal-title-group {
-      display: flex; align-items: center; gap: 12px;
-    }
-    .task-brand-icon {
-      width: 38px; height: 38px; border-radius: 10px;
-      background: rgba(0, 242, 254, 0.12);
-      border: 1px solid var(--cyan);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--cyan);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
-    }
-    .task-modal-heading {
-      font-size: 1.05rem; font-weight: 700; letter-spacing: 0.1em;
-      background: linear-gradient(90deg, #ffffff, var(--cyan));
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      font-family: var(--font);
-    }
-    .task-modal-sub {
-      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
-    }
-
-    .task-modal-top-actions {
-      display: flex; align-items: center; gap: 10px;
-    }
-    .task-select {
-      background: rgba(13, 22, 44, 0.9);
-      border: 1px solid rgba(0, 242, 254, 0.3);
-      border-radius: 20px; padding: 6px 14px;
-      color: #ffffff; font-family: var(--mono); font-size: 0.75rem;
-      outline: none; cursor: pointer; transition: all 0.2s;
-    }
-    .task-select:hover, .task-select:focus {
-      border-color: var(--cyan);
-      box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
-    }
-
-    .task-btn {
-      display: flex; align-items: center; gap: 6px;
-      border-radius: 20px; padding: 6px 14px;
-      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
-      cursor: pointer; transition: all 0.2s; outline: none;
-    }
-    .task-btn-green {
-      background: rgba(0, 255, 136, 0.12);
-      border: 1px solid var(--green);
-      color: var(--green);
-    }
-    .task-btn-green:hover {
-      background: rgba(0, 255, 136, 0.25);
-      box-shadow: 0 0 15px rgba(0, 255, 136, 0.35);
-      transform: translateY(-1px);
-    }
-    .task-btn-cyan {
-      background: rgba(0, 242, 254, 0.12);
-      border: 1px solid var(--cyan);
-      color: var(--cyan);
-    }
-    .task-btn-cyan:hover {
-      background: rgba(0, 242, 254, 0.25);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
-      transform: translateY(-1px);
-    }
-    .task-btn-primary {
-      background: linear-gradient(135deg, var(--neon-blue), var(--cyan));
-      border: none; color: #030508; font-weight: 700;
-    }
-    .task-btn-primary:hover {
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.5);
-      transform: translateY(-1px);
-    }
-
-    .task-close-btn {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: var(--text-dim); cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s;
-    }
-    .task-close-btn:hover {
-      background: rgba(255, 51, 102, 0.2);
-      border-color: var(--red); color: var(--red);
-      transform: rotate(90deg);
-    }
-
-    /* ── 31-Day Timeline Bar ── */
-    .task-days-timeline-wrap {
-      padding: 10px 18px;
-      background: rgba(6, 12, 24, 0.9);
-      border-bottom: 1px solid rgba(0, 242, 254, 0.12);
-      overflow-x: auto;
-    }
-    .task-days-timeline-wrap::-webkit-scrollbar { height: 4px; }
-    .task-days-timeline-wrap::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.3); border-radius: 4px; }
-    
-    .task-days-timeline {
-      display: flex; gap: 6px; min-width: max-content;
-    }
-    .day-pill {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      width: 44px; height: 46px; border-radius: 10px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: var(--text-dim); cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      font-family: var(--mono);
-    }
-    .day-pill:hover {
-      background: rgba(0, 242, 254, 0.08);
-      border-color: rgba(0, 242, 254, 0.3);
-      color: #ffffff;
-      transform: translateY(-2px);
-    }
-    .day-pill.active {
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(127, 0, 255, 0.25));
-      border-color: var(--cyan);
-      color: var(--cyan);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
-      font-weight: 700;
-    }
-    .day-pill.is-today {
-      border-color: var(--green);
-    }
-    .day-pill.is-today::after {
-      content: ''; width: 4px; height: 4px; border-radius: 50%;
-      background: var(--green); margin-top: 2px;
-      box-shadow: 0 0 6px var(--green);
-    }
-    .day-pill-num { font-size: 0.85rem; }
-    .day-pill-sub { font-size: 0.55rem; text-transform: uppercase; }
-
-    /* ── Main Modal Body Split ── */
-    .task-modal-body {
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      overflow: hidden;
-      flex: 1; min-height: 480px;
-    }
-
-    /* Left Column: Analytics */
-    .task-analytics-col {
-      background: rgba(6, 11, 22, 0.6);
-      border-right: 1px solid rgba(0, 242, 254, 0.12);
-      padding: 16px; display: flex; flex-direction: column; gap: 14px;
-      overflow-y: auto;
-    }
-    .task-analytics-col::-webkit-scrollbar { width: 4px; }
-    .task-analytics-col::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.2); border-radius: 4px; }
-
-    .task-kpi-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    }
-    .task-kpi-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(0, 242, 254, 0.14);
-      border-radius: 12px; padding: 10px;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      text-align: center;
-    }
-    .task-kpi-val {
-      font-size: 1.15rem; font-weight: 700; font-family: var(--mono);
-    }
-    .task-kpi-lbl {
-      font-size: 0.6rem; font-family: var(--mono); color: var(--text-dim);
-      letter-spacing: 0.05em; margin-top: 2px;
-    }
-    .text-cyan { color: var(--cyan); text-shadow: 0 0 10px rgba(0, 242, 254, 0.4); }
-    .text-green { color: var(--green); text-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
-    .text-purple { color: #c084fc; text-shadow: 0 0 10px rgba(192, 132, 252, 0.4); }
-    .text-amber { color: var(--amber); text-shadow: 0 0 10px rgba(255, 170, 0, 0.4); }
-
-    /* LeetCode & Problem Solving Daily Habit Card */
-    .task-leetcode-card {
-      background: linear-gradient(135deg, rgba(255, 161, 22, 0.08) 0%, rgba(255, 107, 0, 0.04) 100%);
-      border: 1px solid rgba(255, 161, 22, 0.35);
-      border-radius: 14px;
-      padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      box-shadow: 0 0 18px rgba(255, 161, 22, 0.12);
-      position: relative;
-      overflow: hidden;
-    }
-    .task-leetcode-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; width: 4px; height: 100%;
-      background: linear-gradient(180deg, #FFA116, #FF6B00);
-    }
-    .task-leetcode-streak-badge {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 800;
-      color: #FFA116;
-      background: rgba(255, 161, 22, 0.15);
-      border: 1px solid rgba(255, 161, 22, 0.4);
-      padding: 3px 8px;
-      border-radius: 20px;
-      text-shadow: 0 0 8px rgba(255, 161, 22, 0.5);
-    }
-    .platform-link-btn {
-      flex: 1;
-      text-align: center;
-      padding: 4px 6px;
-      font-size: 0.65rem;
-      font-family: var(--mono);
-      font-weight: 600;
-      color: #cbd5e1;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      text-decoration: none;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-    }
-    .platform-link-btn:hover {
-      background: rgba(255, 161, 22, 0.2);
-      border-color: rgba(255, 161, 22, 0.5);
-      color: #FFA116;
-    }
-
-    .task-chart-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(0, 242, 254, 0.14);
-      border-radius: 14px; padding: 12px;
-      display: flex; flex-direction: column; gap: 8px;
-    }
-    .task-chart-header {
-      font-size: 0.68rem; font-family: var(--mono); color: var(--cyan);
-      letter-spacing: 0.1em; display: flex; align-items: center; gap: 6px;
-    }
-    .task-chart-canvas-wrap {
-      width: 100%; height: 160px; position: relative;
-      display: flex; align-items: center; justify-content: center;
-    }
-
-    .task-categories-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(0, 242, 254, 0.14);
-      border-radius: 14px; padding: 12px;
-      display: flex; flex-direction: column; gap: 8px;
-    }
-    .category-row {
-      display: flex; flex-direction: column; gap: 3px;
-    }
-    .category-header-row {
-      display: flex; justify-content: space-between; font-size: 0.68rem; font-family: var(--mono);
-    }
-    .cat-track {
-      width: 100%; height: 4px; border-radius: 2px;
-      background: rgba(255, 255, 255, 0.06); overflow: hidden;
-    }
-    .cat-fill {
-      height: 100%; border-radius: 2px;
-      background: linear-gradient(90deg, var(--neon-blue), var(--cyan));
-      transition: width 0.4s ease;
-    }
-
-    /* Right Column: Task List */
-    .task-list-col {
-      padding: 18px 22px; display: flex; flex-direction: column; gap: 14px;
-      overflow-y: auto;
-    }
-    .task-list-col::-webkit-scrollbar { width: 4px; }
-    .task-list-col::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.2); border-radius: 4px; }
-
-    .task-add-form {
-      display: flex; gap: 8px; align-items: center;
-    }
-    .task-input {
-      flex: 1; background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(0, 242, 254, 0.25);
-      border-radius: 10px; padding: 9px 14px;
-      color: #ffffff; font-family: var(--font); font-size: 0.85rem;
-      outline: none; transition: all 0.2s;
-    }
-    .task-input:focus {
-      border-color: var(--cyan);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
-      background: rgba(255, 255, 255, 0.07);
-    }
-    .task-select-sm {
-      background: rgba(13, 22, 44, 0.9);
-      border: 1px solid rgba(0, 242, 254, 0.25);
-      border-radius: 10px; padding: 8px 10px;
-      color: #ffffff; font-family: var(--mono); font-size: 0.72rem;
-      outline: none; cursor: pointer;
-    }
-
-    .task-filters-bar {
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      padding-bottom: 8px;
-    }
-    .task-filters-left { display: flex; gap: 6px; }
-    .task-filter-pill {
-      background: none; border: 1px solid transparent;
-      border-radius: 14px; padding: 3px 10px;
-      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
-      cursor: pointer; transition: all 0.2s;
-    }
-    .task-filter-pill.active {
-      background: rgba(0, 242, 254, 0.12);
-      border-color: rgba(0, 242, 254, 0.35);
-      color: var(--cyan); font-weight: 600;
-    }
-    .task-active-date-label {
-      font-size: 0.72rem; font-family: var(--mono); color: var(--cyan);
-      font-weight: 600; letter-spacing: 0.05em;
-    }
-
-    .task-items-container {
-      display: flex; flex-direction: column; gap: 8px;
-    }
-    .task-item-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 12px; padding: 10px 14px;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .task-item-card:hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(0, 242, 254, 0.25);
-      transform: translateX(3px);
-    }
-    .task-item-card.completed {
-      background: rgba(0, 255, 136, 0.03);
-      border-color: rgba(0, 255, 136, 0.2);
-    }
-    .task-item-left {
-      display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
-    }
-    
-    /* Custom Checkbox */
-    .task-checkbox-btn {
-      width: 22px; height: 22px; border-radius: 6px;
-      border: 2px solid rgba(0, 242, 254, 0.5);
-      background: rgba(0, 242, 254, 0.05);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: all 0.2s; flex-shrink: 0;
-      color: transparent;
-    }
-    .task-checkbox-btn:hover {
-      border-color: var(--cyan);
-      box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
-    }
-    .task-item-card.completed .task-checkbox-btn {
-      background: var(--green); border-color: var(--green);
-      color: #030508; box-shadow: 0 0 12px rgba(0, 255, 136, 0.5);
-    }
-
-    .task-details {
-      display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;
-    }
-    .task-title-text {
-      font-size: 0.85rem; font-weight: 500; color: #ffffff;
-      word-break: break-word; transition: all 0.2s;
-    }
-    .task-item-card.completed .task-title-text {
-      text-decoration: line-through; color: var(--text-dim);
-    }
-    .task-meta-row {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .task-badge-cat {
-      font-size: 0.6rem; font-family: var(--mono); color: var(--cyan);
-      background: rgba(0, 242, 254, 0.08); border-radius: 6px;
-      padding: 1px 6px; border: 1px solid rgba(0, 242, 254, 0.2);
-    }
-    .task-badge-prio {
-      font-size: 0.6rem; font-family: var(--mono); border-radius: 6px;
-      padding: 1px 6px;
-    }
-    .prio-high { color: var(--red); background: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.3); }
-    .prio-medium { color: var(--amber); background: rgba(255, 170, 0, 0.1); border: 1px solid rgba(255, 170, 0, 0.3); }
-    .prio-low { color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); }
-
-    .task-delete-btn {
-      background: none; border: none; color: var(--text-dim);
-      cursor: pointer; padding: 4px; border-radius: 6px;
-      transition: all 0.2s; opacity: 0.4;
-    }
-    .task-item-card:hover .task-delete-btn { opacity: 1; }
-    .task-delete-btn:hover {
-      color: var(--red); background: rgba(255, 51, 102, 0.15);
-    }
-
-    /* ── Expandable Day Card & Accordion Styling ── */
-    .day-accordion-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      border-radius: 14px;
-      overflow: hidden;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-bottom: 10px;
-    }
-    .day-accordion-card:hover {
-      border-color: rgba(0, 242, 254, 0.3);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    }
-    .day-accordion-card.is-today {
-      border-color: rgba(0, 255, 136, 0.4);
-      background: rgba(0, 255, 136, 0.02);
-    }
-    .day-accordion-card.is-today .day-acc-title {
-      color: var(--green);
-    }
-    .day-accordion-card.expanded {
-      border-color: rgba(0, 242, 254, 0.4);
-      background: rgba(13, 22, 44, 0.5);
-    }
-
-    .day-acc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 16px; cursor: pointer; user-select: none;
-      background: rgba(255, 255, 255, 0.015);
-      gap: 12px;
-    }
-    .day-acc-header:hover {
-      background: rgba(255, 255, 255, 0.04);
-    }
-    .day-acc-left {
-      display: flex; align-items: center; gap: 12px;
-    }
-    .day-acc-badge {
-      width: 38px; height: 38px; border-radius: 10px;
-      background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.25);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-family: var(--mono); font-weight: 700; color: var(--cyan);
-      flex-shrink: 0;
-    }
-    .day-acc-badge .day-acc-num { font-size: 0.95rem; line-height: 1; }
-    .day-acc-badge .day-acc-sub { font-size: 0.5rem; text-transform: uppercase; color: var(--text-dim); }
-
-    .day-acc-title-group {
-      display: flex; flex-direction: column; gap: 2px;
-    }
-    .day-acc-title {
-      font-size: 0.88rem; font-weight: 600; font-family: var(--font); color: #ffffff;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .day-today-tag {
-      font-size: 0.58rem; font-family: var(--mono); color: var(--green);
-      background: rgba(0, 255, 136, 0.12); border: 1px solid rgba(0, 255, 136, 0.3);
-      padding: 1px 6px; border-radius: 10px; font-weight: 700;
-    }
-    .day-acc-count-text {
-      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
-    }
-
-    .day-acc-right {
-      display: flex; align-items: center; gap: 12px;
-    }
-    .day-acc-mini-bar {
-      width: 80px; height: 4px; border-radius: 2px;
-      background: rgba(255, 255, 255, 0.08); overflow: hidden;
-    }
-    .day-acc-mini-fill {
-      height: 100%; border-radius: 2px;
-      background: linear-gradient(90deg, var(--neon-blue), var(--green));
-      transition: width 0.3s;
-    }
-    .day-acc-chevron {
-      color: var(--text-dim); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .day-accordion-card.expanded .day-acc-chevron {
-      transform: rotate(180deg);
-      color: var(--cyan);
-    }
-
-    .day-acc-body {
-      display: none; padding: 12px 16px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      animation: slideDownAcc 0.25s ease-out;
-    }
-    .day-accordion-card.expanded .day-acc-body {
-      display: block;
-    }
-    @keyframes slideDownAcc {
-      from { opacity: 0; transform: translateY(-6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .day-inline-add-row {
-      display: flex; gap: 8px; align-items: center;
-      margin-top: 10px; padding-top: 10px;
-      border-top: 1px dashed rgba(255, 255, 255, 0.08);
-    }
-    .day-inline-input {
-      flex: 1; background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(0, 242, 254, 0.2);
-      border-radius: 8px; padding: 6px 10px;
-      color: #ffffff; font-family: var(--font); font-size: 0.78rem; outline: none;
-    }
-    .day-inline-input:focus {
-      border-color: var(--cyan);
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    /* View Switcher Pills */
-    .view-mode-tabs {
-      display: flex; gap: 8px; align-items: center;
-    }
-    .view-mode-btn {
-      display: flex; align-items: center; gap: 5px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px; padding: 4px 12px;
-      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
-      cursor: pointer; transition: all 0.2s;
-    }
-    .view-mode-btn:hover {
-      background: rgba(0, 242, 254, 0.1); color: #ffffff;
-    }
-    .view-mode-btn.active {
-      background: rgba(0, 242, 254, 0.18);
-      border-color: var(--cyan);
-      color: var(--cyan); font-weight: 700;
-      box-shadow: 0 0 10px rgba(0, 242, 254, 0.25);
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 1080px) {
-      .hud-middle { grid-template-columns: 1fr; }
-      .left-hud-column, .transcriptions-card { display: none; }
-      .center-hud { max-width: 90%; }
-      #hud-shell { padding: 12px; }
-      .task-modal-body { grid-template-columns: 1fr; }
-      .task-analytics-col { display: none; }
-    }
-  </style>
 </head>
-
 <body>
-  <!-- 3D WebGL Canvas Layer -->
-  <div id="canvas-container">
-    <canvas id="canvas3d"></canvas>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SPLASH / BOOT SCREEN
+       ══════════════════════════════════════════════════════════ -->
+  <div id="splash-screen">
+    <div class="splash-logo">V</div>
+    <div class="splash-text">VISION</div>
+    <div class="splash-status">
+      <div class="splash-spinner"></div>
+      <span id="splash-status-text">Initializing Neural Core...</span>
+    </div>
+    <div class="splash-progress">
+      <div class="splash-progress-fill" id="splash-progress-fill"></div>
+    </div>
   </div>
 
-  <div class="vignette"></div>
-  <div class="hud-grid"></div>
 
-  <!-- HUD Interface Layer -->
-  <div id="hud-shell">
-    
-    <!-- Top Header -->
-    <header class="hud-header">
-      <div class="brand">
-        <div class="brand-core">
-          <i data-lucide="sparkles" class="icon-md"></i>
-        </div>
-        <span class="brand-title">VISION</span>
-        <span class="brand-tag">AUTONOMOUS OS</span>
-      </div>
+  <!-- ══════════════════════════════════════════════════════════
+       APP SHELL
+       ══════════════════════════════════════════════════════════ -->
+  <div id="app-shell">
 
-      <div class="header-controls">
-        <!-- Task Tracker & Excel Button -->
-        <button class="task-tracker-btn" id="task-tracker-toggle-btn" title="Open Dynamic Task Tracker & Excel Dashboard">
-          <i data-lucide="check-square" class="icon-sm"></i>
-          <span>TASK TRACKER & EXCEL</span>
-        </button>
-
-        <!-- Mute Kill-Switch Button -->
-        <button class="mute-toggle-btn" id="mute-btn" title="Mute Microphone (VISION will not listen)">
-          <span id="mute-icon-container">
-            <i data-lucide="mic" class="icon-sm"></i>
-          </span>
-          <span id="mute-label">MUTE: OFF</span>
-        </button>
-
-        <!-- Hands-Free VAD Toggle Button -->
-        <button class="handsfree-toggle-btn" id="handsfree-btn" title="Toggle Continuous Hands-Free VAD Listening">
-          <div class="vad-indicator-dot"></div>
-          <span id="handsfree-status-label">HANDS-FREE VAD: ON</span>
-        </button>
-
-        <div class="hud-status-badge">
-          <div class="status-dot" id="status-indicator"></div>
-          <span id="system-status-text">ONLINE</span>
+    <!-- ── Sidebar Navigation ──────────────────────────────── -->
+    <nav id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">V</div>
+        <div class="sidebar-brand">
+          <span class="sidebar-brand-name">Vision</span>
+          <span class="sidebar-brand-sub">AI Voice OS</span>
         </div>
       </div>
-    </header>
 
-    <!-- Middle Stage -->
-    <div class="hud-middle">
-      
-      <!-- Left Column: System Vitals + Autonomous Monitor -->
-      <div class="left-hud-column">
-        
-        <!-- Top: System Vitals -->
-        <div class="telemetry-card">
-          <div class="card-title">
-            <div class="title-left">
-              <i data-lucide="activity" class="icon-sm"></i>
-              <span>SYSTEM VITALS</span>
-            </div>
+      <div class="sidebar-nav">
+        <div class="nav-section-label">Core</div>
+        <div class="nav-item active" data-page="voice" id="nav-voice">
+          <span class="nav-icon"><i data-lucide="radio" class="icon-sm"></i></span>
+          <span class="nav-label">Voice HUD</span>
+        </div>
+        <div class="nav-item" data-page="chat" id="nav-chat">
+          <span class="nav-icon"><i data-lucide="message-square" class="icon-sm"></i></span>
+          <span class="nav-label">Chat</span>
+        </div>
+
+        <div class="nav-section-label">Analytics</div>
+        <div class="nav-item" data-page="dashboard" id="nav-dashboard">
+          <span class="nav-icon"><i data-lucide="bar-chart-3" class="icon-sm"></i></span>
+          <span class="nav-label">Dashboard</span>
+        </div>
+        <div class="nav-item" data-page="memory" id="nav-memory">
+          <span class="nav-icon"><i data-lucide="brain" class="icon-sm"></i></span>
+          <span class="nav-label">Memory</span>
+        </div>
+
+        <div class="nav-section-label">System</div>
+        <div class="nav-item" data-page="tools" id="nav-tools">
+          <span class="nav-icon"><i data-lucide="wrench" class="icon-sm"></i></span>
+          <span class="nav-label">Tools</span>
+          <span class="nav-badge" id="tools-count">--</span>
+        </div>
+        <div class="nav-item" id="task-tracker-toggle-btn">
+          <span class="nav-icon"><i data-lucide="check-square" class="icon-sm"></i></span>
+          <span class="nav-label">Task Tracker</span>
+        </div>
+      </div>
+
+      <div class="sidebar-status">
+        <div class="sidebar-status-dot" id="sidebar-status-dot"></div>
+        <span id="sidebar-uptime">--:--:--</span>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-toggle" id="sidebar-collapse-btn">
+          <i data-lucide="panel-left-close" class="icon-sm"></i>
+          <span class="nav-label">Collapse</span>
+        </button>
+      </div>
+    </nav>
+
+
+    <!-- ── Main Content ────────────────────────────────────── -->
+    <div id="main-content">
+
+      <!-- Status Bar -->
+      <header id="status-bar">
+        <div class="status-left">
+          <div class="status-indicator">
+            <div class="status-dot" id="status-indicator"></div>
+            <span id="system-status-text">ONLINE</span>
+          </div>
+          <div class="status-chip" id="telemetry-uptime-chip">
+            <i data-lucide="clock" class="icon-xs"></i>
             <span id="telemetry-uptime">00:00:00</span>
           </div>
-          <div class="stat-row">
-            <div class="stat-label-row">
-              <div class="stat-name-wrap">
-                <i data-lucide="cpu" class="icon-sm"></i>
-                <span>QUANTUM CPU</span>
-              </div>
-              <span class="stat-val" id="cpu-stat">0%</span>
-            </div>
-            <div class="stat-bar-track">
-              <div class="stat-bar-fill" id="cpu-bar" style="width: 0%;"></div>
-            </div>
-          </div>
-          <div class="stat-row">
-            <div class="stat-label-row">
-              <div class="stat-name-wrap">
-                <i data-lucide="hard-drive" class="icon-sm"></i>
-                <span>NEURAL MEMORY</span>
-              </div>
-              <span class="stat-val" id="ram-stat">0 / 0 GB</span>
-            </div>
-            <div class="stat-bar-track">
-              <div class="stat-bar-fill" id="ram-bar" style="width: 0%;"></div>
-            </div>
-          </div>
-          <div class="stat-row">
-            <div class="stat-label-row">
-              <div class="stat-name-wrap">
-                <i data-lucide="database" class="icon-sm"></i>
-                <span>CAG / MAG NODES</span>
-              </div>
-              <span class="stat-val" id="memory-nodes-stat">0 Memories</span>
-            </div>
-            <div class="stat-bar-track">
-              <div class="stat-bar-fill" id="nodes-bar" style="width: 25%;"></div>
-            </div>
-          </div>
-          <div class="stat-row">
-            <div class="stat-label-row">
-              <div class="stat-name-wrap">
-                <i data-lucide="battery-charging" class="icon-sm"></i>
-                <span>BATTERY CELL</span>
-              </div>
-              <span class="stat-val" id="battery-stat">--</span>
-            </div>
-            <div class="stat-bar-track">
-              <div class="stat-bar-fill" id="battery-bar" style="width: 100%;"></div>
-            </div>
-          </div>
         </div>
 
-        <!-- Bottom: Autonomous Action Monitor -->
-        <div class="actions-card">
-          <div class="actions-header">
-            <span class="actions-header-title">
-              <i data-lucide="layers" class="icon-sm"></i>
-              <span>AUTONOMOUS MONITOR</span>
-            </span>
-            <span class="actions-header-count" id="active-tools-count">28 Tools</span>
+        <div class="status-right">
+          <!-- Mute Control -->
+          <button class="header-btn active-hud" id="mute-btn" title="Toggle Mute">
+            <span id="mute-icon-container"><i data-lucide="mic" class="icon-sm"></i></span>
+            <span class="nav-label" id="mute-label">MUTE: OFF</span>
+          </button>
+
+          <!-- Hands-Free VAD -->
+          <button class="header-btn accent-green" id="handsfree-btn" title="Toggle Hands-Free VAD">
+            <div class="vad-dot"></div>
+            <span class="nav-label" id="handsfree-status-label">HANDS-FREE VAD: ON</span>
+          </button>
+
+          <!-- Command Palette Trigger -->
+          <div class="cmd-palette-trigger" id="cmd-palette-trigger" title="Open Command Palette">
+            <i data-lucide="search" class="icon-sm"></i>
+            <span>Search...</span>
+            <kbd>Ctrl+K</kbd>
           </div>
-          <div class="actions-list" id="actions-stream">
-            <div class="action-item">
-              <div class="action-icon-box">
-                <i data-lucide="zap" class="icon-sm"></i>
+        </div>
+      </header>
+
+
+      <!-- ── Page Container ──────────────────────────────── -->
+      <div class="page-container">
+
+        <!-- ═══════════════════════════════════════════════════
+             PAGE: Voice HUD (Default)
+             ═══════════════════════════════════════════════════ -->
+        <section id="page-voice" class="page active">
+          <!-- 3D Canvas Background -->
+          <div id="canvas-container">
+            <canvas id="canvas3d"></canvas>
+          </div>
+          <div class="vignette"></div>
+          <div class="hud-grid"></div>
+
+          <div class="voice-hud-layout">
+
+            <!-- Left: System Vitals & Autonomous Monitor -->
+            <div class="voice-left-panel stagger-children">
+              <!-- System Vitals Panel -->
+              <div class="hud-panel">
+                <div class="hud-panel-header">
+                  <span class="hud-panel-title">
+                    <i data-lucide="activity" class="icon-xs"></i>
+                    <span>System Vitals</span>
+                  </span>
+                </div>
+                <div class="hud-panel-body">
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <div class="stat-name-wrap">
+                        <i data-lucide="cpu" class="icon-xs"></i>
+                        <span>CPU LOAD</span>
+                      </div>
+                      <span class="stat-val" id="cpu-stat">0%</span>
+                    </div>
+                    <div class="stat-bar-track">
+                      <div class="stat-bar-fill" id="cpu-bar" style="width: 0%;"></div>
+                    </div>
+                  </div>
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <div class="stat-name-wrap">
+                        <i data-lucide="memory-stick" class="icon-xs"></i>
+                        <span>RAM USAGE</span>
+                      </div>
+                      <span class="stat-val" id="ram-stat">0 / 0 GB</span>
+                    </div>
+                    <div class="stat-bar-track">
+                      <div class="stat-bar-fill" id="ram-bar" style="width: 0%;"></div>
+                    </div>
+                  </div>
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <div class="stat-name-wrap">
+                        <i data-lucide="database" class="icon-xs"></i>
+                        <span>CAG / MAG NODES</span>
+                      </div>
+                      <span class="stat-val" id="memory-nodes-stat">0 Memories</span>
+                    </div>
+                    <div class="stat-bar-track">
+                      <div class="stat-bar-fill" id="nodes-bar" style="width: 25%;"></div>
+                    </div>
+                  </div>
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <div class="stat-name-wrap">
+                        <i data-lucide="battery-charging" class="icon-xs"></i>
+                        <span>BATTERY CELL</span>
+                      </div>
+                      <span class="stat-val" id="battery-stat">--</span>
+                    </div>
+                    <div class="stat-bar-track">
+                      <div class="stat-bar-fill" id="battery-bar" style="width: 100%;"></div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="action-content">
-                <div class="action-name">VISION Engine Initialized</div>
-                <div class="action-desc">Autonomous tools ready (WhatsApp, Web, Files, SSH).</div>
+
+              <!-- Autonomous Action Monitor -->
+              <div class="actions-card">
+                <div class="actions-header">
+                  <span class="actions-header-title">
+                    <i data-lucide="layers" class="icon-xs"></i>
+                    <span>Autonomous Monitor</span>
+                  </span>
+                  <span class="actions-header-count" id="active-tools-count">28 Tools</span>
+                </div>
+                <div class="actions-list" id="actions-stream">
+                  <div class="action-item">
+                    <div class="action-icon-box">
+                      <i data-lucide="zap" class="icon-sm"></i>
+                    </div>
+                    <div class="action-content">
+                      <div class="action-name">VISION Engine Initialized</div>
+                      <div class="action-desc">Autonomous tools ready (WhatsApp, Web, Files, SSH).</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Center: 3D Orb Stage -->
+            <div class="voice-center">
+              <div class="orb-hitbox" id="orb-hitbox" title="Toggle Mute / Mic"></div>
+              <div class="voice-waveform-wrap" id="voice-waveform-wrap">
+                <canvas id="waveform-canvas" width="280" height="48"></canvas>
+              </div>
+            </div>
+
+            <!-- Right: Live Transcriptions -->
+            <div class="voice-right-panel">
+              <div class="transcriptions-card">
+                <div class="transcriptions-header">
+                  <div class="transcriptions-header-title">
+                    <i data-lucide="message-square" class="icon-xs"></i>
+                    <span>Live Transcriptions</span>
+                  </div>
+                  <div class="transcriptions-header-actions">
+                    <button class="transcriptions-copy-btn" id="copy-transcripts-btn" title="Copy chat transcript as JSON" aria-label="Copy chat transcript as JSON">
+                      <i data-lucide="copy" class="icon-xs"></i>
+                      <span class="copy-btn-text">COPY JSON</span>
+                    </button>
+                    <div class="live-pulse-badge">STREAM</div>
+                  </div>
+                </div>
+
+                <div class="transcriptions-list" id="transcriptions-stream">
+                  <div class="transcript-entry ai">
+                    <div class="transcript-meta">
+                      <span class="transcript-speaker">
+                        <i data-lucide="bot" class="icon-xs"></i>
+                        <span>VISION</span>
+                      </span>
+                      <span class="transcript-time">System</span>
+                    </div>
+                    <div class="transcript-text">VISION is online. Continuous hands-free VAD speech recognition is active.</div>
+                  </div>
+                </div>
+
+                <div class="transcriptions-footer">
+                  <div class="voice-command-bar">
+                    <input type="text" class="hud-input" id="command-input" placeholder="Speak hands-free, or type here..." autocomplete="off">
+                    <button class="hud-send-btn" id="send-command-btn" title="Execute Command">
+                      <i data-lucide="send" class="icon-sm"></i>
+                    </button>
+                    <button class="hud-mic-btn" id="voice-trigger-btn" title="Toggle Mute / Mic">
+                      <span id="main-mic-icon">
+                        <i data-lucide="mic" class="icon-md"></i>
+                      </span>
+                    </button>
+                  </div>
+                  <div class="key-hints">
+                    <span><kbd>M</kbd> Mute</span>
+                    <span><kbd>SPACE</kbd> Mic</span>
+                    <span><kbd>ENTER</kbd> Send</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+
+        <!-- ═══════════════════════════════════════════════════
+             PAGE: Chat
+             ═══════════════════════════════════════════════════ -->
+        <section id="page-chat" class="page">
+          <div id="chat-messages" class="chat-messages">
+            <!-- Messages injected by chat.js -->
+          </div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+              <textarea id="chat-input" rows="1" placeholder="Ask VISION anything..."></textarea>
+              <button class="btn-icon" id="chat-mic" title="Voice Input">
+                <i data-lucide="mic" class="icon-sm"></i>
+              </button>
+              <button class="btn btn-primary btn-sm" id="chat-send">
+                <i data-lucide="send" class="icon-sm"></i>
+                <span>Send</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ═══════════════════════════════════════════════════
+             PAGE: Dashboard
+             ═══════════════════════════════════════════════════ -->
+        <section id="page-dashboard" class="page">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">System Dashboard</h1>
+              <p class="page-subtitle">Real-time monitoring and performance metrics</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <!-- Stat Cards -->
+            <div class="content-grid grid-4 stagger-children" style="margin-bottom: var(--sp-5);">
+              <div class="card">
+                <div class="card-body-compact">
+                  <div class="gauge-container">
+                    <svg width="100" height="100" viewBox="0 0 100 100" id="gauge-cpu">
+                      <circle class="gauge-bg" cx="50" cy="50" r="40" />
+                      <circle class="gauge-fill" cx="50" cy="50" r="40" />
+                    </svg>
+                    <span class="gauge-label" id="gauge-cpu-val">0%</span>
+                  </div>
+                  <div style="text-align:center; margin-top: var(--sp-2);">
+                    <div class="text-sm fw-semibold" id="stat-cpu-val">0%</div>
+                    <div class="text-xs text-muted" id="stat-cpu-label">CPU</div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-body-compact">
+                  <div class="gauge-container">
+                    <svg width="100" height="100" viewBox="0 0 100 100" id="gauge-ram">
+                      <circle class="gauge-bg" cx="50" cy="50" r="40" />
+                      <circle class="gauge-fill" cx="50" cy="50" r="40" />
+                    </svg>
+                    <span class="gauge-label" id="gauge-ram-val">0%</span>
+                  </div>
+                  <div style="text-align:center; margin-top: var(--sp-2);">
+                    <div class="text-sm fw-semibold" id="stat-ram-val">0%</div>
+                    <div class="text-xs text-muted" id="stat-ram-label">RAM</div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-body-compact">
+                  <div class="gauge-container">
+                    <svg width="100" height="100" viewBox="0 0 100 100" id="gauge-bat">
+                      <circle class="gauge-bg" cx="50" cy="50" r="40" />
+                      <circle class="gauge-fill" cx="50" cy="50" r="40" />
+                    </svg>
+                    <span class="gauge-label" id="gauge-bat-val">N/A</span>
+                  </div>
+                  <div style="text-align:center; margin-top: var(--sp-2);">
+                    <div class="text-sm fw-semibold" id="stat-bat-val">N/A</div>
+                    <div class="text-xs text-muted" id="stat-bat-label">Battery</div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-body-compact">
+                  <div style="text-align:center; padding: var(--sp-4);">
+                    <div class="text-2xl fw-bold font-mono" id="stat-disk-val">0%</div>
+                    <div class="text-xs text-muted" id="stat-disk-label">Disk</div>
+                    <div class="text-xs text-muted font-mono" style="margin-top: var(--sp-2);" id="sys-uptime">--</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="content-grid grid-2-1" style="margin-bottom: var(--sp-5);">
+              <!-- CPU Cores -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <i data-lucide="cpu" class="icon-sm"></i>
+                    <span>CPU Per-Core Usage</span>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div id="cpu-cores" style="display:flex;gap:3px;align-items:flex-end;height:80px;"></div>
+                </div>
+              </div>
+
+              <!-- Load Balancer Info -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <i data-lucide="shuffle" class="icon-sm"></i>
+                    <span>Load Balancer</span>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <span class="text-xs text-muted">Strategy</span>
+                      <span class="text-sm fw-medium font-mono" id="lb-strategy">--</span>
+                    </div>
+                  </div>
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <span class="text-xs text-muted">Primary Model</span>
+                      <span class="text-sm fw-medium font-mono" id="lb-primary">--</span>
+                    </div>
+                  </div>
+                  <div class="stat-row">
+                    <div class="stat-label-row">
+                      <span class="text-xs text-muted">Endpoints</span>
+                      <span class="text-sm fw-medium font-mono" id="lb-providers">--</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="content-grid grid-2" style="margin-bottom: var(--sp-5);">
+              <!-- Top Processes -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <i data-lucide="list" class="icon-sm"></i>
+                    <span>Top Processes</span>
+                  </div>
+                </div>
+                <div class="card-body" style="padding:0;">
+                  <div class="table-container">
+                    <table class="data-table">
+                      <thead>
+                        <tr><th>Process</th><th>CPU</th><th>Mem</th></tr>
+                      </thead>
+                      <tbody id="proc-table-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Storage & Network -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <i data-lucide="hard-drive" class="icon-sm"></i>
+                    <span>Storage & Network</span>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div id="storage-list"></div>
+                  <div style="margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border-subtle);">
+                    <div class="stat-row">
+                      <div class="stat-label-row">
+                        <span class="text-xs text-muted">↑ Sent</span>
+                        <span class="text-sm font-mono" id="net-sent">0 MB</span>
+                      </div>
+                    </div>
+                    <div class="stat-row">
+                      <div class="stat-label-row">
+                        <span class="text-xs text-muted">↓ Received</span>
+                        <span class="text-sm font-mono" id="net-recv">0 MB</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-      </div>
 
-      <!-- Center: 3D Orb Stage (Clean & Pure with Voice Waveform) -->
-      <div class="center-hud">
-        <div class="orb-hitbox" id="orb-hitbox" title="Toggle Mute / Mic"></div>
-
-        <!-- Dynamic Holographic Voice Waveform (Active while speaking) -->
-        <div class="voice-waveform-wrap" id="voice-waveform-wrap">
-          <canvas id="waveform-canvas" width="280" height="48"></canvas>
-        </div>
-      </div>
-
-      <!-- Right Column: Live Voice Transcriptions Stream with Integrated Input Bar -->
-      <div class="transcriptions-card">
-        <div class="transcriptions-header">
-          <div class="transcriptions-header-title">
-            <i data-lucide="message-square" class="icon-sm"></i>
-            <span>LIVE TRANSCRIPTIONS</span>
-          </div>
-          <div class="transcriptions-header-actions">
-            <button class="transcriptions-copy-btn" id="copy-transcripts-btn" title="Copy entire chat transcript as JSON" aria-label="Copy chat transcript as JSON">
-              <i data-lucide="copy" class="icon-xs"></i>
-              <span class="copy-btn-text">COPY JSON</span>
-            </button>
-            <div class="live-pulse-badge">STREAM</div>
-          </div>
-        </div>
-        
-        <div class="transcriptions-list" id="transcriptions-stream">
-          <div class="transcript-entry ai">
-            <div class="transcript-meta">
-              <span class="transcript-speaker">
-                <i data-lucide="bot" class="icon-sm"></i>
-                <span>VISION</span>
-              </span>
-              <span class="transcript-time">System</span>
+        <!-- ═══════════════════════════════════════════════════
+             PAGE: Memory Explorer
+             ═══════════════════════════════════════════════════ -->
+        <section id="page-memory" class="page">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Memory Explorer</h1>
+              <p class="page-subtitle">Semantic memories, episodic events, and knowledge graph</p>
             </div>
-            <div class="transcript-text">VISION is online. Continuous hands-free VAD speech recognition is active.</div>
+            <div style="display:flex; gap: var(--sp-2);">
+              <button class="btn btn-primary btn-sm" id="memory-add-btn">
+                <i data-lucide="plus" class="icon-sm"></i>
+                <span>Add Memory</span>
+              </button>
+            </div>
           </div>
-        </div>
+          <div class="page-body">
+            <div class="content-grid grid-2-1" style="margin-bottom: var(--sp-5);">
+              <!-- Memories List -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <i data-lucide="brain" class="icon-sm"></i>
+                    <span>Semantic Memories</span>
+                  </div>
+                  <div class="search-bar" style="width: 220px;">
+                    <i data-lucide="search" class="icon-sm search-icon"></i>
+                    <input class="input-field" id="memory-search" placeholder="Search memories...">
+                  </div>
+                </div>
+                <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                  <div id="memory-list"></div>
+                </div>
+              </div>
 
-        <!-- Integrated Command Bar inside Live Transcriptions Sidebar -->
-        <div class="transcriptions-footer">
-          <div class="voice-command-bar">
-            <input type="text" class="hud-input" id="command-input" placeholder="Speak hands-free, or type here..." autocomplete="off">
-            <button class="hud-send-btn" id="send-command-btn" title="Execute Command">
-              <i data-lucide="send" class="icon-sm"></i>
-            </button>
-            <button class="hud-mic-btn" id="voice-trigger-btn" title="Toggle Mute / Mic">
-              <span id="main-mic-icon">
-                <i data-lucide="mic" class="icon-md"></i>
-              </span>
-            </button>
+              <!-- Episodic + CAG -->
+              <div style="display:flex; flex-direction:column; gap: var(--sp-5);">
+                <div class="card">
+                  <div class="card-header">
+                    <div class="card-title">
+                      <i data-lucide="git-commit" class="icon-sm"></i>
+                      <span>Episodic Timeline</span>
+                    </div>
+                  </div>
+                  <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+                    <div id="episodic-timeline"></div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-header">
+                    <div class="card-title">
+                      <i data-lucide="database" class="icon-sm"></i>
+                      <span>CAG Cache</span>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="content-grid grid-2" style="gap: var(--sp-3);">
+                      <div>
+                        <div class="text-xs text-muted">Entries</div>
+                        <div class="text-md fw-bold font-mono" id="cag-entries">0</div>
+                      </div>
+                      <div>
+                        <div class="text-xs text-muted">Capacity</div>
+                        <div class="text-md fw-bold font-mono" id="cag-capacity">500</div>
+                      </div>
+                      <div>
+                        <div class="text-xs text-muted">Hits</div>
+                        <div class="text-md fw-bold font-mono text-success" id="cag-hits">0</div>
+                      </div>
+                      <div>
+                        <div class="text-xs text-muted">Misses</div>
+                        <div class="text-md fw-bold font-mono" id="cag-misses">0</div>
+                      </div>
+                    </div>
+                    <div style="margin-top: var(--sp-3);">
+                      <div class="text-xs text-muted">Hit Ratio</div>
+                      <div class="text-lg fw-bold font-mono text-accent" id="cag-ratio">0%</div>
+                    </div>
+                    <svg width="100%" height="80" viewBox="0 0 100 100" id="cag-donut" style="margin-top:var(--sp-3);">
+                      <circle class="gauge-bg" cx="50" cy="50" r="35" />
+                      <circle class="donut-fill gauge-fill" cx="50" cy="50" r="35" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Knowledge Graph -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">
+                  <i data-lucide="share-2" class="icon-sm"></i>
+                  <span>Knowledge Graph</span>
+                </div>
+              </div>
+              <div class="card-body" style="height: 280px;">
+                <canvas id="knowledge-graph-canvas" style="width:100%;height:100%;"></canvas>
+              </div>
+            </div>
+
+            <!-- Working Memory -->
+            <div class="card" style="margin-top: var(--sp-5);">
+              <div class="card-header">
+                <div class="card-title">
+                  <i data-lucide="folder-open" class="icon-sm"></i>
+                  <span>Working Memory</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="content-grid grid-4" style="gap: var(--sp-3);">
+                  <div>
+                    <div class="text-xs text-muted">Recent Files</div>
+                    <div class="text-md fw-bold font-mono" id="wm-files">0</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-muted">Indexed Files</div>
+                    <div class="text-md fw-bold font-mono" id="wm-indexed">0</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-muted">Last Directory</div>
+                    <div class="text-sm font-mono truncate" id="wm-last-dir">None</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-muted">Last App</div>
+                    <div class="text-sm font-mono truncate" id="wm-last-app">None</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="key-hints">
-            <span><kbd>M</kbd> Mute</span>
-            <span><kbd>SPACE</kbd> Mic</span>
-            <span><kbd>ENTER</kbd> Send</span>
+        </section>
+
+
+        <!-- ═══════════════════════════════════════════════════
+             PAGE: Tools
+             ═══════════════════════════════════════════════════ -->
+        <section id="page-tools" class="page">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Tool Arsenal</h1>
+              <p class="page-subtitle">Execute autonomous tools and view capabilities</p>
+            </div>
           </div>
-        </div>
-      </div>
+          <div class="page-body">
+            <div class="search-bar" style="margin-bottom: var(--sp-5); max-width: 400px;">
+              <i data-lucide="search" class="icon-sm search-icon"></i>
+              <input class="input-field" id="tools-search" placeholder="Search tools by name, category...">
+            </div>
+            <div id="tools-grid" class="tools-grid"></div>
+            <div id="tool-exec-panel" style="display:none; margin-top: var(--sp-5);"></div>
+          </div>
+        </section>
 
-    </div>
+      </div><!-- /page-container -->
+    </div><!-- /main-content -->
+  </div><!-- /app-shell -->
 
-  </div>
 
-  <!-- ══════════════════════════════════════════════════════════════
-       VISION DYNAMIC TASK TRACKER & EXCEL DASHBOARD MODAL
-       ══════════════════════════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════════════════
+       TASK TRACKER MODAL
+       ══════════════════════════════════════════════════════════ -->
   <div id="task-tracker-modal" class="task-modal-backdrop">
     <div class="task-modal-card">
       <div class="task-modal-header">
@@ -1329,12 +664,11 @@
             <i data-lucide="sparkles" class="icon-md"></i>
           </div>
           <div>
-            <div class="task-modal-heading">VISION TASK TRACKER & PRODUCTIVITY HUD</div>
-            <div class="task-modal-sub">Dual-Control Voice OS & Colorful Excel Workbook Sync</div>
+            <div class="task-modal-heading">VISION TASK TRACKER</div>
+            <div class="task-modal-sub">Productivity Dashboard & Excel Sync</div>
           </div>
         </div>
         <div class="task-modal-top-actions">
-          <!-- Month Picker -->
           <select id="task-month-select" class="task-select">
             <option value="January">January</option>
             <option value="February">February</option>
@@ -1349,12 +683,11 @@
             <option value="November">November</option>
             <option value="December">December</option>
           </select>
-
-          <button class="task-btn task-btn-green" id="open-excel-btn" title="Open the .xlsx file on your computer">
+          <button class="task-btn task-btn-green" id="open-excel-btn" title="Open .xlsx file">
             <i data-lucide="file-spreadsheet" class="icon-sm"></i>
             <span>OPEN IN EXCEL</span>
           </button>
-          <button class="task-btn task-btn-cyan" id="sync-excel-btn" title="Regenerate & sync Excel workbook">
+          <button class="task-btn task-btn-cyan" id="sync-excel-btn" title="Sync Excel workbook">
             <i data-lucide="refresh-cw" class="icon-sm"></i>
             <span>SYNC EXCEL</span>
           </button>
@@ -1364,18 +697,15 @@
         </div>
       </div>
 
-      <!-- 31-Day Timeline Bar -->
+      <!-- Day Timeline Bar -->
       <div class="task-days-timeline-wrap">
-        <div class="task-days-timeline" id="task-days-bar">
-          <!-- Injected via JS: Day 1 to 31 -->
-        </div>
+        <div class="task-days-timeline" id="task-days-bar"></div>
       </div>
 
-      <!-- Main Modal Split Grid -->
+      <!-- Modal Body -->
       <div class="task-modal-body">
-        <!-- Left Column: Live Analytics & Dynamic Pie/Donut Chart -->
+        <!-- Left: Analytics -->
         <div class="task-analytics-col">
-          <!-- KPI Cards -->
           <div class="task-kpi-grid">
             <div class="task-kpi-card">
               <span class="task-kpi-val text-cyan" id="kpi-streak">0 🔥</span>
@@ -1395,40 +725,29 @@
             </div>
           </div>
 
-          <!-- LeetCode & Problem Solving Daily Priority Habit Card -->
+          <!-- LeetCode Card -->
           <div class="task-leetcode-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 1.25rem;">🔥</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:1.25rem;">🔥</span>
                 <div>
-                  <div style="font-size: 0.76rem; font-weight: 800; color: #FFA116; font-family: var(--font); letter-spacing: 0.5px;">
-                    LEETCODE & CODING HABIT
-                  </div>
-                  <div style="font-size: 0.62rem; color: #94a3b8; font-family: var(--mono);">
-                    Daily Problem Solving (LeetCode / GFG / CodeChef)
-                  </div>
+                  <div class="text-xs fw-extrabold" style="color:#FFA116; letter-spacing:0.5px;">LEETCODE & CODING HABIT</div>
+                  <div class="text-2xs text-muted font-mono">Daily Problem Solving (LeetCode / GFG / CodeChef)</div>
                 </div>
               </div>
-              <div class="task-leetcode-streak-badge" id="leetcode-streak-badge">
-                0 DAYS 🔥
-              </div>
+              <div class="task-leetcode-streak-badge" id="leetcode-streak-badge">0 DAYS 🔥</div>
             </div>
-
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 7px 10px; background: rgba(0,0,0,0.35); border-radius: 8px; border: 1px solid rgba(255,161,22,0.25);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px; padding:7px 10px; background:rgba(0,0,0,0.35); border-radius:8px; border:1px solid rgba(255,161,22,0.25);">
               <div>
-                <div style="font-size: 0.64rem; color: #94a3b8;">Today's LeetCode Status:</div>
-                <div style="font-size: 0.78rem; font-weight: 700; font-family: var(--mono);" id="leetcode-today-status">
-                  ⏳ Pending
-                </div>
+                <div class="text-2xs text-muted">Today's LeetCode Status:</div>
+                <div class="text-sm fw-bold font-mono" id="leetcode-today-status">⏳ Pending</div>
               </div>
-              <button type="button" class="task-btn" id="btn-quick-solve-leetcode" style="background: linear-gradient(135deg, #FFA116, #FF6B00); color: #000; font-weight: 800; padding: 5px 11px; font-size: 0.68rem; border-radius: 6px; box-shadow: 0 0 10px rgba(255,161,22,0.35); border: none;">
-                <i data-lucide="check" class="icon-xs" style="stroke-width: 3;"></i>
+              <button type="button" class="task-btn" id="btn-quick-solve-leetcode" style="background:linear-gradient(135deg,#FFA116,#FF6B00); color:#000; font-weight:800; padding:5px 11px; font-size:0.68rem; border-radius:6px; box-shadow:0 0 10px rgba(255,161,22,0.35); border:none;">
+                <i data-lucide="check" class="icon-xs" style="stroke-width:3;"></i>
                 <span id="btn-quick-solve-text">MARK SOLVED</span>
               </button>
             </div>
-
-            <!-- Quick Platform Jump Links -->
-            <div style="display: flex; gap: 6px; margin-top: 6px;">
+            <div style="display:flex; gap:6px; margin-top:6px;">
               <a href="https://leetcode.com/problemset/" target="_blank" rel="noopener noreferrer" class="platform-link-btn" title="Open LeetCode">
                 <i data-lucide="code" class="icon-xs"></i> LeetCode
               </a>
@@ -1441,10 +760,10 @@
             </div>
           </div>
 
-          <!-- Chart Container -->
+          <!-- Chart -->
           <div class="task-chart-card">
             <div class="task-chart-header">
-              <i data-lucide="pie-chart" class="icon-sm"></i>
+              <i data-lucide="pie-chart" class="icon-xs"></i>
               <span>COMPLETION RATIO (MONTH)</span>
             </div>
             <div class="task-chart-canvas-wrap">
@@ -1455,35 +774,31 @@
           <!-- Category Breakdown -->
           <div class="task-categories-card">
             <div class="task-chart-header">
-              <i data-lucide="folder-kanban" class="icon-sm"></i>
+              <i data-lucide="folder-kanban" class="icon-xs"></i>
               <span>CATEGORY BREAKDOWN</span>
             </div>
-            <div id="task-category-breakdown" style="display: flex; flex-direction: column; gap: 8px;">
-              <!-- Injected via JS -->
-            </div>
+            <div id="task-category-breakdown" style="display:flex; flex-direction:column; gap:8px;"></div>
           </div>
         </div>
 
-        <!-- Right Column: Interactive Checklist & Expandable Month View -->
+        <!-- Right: Task List -->
         <div class="task-list-col">
-          <!-- View Switcher & Expand All Controls -->
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:1px solid var(--border-subtle); padding-bottom:10px;">
             <div class="view-mode-tabs">
-              <button type="button" class="view-mode-btn active" id="view-mode-expandable" title="View all 31 days of the month with expandable cards">
+              <button type="button" class="view-mode-btn active" id="view-mode-expandable" title="Expandable 31-day month view">
                 <i data-lucide="calendar" class="icon-xs"></i>
-                <span>EXPANDABLE MONTH VIEW</span>
+                <span>MONTH VIEW</span>
               </button>
-              <button type="button" class="view-mode-btn" id="view-mode-single" title="Focus on single selected day">
+              <button type="button" class="view-mode-btn" id="view-mode-single" title="Single day focus">
                 <i data-lucide="target" class="icon-xs"></i>
-                <span>SINGLE DAY VIEW</span>
+                <span>DAY VIEW</span>
               </button>
             </div>
-            
-            <div style="display: flex; align-items: center; gap: 6px;" id="expand-collapse-actions">
-              <button type="button" class="task-filter-pill" id="btn-expand-all" title="Expand all day cards">
+            <div style="display:flex; align-items:center; gap:6px;" id="expand-collapse-actions">
+              <button type="button" class="task-filter-pill" id="btn-expand-all" title="Expand all">
                 <i data-lucide="chevrons-down" class="icon-xs"></i> Expand All
               </button>
-              <button type="button" class="task-filter-pill" id="btn-collapse-all" title="Collapse all day cards">
+              <button type="button" class="task-filter-pill" id="btn-collapse-all" title="Collapse all">
                 <i data-lucide="chevrons-up" class="icon-xs"></i> Collapse All
               </button>
             </div>
@@ -1491,10 +806,8 @@
 
           <!-- Add Task Form -->
           <form class="task-add-form" id="task-add-form">
-            <input type="text" id="new-task-title" class="task-input" placeholder="Add task or habit (e.g. Daily Gym, Code Review)..." required autocomplete="off">
-            <select id="new-task-day-select" class="task-select-sm" title="Select Day (1-31)">
-              <!-- Populated via JS with Days 1..31 -->
-            </select>
+            <input type="text" id="new-task-title" class="task-input" placeholder="Add task or habit..." required autocomplete="off">
+            <select id="new-task-day-select" class="task-select-sm" title="Select Day (1-31)"></select>
             <select id="new-task-category" class="task-select-sm">
               <option value="General">General</option>
               <option value="Coding">Coding</option>
@@ -1514,1932 +827,60 @@
             </button>
           </form>
 
-          <!-- Filter & Info Bar -->
+          <!-- Filters -->
           <div class="task-filters-bar">
             <div class="task-filters-left">
               <button type="button" class="task-filter-pill active" data-filter="all">All Tasks</button>
               <button type="button" class="task-filter-pill" data-filter="pending">Pending</button>
               <button type="button" class="task-filter-pill" data-filter="completed">Completed</button>
             </div>
-            <div class="task-active-date-label" id="task-current-viewing-label">
-              August 2026 (31 Days)
-            </div>
+            <div class="task-active-date-label" id="task-current-viewing-label">August 2026 (31 Days)</div>
           </div>
 
-          <!-- Scrollable Task Items / Expandable Accordions Container -->
-          <div class="task-items-container" id="task-items-list">
-            <!-- Injected via JS: Accordion cards for Days 1..31 or Single Day list -->
-          </div>
+          <!-- Task Items -->
+          <div class="task-items-container" id="task-items-list"></div>
         </div>
       </div>
     </div>
   </div>
 
+
+  <!-- ══════════════════════════════════════════════════════════
+       COMMAND PALETTE
+       ══════════════════════════════════════════════════════════ -->
+  <div id="command-palette">
+    <div class="cmd-palette-box">
+      <div class="cmd-palette-input-wrapper">
+        <i data-lucide="search" class="icon-md search-icon"></i>
+        <input class="cmd-palette-input" id="cmd-palette-input" placeholder="Type a command or search..." autocomplete="off">
+      </div>
+      <div class="cmd-palette-results" id="cmd-palette-results"></div>
+      <div class="cmd-palette-footer">
+        <span><kbd>↑↓</kbd> Navigate</span>
+        <span><kbd>Enter</kbd> Select</span>
+        <span><kbd>Esc</kbd> Close</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       JAVASCRIPT MODULES
+       ══════════════════════════════════════════════════════════ -->
   <script src="js/websocket.js"></script>
+  <script src="js/orb.js"></script>
+  <script src="js/voice-engine.js"></script>
+  <script src="js/transcript.js"></script>
+  <script src="js/task-tracker.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/memory.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/app.js"></script>
 
-  <script>
-    /* ══════════════════════════════════════════════════════════════
-       VISION Cinematic 3D Quantum Energy Orb (WebGL / Three.js)
-       ══════════════════════════════════════════════════════════════ */
-    /* ══════════════════════════════════════════════════════════════
-       VISION Masterpiece 3D Quantum Plasma Supernova Orb (Three.js)
-       ══════════════════════════════════════════════════════════════ */
-    let scene, camera, renderer;
-    let orbGroup, particleSphere, coronaDust, plasmaCore, outerRings = [], satellites = [];
-    let noiseVal = 0;
-    let agentState = 'idle'; // idle | listening | thinking | executing | speaking | muted
-    let audioFrequencyData = new Uint8Array(32);
-
-    function init3DOrb() {
-      const container = document.getElementById('canvas-container');
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-      camera.position.z = 4.6;
-
-      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), alpha: true, antialias: true });
-      renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-      orbGroup = new THREE.Group();
-      scene.add(orbGroup);
-
-      // High-precision radial particle glow texture
-      const pTexture = createParticleTexture();
-
-      // ── 1. High-Density Quantum Particle Matrix (4,000 Nodes) ──
-      const particleCount = 4000;
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(particleCount * 3);
-      const originalPositions = new Float32Array(particleCount * 3);
-      const colors = new Float32Array(particleCount * 3);
-      const phases = new Float32Array(particleCount);
-
-      const colCyan = new THREE.Color(0x00f2fe);
-      const colBlue = new THREE.Color(0x38bdf8);
-      const colPurple = new THREE.Color(0x7f00ff);
-      const colMagenta = new THREE.Color(0xec4899);
-      const colGreen = new THREE.Color(0x00ff88);
-
-      for (let i = 0; i < particleCount; i++) {
-        // Golden Ratio Fibonacci distribution with compact volumetric thickness
-        const phi = Math.acos(-1 + (2 * i) / particleCount);
-        const theta = Math.sqrt(particleCount * Math.PI) * phi;
-        
-        const shell = 0.88 + (i % 5) * 0.05;
-        const radius = 0.94 * shell;
-
-        const x = radius * Math.cos(theta) * Math.sin(phi);
-        const y = radius * Math.sin(theta) * Math.sin(phi);
-        const z = radius * Math.cos(phi);
-
-        positions[i * 3] = x;
-        positions[i * 3 + 1] = y;
-        positions[i * 3 + 2] = z;
-
-        originalPositions[i * 3] = x;
-        originalPositions[i * 3 + 1] = y;
-        originalPositions[i * 3 + 2] = z;
-
-        phases[i] = Math.random() * Math.PI * 2;
-
-        // Rich Multi-stop Chromatic Gradient
-        let mixedColor;
-        const norm = i / particleCount;
-        if (norm < 0.35) {
-          mixedColor = colCyan.clone().lerp(colBlue, norm * 2.85);
-        } else if (norm < 0.7) {
-          mixedColor = colBlue.clone().lerp(colPurple, (norm - 0.35) * 2.85);
-        } else if (norm < 0.9) {
-          mixedColor = colPurple.clone().lerp(colMagenta, (norm - 0.7) * 5.0);
-        } else {
-          mixedColor = colMagenta.clone().lerp(colGreen, (norm - 0.9) * 10.0);
-        }
-
-        colors[i * 3] = mixedColor.r;
-        colors[i * 3 + 1] = mixedColor.g;
-        colors[i * 3 + 2] = mixedColor.b;
-      }
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      geometry.userData = { originalPositions, phases };
-
-      const particleMat = new THREE.PointsMaterial({
-        size: 0.048,
-        map: pTexture,
-        transparent: true,
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-
-      particleSphere = new THREE.Points(geometry, particleMat);
-      orbGroup.add(particleSphere);
-
-      // ── 2. Ethereal Cosmic Corona Dust (1,200 Floating Star Particles) ──
-      const dustCount = 1200;
-      const dustGeo = new THREE.BufferGeometry();
-      const dustPos = new Float32Array(dustCount * 3);
-      const dustColors = new Float32Array(dustCount * 3);
-      const dustOrig = new Float32Array(dustCount * 3);
-
-      for (let i = 0; i < dustCount; i++) {
-        const u = Math.random();
-        const v = Math.random();
-        const theta = u * 2.0 * Math.PI;
-        const phi = Math.acos(2.0 * v - 1.0);
-        const r = 1.05 + Math.random() * 0.45;
-
-        const x = r * Math.sin(phi) * Math.cos(theta);
-        const y = r * Math.sin(phi) * Math.sin(theta);
-        const z = r * Math.cos(phi);
-
-        dustPos[i * 3] = x; dustPos[i * 3 + 1] = y; dustPos[i * 3 + 2] = z;
-        dustOrig[i * 3] = x; dustOrig[i * 3 + 1] = y; dustOrig[i * 3 + 2] = z;
-
-        const dustCol = Math.random() > 0.5 ? colCyan : colPurple;
-        dustColors[i * 3] = dustCol.r;
-        dustColors[i * 3 + 1] = dustCol.g;
-        dustColors[i * 3 + 2] = dustCol.b;
-      }
-
-      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-      dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
-      dustGeo.userData = { originalPositions: dustOrig };
-
-      const dustMat = new THREE.PointsMaterial({
-        size: 0.030,
-        map: pTexture,
-        transparent: true,
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
-        opacity: 0.75,
-        depthWrite: false
-      });
-      coronaDust = new THREE.Points(dustGeo, dustMat);
-      orbGroup.add(coronaDust);
-
-      // ── 3. Concentric White-Hot Supernova Plasma Nucleus (Direct Center) ──
-      // Central Radiant Flare Sprite
-      const coreCanvas = document.createElement('canvas');
-      coreCanvas.width = 128; coreCanvas.height = 128;
-      const cctx = coreCanvas.getContext('2d');
-      const cgrad = cctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      cgrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-      cgrad.addColorStop(0.2, 'rgba(0, 242, 254, 0.95)');
-      cgrad.addColorStop(0.55, 'rgba(127, 0, 255, 0.45)');
-      cgrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      cctx.fillStyle = cgrad;
-      cctx.fillRect(0, 0, 128, 128);
-      const coreSpriteTex = new THREE.CanvasTexture(coreCanvas);
-
-      const coreSpriteMat = new THREE.SpriteMaterial({
-        map: coreSpriteTex,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: 0.9
-      });
-      plasmaCore = new THREE.Sprite(coreSpriteMat);
-      plasmaCore.scale.set(0.92, 0.92, 0.92);
-      orbGroup.add(plasmaCore);
-
-      // ── 4. Concentric Holographic Gyroscopic Gimbal Rings ──
-      const ringConfigs = [
-        { radius: 1.10, color: 0x00f2fe, tiltX: 1.28, tiltY: 0.20, spinSpeed: 0.0035 },
-        { radius: 1.22, color: 0x7f00ff, tiltX: 0.45, tiltY: 1.15, spinSpeed: -0.0030 },
-        { radius: 1.35, color: 0x38bdf8, tiltX: 0.85, tiltY: -0.75, spinSpeed: 0.0025 }
-      ];
-
-      ringConfigs.forEach((cfg, idx) => {
-        const ringPivot = new THREE.Group();
-        ringPivot.rotation.x = cfg.tiltX;
-        ringPivot.rotation.y = cfg.tiltY;
-        orbGroup.add(ringPivot);
-
-        const ringGeo = new THREE.RingGeometry(cfg.radius, cfg.radius + 0.010, 64);
-        const ringMat = new THREE.MeshBasicMaterial({
-          color: cfg.color,
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.32,
-          blending: THREE.AdditiveBlending
-        });
-        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-        ringPivot.add(ringMesh);
-
-        // Glowing Photon Satellite
-        const satGeo = new THREE.SphereGeometry(0.024, 16, 16);
-        const satMat = new THREE.MeshBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.95,
-          blending: THREE.AdditiveBlending
-        });
-        const sat = new THREE.Mesh(satGeo, satMat);
-        ringPivot.add(sat);
-
-        outerRings.push({
-          pivot: ringPivot,
-          mesh: ringMesh,
-          sat: sat,
-          radius: cfg.radius + 0.005,
-          angle: (idx * Math.PI) / 1.5,
-          spinSpeed: cfg.spinSpeed
-        });
-      });
-
-      window.addEventListener('resize', onWindowResize);
-      animate3D();
-    }
-
-    function createParticleTexture() {
-      const canvas = document.createElement('canvas');
-      canvas.width = 64; canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(0.2, 'rgba(0,242,254,0.95)');
-      grad.addColorStop(0.55, 'rgba(127,0,255,0.45)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 64, 64);
-      return new THREE.CanvasTexture(canvas);
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate3D() {
-      requestAnimationFrame(animate3D);
-      noiseVal += 0.008;
-
-      // ── 1. Quantum Particle Sphere Wave Dynamics ──
-      if (particleSphere) {
-        const pos = particleSphere.geometry.attributes.position.array;
-        const orig = particleSphere.geometry.userData.originalPositions;
-        const count = pos.length / 3;
-
-        let intensity = 0.045;
-        let speed = 0.65;
-        let rotSpeed = 0.0012;
-
-        if (agentState === 'muted') {
-          intensity = 0.015;
-          speed = 0.25;
-          rotSpeed = 0.0004;
-        } else if (agentState === 'listening') {
-          intensity = 0.07;
-          speed = 0.9;
-          rotSpeed = 0.0018;
-        } else if (agentState === 'thinking') {
-          intensity = 0.09;
-          speed = 1.4;
-          rotSpeed = 0.0035;
-        } else if (agentState === 'executing') {
-          intensity = 0.10;
-          speed = 1.6;
-          rotSpeed = 0.0040;
-        } else if (agentState === 'speaking') {
-          intensity = 0.08;
-          speed = 1.0;
-          rotSpeed = 0.0020;
-        }
-
-        let audioBoost = 0;
-        if (agentState !== 'muted' && audioFrequencyData && audioFrequencyData.length > 0) {
-          let sum = 0;
-          for (let i = 0; i < 16; i++) sum += audioFrequencyData[i];
-          audioBoost = (sum / 16) / 255;
-        }
-
-        // Concentric Spherical Breathing Waves (Maintains Perfect Spherical Shape)
-        const primaryBreathe = Math.sin(noiseVal * speed) * (intensity * 0.5);
-        const secondaryHarmonic = Math.cos(noiseVal * (speed * 1.6)) * (intensity * 0.25 + audioBoost * 0.12);
-        const phasesArr = particleSphere.geometry.userData.phases;
-
-        for (let i = 0; i < count; i++) {
-          const idx = i * 3;
-          const ox = orig[idx];
-          const oy = orig[idx + 1];
-          const oz = orig[idx + 2];
-
-          // Micro-surface shimmer along radial shell
-          const shellPhase = (phasesArr && phasesArr[i]) || 0;
-          const surfaceShimmer = Math.sin(noiseVal * 2.0 + shellPhase) * 0.02;
-
-          const totalScale = 1.0 + primaryBreathe + secondaryHarmonic + surfaceShimmer;
-
-          pos[idx] = ox * totalScale;
-          pos[idx + 1] = oy * totalScale;
-          pos[idx + 2] = oz * totalScale;
-        }
-        particleSphere.geometry.attributes.position.needsUpdate = true;
-        particleSphere.rotation.y += rotSpeed;
-      }
-
-      // ── 2. Ethereal Corona Dust Rotation ──
-      if (coronaDust) {
-        coronaDust.rotation.y -= 0.0008;
-      }
-
-      // ── 3. Supernova Radiant Plasma Core (Centered & Glowing) ──
-      if (plasmaCore) {
-        const baseScale = 0.92;
-        let corePulse = baseScale * (1.0 + Math.sin(noiseVal * 1.3) * 0.07);
-        if (agentState === 'thinking') corePulse = baseScale * (1.0 + Math.sin(noiseVal * 3.2) * 0.15);
-        else if (agentState === 'listening') corePulse = baseScale * (1.0 + Math.sin(noiseVal * 2.0) * 0.10);
-        else if (agentState === 'muted') corePulse = baseScale * (0.75 + Math.sin(noiseVal * 0.5) * 0.03);
-
-        plasmaCore.scale.set(corePulse, corePulse, 1.0);
-        plasmaCore.material.opacity = (agentState === 'thinking' || agentState === 'speaking') ? 0.95 : (agentState === 'muted' ? 0.35 : 0.85);
-      }
-
-      // ── 4. Concentric Gyroscopic Orbiting (Rings Stay in Precise Position) ──
-      let mult = (agentState === 'thinking' || agentState === 'executing') ? 2.2 : (agentState === 'muted' ? 0.3 : 1.0);
-      
-      outerRings.forEach(r => {
-        r.angle += r.spinSpeed * mult;
-        r.mesh.rotation.z += r.spinSpeed * 0.5 * mult;
-        r.sat.position.set(
-          r.radius * Math.cos(r.angle),
-          r.radius * Math.sin(r.angle),
-          0
-        );
-      });
-
-      // ── 5. Render Dynamic Holographic Voice Waveform Below Orb ──
-      renderVoiceWaveform();
-
-      renderer.render(scene, camera);
-    }
-
-    let wavePhase = 0;
-    let currentWaveAmp = 0;
-
-    function renderVoiceWaveform() {
-      const waveformCanvas = document.getElementById('waveform-canvas');
-      if (!waveformCanvas) return;
-      const waveCtx = waveformCanvas.getContext('2d');
-      if (!waveCtx) return;
-
-      const isSpeaking = (agentState === 'speaking');
-      const isListening = (agentState === 'listening');
-      const targetAmp = (isSpeaking || isListening) ? 1.0 : 0.0;
-      
-      // Smooth organic interpolation
-      currentWaveAmp += (targetAmp - currentWaveAmp) * 0.09;
-
-      wavePhase += (currentWaveAmp > 0.1) ? 0.08 : 0.03;
-      const w = waveformCanvas.width;
-      const h = waveformCanvas.height;
-      const midY = h / 2;
-      waveCtx.clearRect(0, 0, w, h);
-
-      // ── 1. Always Render the Glowing Horizon Baseline (Calm Line) ──
-      waveCtx.beginPath();
-      waveCtx.moveTo(0, midY);
-      for (let x = 0; x <= w; x += 4) {
-        const idleRipple = Math.sin(wavePhase * 1.5 + x * 0.04) * 1.2 * (1.0 - currentWaveAmp);
-        waveCtx.lineTo(x, midY + idleRipple);
-      }
-      waveCtx.strokeStyle = isSpeaking 
-        ? 'rgba(0, 242, 254, 0.7)' 
-        : (isListening ? 'rgba(0, 255, 136, 0.7)' : 'rgba(0, 242, 254, 0.35)');
-      waveCtx.lineWidth = 1.5;
-      waveCtx.shadowBlur = (currentWaveAmp > 0.1) ? 8 : 4;
-      waveCtx.shadowColor = isSpeaking ? '#00f2fe' : (isListening ? '#00ff88' : 'rgba(0, 242, 254, 0.5)');
-      waveCtx.stroke();
-
-      // ── 2. Harmonic Equalizer Bars (Active while speaking / listening) ──
-      const numBars = 28;
-      const barWidth = 4;
-      const gap = (w - (numBars * barWidth)) / (numBars - 1);
-      const mid = numBars / 2;
-
-      for (let i = 0; i < numBars; i++) {
-        const distFromCenter = Math.abs(i - mid + 0.5) / mid;
-        const envelope = Math.cos(distFromCenter * Math.PI * 0.5);
-
-        const wave1 = Math.sin(wavePhase * 2.5 + i * 0.45);
-        const wave2 = Math.cos(wavePhase * 1.8 + i * 0.65);
-        const wave3 = Math.sin(wavePhase * 3.2 - i * 0.35);
-        const rawAmp = Math.abs(wave1 * 0.5 + wave2 * 0.35 + wave3 * 0.15);
-
-        let audioAmp = 0;
-        if (audioFrequencyData && audioFrequencyData.length > 0) {
-          const freqIdx = i % 16;
-          audioAmp = (audioFrequencyData[freqIdx] / 255) * 0.8;
-        }
-
-        // Modulate with currentWaveAmp: when idle, height collapses flush with the calm line
-        const activeHeight = (rawAmp * 26 + audioAmp * 18 + 2) * envelope;
-        const barHeight = Math.max(2, activeHeight * currentWaveAmp + 2);
-        const x = i * (barWidth + gap);
-        const y = (h - barHeight) / 2;
-
-        const grad = waveCtx.createLinearGradient(0, y, 0, y + barHeight);
-        if (isSpeaking) {
-          grad.addColorStop(0, '#00f2fe');
-          grad.addColorStop(0.5, '#7f00ff');
-          grad.addColorStop(1, '#ec4899');
-        } else if (isListening) {
-          grad.addColorStop(0, '#00ff88');
-          grad.addColorStop(0.5, '#00f2fe');
-          grad.addColorStop(1, '#38bdf8');
-        } else {
-          grad.addColorStop(0, 'rgba(0, 242, 254, 0.4)');
-          grad.addColorStop(1, 'rgba(127, 0, 255, 0.2)');
-        }
-
-        waveCtx.fillStyle = grad;
-        waveCtx.shadowBlur = (currentWaveAmp > 0.1) ? 8 : 3;
-        waveCtx.shadowColor = isSpeaking ? 'rgba(0, 242, 254, 0.7)' : (isListening ? 'rgba(0, 255, 136, 0.7)' : 'rgba(0, 242, 254, 0.3)');
-
-        if (waveCtx.roundRect) {
-          waveCtx.beginPath();
-          waveCtx.roundRect(x, y, barWidth, barHeight, 2);
-          waveCtx.fill();
-        } else {
-          waveCtx.fillRect(x, y, barWidth, barHeight);
-        }
-      }
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       Autonomous Real-Time VAD Voice Engine (Hands-Free Loop + Mute)
-       ══════════════════════════════════════════════════════════════ */
-    let handsFreeEnabled = true;
-    let isMuted = false;
-    let isProcessing = false;
-    let micStream = null;
-    let audioContext = null;
-    let analyser = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
-    let isUserSpeaking = false;
-    let speechStartTime = 0;
-    let lastSpeechTime = 0;
-    let vadCheckInterval = null;
-
-    const muteBtn = document.getElementById('mute-btn');
-    const muteIconContainer = document.getElementById('mute-icon-container');
-    const muteLabel = document.getElementById('mute-label');
-    const micBtn = document.getElementById('voice-trigger-btn');
-    const mainMicIcon = document.getElementById('main-mic-icon');
-    const handsfreeBtn = document.getElementById('handsfree-btn');
-    const handsfreeLabel = document.getElementById('handsfree-status-label');
-    const orbHitbox = document.getElementById('orb-hitbox');
-    const cmdInput = document.getElementById('command-input');
-    const sendBtn = document.getElementById('send-command-btn');
-    const statusText = document.getElementById('system-status-text');
-    const statusDot = document.getElementById('status-indicator');
-
-    document.addEventListener('DOMContentLoaded', async () => {
-      try { init3DOrb(); } catch(e) { console.error('[3D Orb] Init error:', e); }
-      try { setupWebSocketListeners(); } catch(e) { console.error('[WS] Init error:', e); }
-      try { setupEventListeners(); } catch(e) { console.error('[Events] Init error:', e); }
-      try { startSystemTelemetry(); } catch(e) { console.error('[Telemetry] Init error:', e); }
-      try { initTaskTracker(); } catch(e) { console.error('[TaskTracker] Init error:', e); }
-      refreshIcons();
-
-      document.body.addEventListener('click', startHandsFreeVAD, { once: true });
-      document.body.addEventListener('keydown', startHandsFreeVAD, { once: true });
-      setTimeout(startHandsFreeVAD, 800);
-    });
-
-    function refreshIcons() {
-      if (window.lucide && lucide.createIcons) {
-        lucide.createIcons();
-      }
-    }
-
-    function setAgentState(state, customSubtitle = null) {
-      if (isMuted && state !== 'muted') {
-        state = 'muted';
-      }
-      agentState = state;
-
-      if (state === 'muted') {
-        statusText.textContent = 'MUTED (NOT LISTENING)';
-        statusDot.className = 'status-dot muted';
-        orbHitbox.classList.add('muted');
-        micBtn.classList.add('muted');
-        micBtn.classList.remove('listening');
-        mainMicIcon.innerHTML = `<i data-lucide="mic-off" class="icon-md"></i>`;
-      } else if (state === 'idle') {
-        statusText.textContent = 'ONLINE';
-        statusDot.className = 'status-dot';
-        orbHitbox.classList.remove('muted');
-        micBtn.classList.remove('muted');
-        micBtn.classList.remove('listening');
-        mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
-      } else if (state === 'listening') {
-        statusText.textContent = 'RECORDING SPEECH';
-        statusDot.className = 'status-dot';
-        orbHitbox.classList.remove('muted');
-        micBtn.classList.remove('muted');
-        micBtn.classList.add('listening');
-        mainMicIcon.innerHTML = `<i data-lucide="mic" class="icon-md"></i>`;
-      } else if (state === 'thinking') {
-        statusText.textContent = 'NEURAL REASONING';
-        statusDot.className = 'status-dot busy';
-        orbHitbox.classList.remove('muted');
-        micBtn.classList.remove('muted');
-        micBtn.classList.remove('listening');
-      } else if (state === 'executing') {
-        statusText.textContent = 'EXECUTING ACTIONS';
-        statusDot.className = 'status-dot busy';
-        orbHitbox.classList.remove('muted');
-        micBtn.classList.remove('muted');
-      } else if (state === 'speaking') {
-        statusText.textContent = 'VOICE ACTIVE';
-        statusDot.className = 'status-dot';
-        orbHitbox.classList.remove('muted');
-        micBtn.classList.remove('muted');
-      }
-      refreshIcons();
-    }
-
-    const API_BASE = (window.location.origin.startsWith('http')) ? '' : 'http://localhost:8000';
-    let isManualRecording = false;
-
-    function setupEventListeners() {
-      muteBtn.addEventListener('click', toggleMute);
-      handsfreeBtn.addEventListener('click', toggleHandsFree);
-      
-      orbHitbox.addEventListener('click', () => {
-        if (isMuted) {
-          toggleMute();
-        } else if (!handsFreeEnabled) {
-          toggleManualRecord();
-        }
-      });
-
-      // Bottom Mic Button -> Push-to-Talk / Click-to-Speak
-      micBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        toggleManualRecord();
-      });
-
-      document.addEventListener('keydown', (e) => {
-        if (document.activeElement === cmdInput) return;
-
-        if (e.key === 'm' || e.key === 'M') {
-          e.preventDefault();
-          toggleMute();
-        } else if (e.code === 'Space' && !isProcessing) {
-          e.preventDefault();
-          toggleManualRecord();
-        }
-      });
-
-      cmdInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          executeCommandText();
-        }
-      });
-      sendBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        executeCommandText();
-      });
-
-      const copyTranscriptsBtn = document.getElementById('copy-transcripts-btn');
-      if (copyTranscriptsBtn) {
-        copyTranscriptsBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          copyTranscriptsAsJSON();
-        });
-      }
-    }
-
-    // ── Manual Push-to-Talk / Click-to-Speak Toggle ──
-    async function toggleManualRecord() {
-      if (isMuted) {
-        toggleMute();
-        return;
-      }
-
-      // If currently recording, STOP and SEND
-      if (isManualRecording || (mediaRecorder && mediaRecorder.state === 'recording')) {
-        isManualRecording = false;
-        micBtn.classList.remove('listening');
-        setAgentState('thinking');
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-          try { mediaRecorder.stop(); } catch(e){}
-        }
-        return;
-      }
-
-      // If VISION is currently speaking, cut speech
-      if (agentState === 'speaking' || speechTimeout) {
-        if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
-        fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
-      }
-
-      // Start recording
-      try {
-        if (!micStream) {
-          micStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-          });
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          analyser = audioContext.createAnalyser();
-          analyser.fftSize = 512;
-          const source = audioContext.createMediaStreamSource(micStream);
-          source.connect(analyser);
-        }
-        setupMediaRecorder();
-        
-        isManualRecording = true;
-        recordedChunks = [];
-        if (mediaRecorder) {
-          if (mediaRecorder.state === 'recording') {
-            try { mediaRecorder.stop(); } catch(e){}
-          }
-          mediaRecorder.start(100);
-        }
-        setAgentState('listening');
-        micBtn.classList.add('listening');
-        statusText.textContent = 'LISTENING (CLICK MIC TO SEND)';
-      } catch (err) {
-        setAgentState('idle');
-      }
-    }
-
-    // ── Mute Microphone Kill-Switch ──
-    function toggleMute() {
-      isMuted = !isMuted;
-
-      if (isMuted) {
-        muteBtn.classList.add('muted');
-        muteIconContainer.innerHTML = `<i data-lucide="mic-off" class="icon-sm"></i>`;
-        muteLabel.textContent = 'MUTED: ON';
-        
-        if (micStream) {
-          micStream.getAudioTracks().forEach(track => track.enabled = false);
-        }
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-          try { mediaRecorder.stop(); } catch(e){}
-        }
-        recordedChunks = [];
-        isUserSpeaking = false;
-        isManualRecording = false;
-        micBtn.classList.remove('listening');
-        
-        setAgentState('muted');
-        logAction('tool', 'Microphone Muted', 'Audio input paused.');
-      } else {
-        muteBtn.classList.remove('muted');
-        muteIconContainer.innerHTML = `<i data-lucide="mic" class="icon-sm"></i>`;
-        muteLabel.textContent = 'MUTE: OFF';
-
-        if (micStream) {
-          micStream.getAudioTracks().forEach(track => track.enabled = true);
-        } else if (handsFreeEnabled) {
-          startHandsFreeVAD();
-        }
-
-        setAgentState('idle');
-        logAction('tool', 'Microphone Unmuted', 'Audio input active.');
-      }
-      refreshIcons();
-    }
-
-    function toggleHandsFree() {
-      handsFreeEnabled = !handsFreeEnabled;
-
-      if (handsFreeEnabled) {
-        handsfreeBtn.classList.remove('off');
-        handsfreeLabel.textContent = 'HANDS-FREE VAD: ON';
-        startHandsFreeVAD();
-        logAction('tool', 'Hands-Free VAD', 'Auto voice detection active.');
-      } else {
-        handsfreeBtn.classList.add('off');
-        handsfreeLabel.textContent = 'HANDS-FREE VAD: OFF';
-        stopHandsFreeVAD();
-        setAgentState('idle');
-        logAction('tool', 'Hands-Free VAD', 'Manual Push-to-Talk active (Click Mic below to speak).');
-      }
-      refreshIcons();
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       State-of-the-Art Autonomous Voice Activity Engine (Silero/DSP VAD)
-       ══════════════════════════════════════════════════════════════ */
-    let ambientNoiseFloor = 0.008;
-    let consecutiveSpeechFrames = 0;
-    const REQUIRED_SPEECH_FRAMES = 1; // Instant temporal capture without clipping initial word
-    const MIN_SPEECH_DURATION_MS = 350;
-
-    async function startHandsFreeVAD() {
-      if (micStream || isProcessing || isMuted || !handsFreeEnabled) return;
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          } 
-        });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // ── Human Vocal Frequency Bandpass Filter (120Hz to 3400Hz) ──
-        const highpass = audioContext.createBiquadFilter();
-        highpass.type = 'highpass';
-        highpass.frequency.value = 120; // Cut low-frequency desk rumble/thump
-
-        const lowpass = audioContext.createBiquadFilter();
-        lowpass.type = 'lowpass';
-        lowpass.frequency.value = 3400; // Cut high-frequency hiss/fan noise
-
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.4;
-
-        const source = audioContext.createMediaStreamSource(micStream);
-        source.connect(highpass);
-        highpass.connect(lowpass);
-        lowpass.connect(analyser);
-
-        setupMediaRecorder();
-        startVADLoop();
-        setAgentState('idle');
-      } catch (err) {
-        setAgentState('idle');
-      }
-    }
-
-    function stopHandsFreeVAD() {
-      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        try { mediaRecorder.stop(); } catch(e){}
-      }
-      isUserSpeaking = false;
-      isManualRecording = false;
-      consecutiveSpeechFrames = 0;
-      micBtn.classList.remove('listening');
-    }
-
-    function setupMediaRecorder() {
-      if (!micStream) return;
-      try {
-        let mimeType = 'audio/webm';
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
-        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          mimeType = 'audio/ogg';
-        }
-
-        mediaRecorder = new MediaRecorder(micStream, { mimeType });
-        recordedChunks = [];
-        
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            recordedChunks.push(e.data);
-          }
-        };
-        mediaRecorder.onstop = onRecordingFinalized;
-      } catch (e) {
-        console.warn('[Recorder] Setup error:', e);
-      }
-    }
-
-    let speechTimeout = null;
-
-    function startVADLoop() {
-      if (vadCheckInterval) clearInterval(vadCheckInterval);
-      const buffer = new Float32Array(analyser.fftSize);
-
-      vadCheckInterval = setInterval(() => {
-        if (!analyser || !handsFreeEnabled || isMuted || isManualRecording) return;
-
-        analyser.getFloatTimeDomainData(buffer);
-        analyser.getByteFrequencyData(audioFrequencyData);
-
-        let sum = 0;
-        for (let i = 0; i < buffer.length; i++) {
-          sum += buffer[i] * buffer[i];
-        }
-        const rms = Math.sqrt(sum / buffer.length);
-        const now = Date.now();
-
-        // ── Adaptive Dynamic Noise Floor Tracking ──
-        if (!isUserSpeaking && agentState !== 'speaking') {
-          ambientNoiseFloor = ambientNoiseFloor * 0.96 + rms * 0.04;
-        }
-        const isAgentSpeaking = (agentState === 'speaking' || speechTimeout !== null);
-        const dynamicSpeechThreshold = isAgentSpeaking ? 0.022 : Math.max(0.015, Math.min(0.055, ambientNoiseFloor * 2.4));
-
-        // 1. Detect User Speech Start with Multi-Frame Confirmation & Barge-in
-        if (rms > dynamicSpeechThreshold) {
-          consecutiveSpeechFrames++;
-          lastSpeechTime = now;
-
-          // Immediate speech interruption if VISION is talking
-          if (isAgentSpeaking) {
-            if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
-            fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
-            isProcessing = false;
-            setAgentState('listening');
-          }
-
-          if (consecutiveSpeechFrames >= REQUIRED_SPEECH_FRAMES && !isUserSpeaking) {
-            isProcessing = false;
-            isUserSpeaking = true;
-            speechStartTime = now;
-            setAgentState('listening');
-            
-            recordedChunks = [];
-            if (mediaRecorder) {
-              if (mediaRecorder.state === 'recording') {
-                try { mediaRecorder.stop(); } catch(e){}
-              }
-              try {
-                mediaRecorder.start(100);
-              } catch(e){}
-            }
-          }
-        } 
-        // 2. Detect Speech Finish with Adaptive Cadence Silence Timeout
-        else {
-          consecutiveSpeechFrames = 0;
-
-          if (isUserSpeaking) {
-            const silenceDuration = now - lastSpeechTime;
-            const totalSpeechDuration = now - speechStartTime;
-
-            // Adaptive Silence Timeout: 850ms for quick utterances, 1200ms for long sentences
-            const adaptiveSilenceTimeout = (totalSpeechDuration > 2200) ? 1200 : 850;
-
-            if (silenceDuration >= adaptiveSilenceTimeout) {
-              isUserSpeaking = false;
-              if (totalSpeechDuration >= MIN_SPEECH_DURATION_MS) {
-                setAgentState('thinking');
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                  try {
-                    mediaRecorder.stop();
-                  } catch(e){}
-                }
-              } else {
-                recordedChunks = [];
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                  try {
-                    mediaRecorder.stop();
-                  } catch(e){}
-                }
-                setAgentState('idle');
-              }
-            }
-          }
-        }
-      }, 40);
-    }
-
-    async function onRecordingFinalized() {
-      if (recordedChunks.length === 0 || isMuted) {
-        if (!isProcessing) setAgentState(isMuted ? 'muted' : 'idle');
-        return;
-      }
-      const mimeType = mediaRecorder?.mimeType || 'audio/webm';
-      const blob = new Blob(recordedChunks, { type: mimeType });
-      recordedChunks = [];
-
-      if (blob.size < 600) {
-        if (!isProcessing) setAgentState(isMuted ? 'muted' : 'idle');
-        return;
-      }
-
-      isProcessing = true;
-      const formData = new FormData();
-      const filename = mimeType.includes('ogg') ? 'voice.ogg' : 'voice.webm';
-      formData.append('file', blob, filename);
-
-      try {
-        setAgentState('thinking');
-        const res = await fetch(`${API_BASE}/api/audio/transcribe`, { method: 'POST', body: formData });
-        const data = await res.json();
-        const text = (data.text || '').trim();
-
-        if (text.length >= 2) {
-          logTranscript('user', 'You (Spoken)', text);
-          await sendToVision(text);
-        } else {
-          isProcessing = false;
-          setAgentState(isMuted ? 'muted' : 'idle');
-        }
-      } catch (err) {
-        isProcessing = false;
-        setAgentState(isMuted ? 'muted' : 'idle');
-      }
-    }
-
-    async function executeCommandText() {
-      const text = cmdInput.value.trim();
-      if (!text) return;
-      cmdInput.value = '';
-      
-      // Stop any current speech if user types
-      if (agentState === 'speaking' || speechTimeout) {
-        if (speechTimeout) { clearTimeout(speechTimeout); speechTimeout = null; }
-        fetch(`${API_BASE}/api/audio/stop`, { method: 'POST' }).catch(() => {});
-      }
-
-      logTranscript('user', 'You (Typed)', text);
-      await sendToVision(text);
-    }
-
-    async function sendToVision(userMessage) {
-      isProcessing = true;
-      setAgentState('thinking');
-
-      try {
-        const res = await fetch(`${API_BASE}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: userMessage,
-            session_id: 'handsfree_session',
-            synthesize_voice: true
-          })
-        });
-
-        const data = await res.json();
-        const responseText = data.response || data.detail || 'Action completed.';
-
-        const cleanFirstSentence = extractFirstSentence(responseText);
-        setAgentState('speaking');
-        
-        logTranscript('ai', 'VISION', responseText);
-
-        const estimatedSpeechDuration = Math.max(3000, Math.min(14000, responseText.length * 45));
-        
-        if (speechTimeout) clearTimeout(speechTimeout);
-        speechTimeout = setTimeout(() => {
-          isProcessing = false;
-          speechTimeout = null;
-          if (agentState === 'speaking') {
-            setAgentState(isMuted ? 'muted' : 'idle');
-          }
-        }, estimatedSpeechDuration);
-
-      } catch (err) {
-        logTranscript('ai', 'VISION', `⚠️ Request failed: ${err.message}. Please ensure VISION server is running on http://localhost:8000.`);
-        setAgentState(isMuted ? 'muted' : 'idle');
-        isProcessing = false;
-      }
-    }
-
-    function extractFirstSentence(text) {
-      if (!text) return '';
-      const clean = text.replace(/```[\s\S]*?```/g, '')
-                        .replace(/\*\*([^*]+)\*\*/g, '$1')
-                        .replace(/\*([^*]+)\*/g, '$1')
-                        .replace(/`([^`]+)`/g, '$1')
-                        .replace(/[-•]\s*/g, '');
-      const parts = clean.split(/[\.\n]/);
-      const first = parts[0].trim();
-      return first.length > 10 ? first : clean.substring(0, 110);
-    }
-
-    function renderMarkdown(text) {
-      if (!text) return '';
-      let h = text;
-      h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${escapeHtml(code.trim())}</code></pre>`);
-      h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-      h = h.replace(/^[•\-\*]\s*(.+)$/gm, '<li>$1</li>');
-      h = h.replace(/(<li>.+<\/li>)/s, '<ul>$1</ul>');
-      h = h.replace(/\n\n+/g, '</p><p>');
-      h = h.replace(/\n/g, '<br>');
-      return `<p>${h}</p>`;
-    }
-
-    function escapeHtml(s) {
-      const d = document.createElement('div');
-      d.textContent = s; return d.innerHTML;
-    }
-
-    // ── Get Official Lucide Icon Name for Tool ──
-    function getToolIconName(toolName) {
-      const name = (toolName || '').toLowerCase();
-      if (name.includes('whatsapp') || name.includes('message')) return 'message-square';
-      if (name.includes('browser') || name.includes('web') || name.includes('search')) return 'globe';
-      if (name.includes('file') || name.includes('document') || name.includes('folder')) return 'file-text';
-      if (name.includes('terminal') || name.includes('ssh') || name.includes('command') || name.includes('code') || name.includes('python')) return 'terminal';
-      if (name.includes('media') || name.includes('youtube') || name.includes('music') || name.includes('video')) return 'play-circle';
-      if (name.includes('battery') || name.includes('hardware') || name.includes('system') || name.includes('cpu')) return 'cpu';
-      if (name.includes('memory') || name.includes('remember') || name.includes('recall')) return 'database';
-      if (name.includes('reminder') || name.includes('timer') || name.includes('time') || name.includes('date')) return 'clock';
-      if (name.includes('phone') || name.includes('mobile')) return 'smartphone';
-      if (name.includes('mic') || name.includes('voice') || name.includes('speech')) return 'mic';
-      return 'zap';
-    }
-
-    // ── Log to Autonomous Action Monitor (Left bottom card) ──
-    function logAction(type, name, desc) {
-      const stream = document.getElementById('actions-stream');
-      const item = document.createElement('div');
-      item.className = 'action-item';
-
-      const iconName = type === 'tool' ? getToolIconName(name) : (type === 'ai' ? 'sparkles' : 'zap');
-
-      item.innerHTML = `
-        <div class="action-icon-box">
-          <i data-lucide="${iconName}" class="icon-sm"></i>
-        </div>
-        <div class="action-content">
-          <div class="action-name">${escapeHtml(name)}</div>
-          <div class="action-desc">${escapeHtml(desc.substring(0, 80))}</div>
-        </div>
-      `;
-      stream.prepend(item);
-      while (stream.children.length > 15) stream.lastChild.remove();
-      refreshIcons();
-    }
-
-    // ── Log to Live Transcriptions Stream (Right side card) ──
-    const transcriptHistory = [
-      {
-        speaker: 'ai',
-        label: 'VISION',
-        text: 'VISION is online. Continuous hands-free VAD speech recognition is active.',
-        time: 'System',
-        timestamp: new Date().toISOString()
-      }
-    ];
-
-    function logTranscript(speaker, label, text) {
-      const stream = document.getElementById('transcriptions-stream');
-      const entry = document.createElement('div');
-      entry.className = `transcript-entry ${speaker}`;
-
-      const now = new Date();
-      const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const speakerIcon = speaker === 'user' ? 'user' : 'bot';
-
-      transcriptHistory.push({
-        speaker: speaker,
-        label: label,
-        text: text,
-        time: time,
-        timestamp: now.toISOString()
-      });
-
-      entry.innerHTML = `
-        <div class="transcript-meta">
-          <span class="transcript-speaker">
-            <i data-lucide="${speakerIcon}" class="icon-sm"></i>
-            <span>${escapeHtml(label)}</span>
-          </span>
-          <span class="transcript-time">${time}</span>
-        </div>
-        <div class="transcript-text">${renderMarkdown(text)}</div>
-      `;
-      stream.prepend(entry);
-      while (stream.children.length > 25) stream.lastChild.remove();
-      refreshIcons();
-    }
-
-    // ── Copy Live Transcriptions as JSON ──
-    async function copyTranscriptsAsJSON() {
-      const copyBtn = document.getElementById('copy-transcripts-btn');
-      
-      let exportList = [];
-      if (transcriptHistory && transcriptHistory.length > 0) {
-        exportList = transcriptHistory.map((item, idx) => ({
-          index: idx + 1,
-          speaker: item.speaker,
-          label: item.label,
-          text: item.text,
-          time: item.time,
-          timestamp: item.timestamp || new Date().toISOString()
-        }));
-      } else {
-        const stream = document.getElementById('transcriptions-stream');
-        if (stream) {
-          const domEntries = Array.from(stream.querySelectorAll('.transcript-entry')).reverse();
-          exportList = domEntries.map((el, idx) => {
-            const speaker = el.classList.contains('user') ? 'user' : 'ai';
-            const label = el.querySelector('.transcript-speaker span')?.textContent?.trim() || (speaker === 'user' ? 'You' : 'VISION');
-            const time = el.querySelector('.transcript-time')?.textContent?.trim() || '';
-            const text = el.querySelector('.transcript-text')?.textContent?.trim() || '';
-            return {
-              index: idx + 1,
-              speaker,
-              label,
-              text,
-              time,
-              timestamp: new Date().toISOString()
-            };
-          });
-        }
-      }
-
-      const payload = {
-        exported_at: new Date().toISOString(),
-        total_messages: exportList.length,
-        session_id: 'vision_hud_session',
-        transcripts: exportList
-      };
-
-      const jsonStr = JSON.stringify(payload, null, 2);
-
-      let copied = false;
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(jsonStr);
-          copied = true;
-        } else {
-          throw new Error('Clipboard API unavailable');
-        }
-      } catch (e) {
-        try {
-          const tempArea = document.createElement('textarea');
-          tempArea.value = jsonStr;
-          tempArea.setAttribute('readonly', '');
-          tempArea.style.position = 'fixed';
-          tempArea.style.left = '-9999px';
-          document.body.appendChild(tempArea);
-          tempArea.focus();
-          tempArea.select();
-          copied = document.execCommand('copy');
-          document.body.removeChild(tempArea);
-        } catch (err) {
-          copied = false;
-        }
-      }
-
-      if (copyBtn) {
-        if (copied) {
-          copyBtn.classList.add('copied');
-          copyBtn.innerHTML = `<i data-lucide="check" class="icon-xs"></i><span class="copy-btn-text">COPIED JSON!</span>`;
-          refreshIcons();
-          setTimeout(() => {
-            copyBtn.classList.remove('copied');
-            copyBtn.innerHTML = `<i data-lucide="copy" class="icon-xs"></i><span class="copy-btn-text">COPY JSON</span>`;
-            refreshIcons();
-          }, 2000);
-        } else {
-          copyBtn.innerHTML = `<i data-lucide="alert-circle" class="icon-xs"></i><span class="copy-btn-text">FAILED</span>`;
-          refreshIcons();
-          setTimeout(() => {
-            copyBtn.innerHTML = `<i data-lucide="copy" class="icon-xs"></i><span class="copy-btn-text">COPY JSON</span>`;
-            refreshIcons();
-          }, 2000);
-        }
-      }
-    }
-
-    function setupWebSocketListeners() {
-      VisionWS.connect();
-      VisionWS.on('status', (d) => {
-        if (!isMuted) {
-          statusDot.style.background = d.connected ? 'var(--green)' : 'var(--red)';
-        }
-      });
-
-      VisionWS.on('tool_event', (event) => {
-        if (event.tool) {
-          setAgentState('executing', `"Executing: ${event.tool}..."`);
-          logAction('tool', `Tool: ${event.tool}`, JSON.stringify(event.args || {}));
-        }
-      });
-    }
-
-    function startSystemTelemetry() {
-      async function updateStats() {
-        try {
-          const res = await fetch('/api/system/stats');
-          const data = await res.json();
-
-          document.getElementById('cpu-stat').textContent = `${data.cpu.percent}%`;
-          document.getElementById('cpu-bar').style.width = `${data.cpu.percent}%`;
-
-          document.getElementById('ram-stat').textContent = `${data.ram.used_gb} / ${data.ram.total_gb} GB`;
-          document.getElementById('ram-bar').style.width = `${data.ram.percent}%`;
-
-          if (data.battery) {
-            document.getElementById('battery-stat').textContent = `${data.battery.percent}% ${data.battery.power_plugged ? '⚡' : ''}`;
-            document.getElementById('battery-bar').style.width = `${data.battery.percent}%`;
-          }
-
-          const h = Math.floor(data.uptime_seconds / 3600);
-          const m = Math.floor((data.uptime_seconds % 3600) / 60);
-          const s = data.uptime_seconds % 60;
-          document.getElementById('telemetry-uptime').textContent = 
-            `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-
-        } catch (e) {}
-      }
-
-      async function updateMemoryNodes() {
-        try {
-          const res = await fetch('/api/memory/stats');
-          const data = await res.json();
-          const memCount = (data.semantic_memories || []).length;
-          document.getElementById('memory-nodes-stat').textContent = `${memCount} Memories`;
-        } catch (e) {}
-      }
-
-      setInterval(updateStats, 2500);
-      setInterval(updateMemoryNodes, 6000);
-      updateStats();
-      updateMemoryNodes();
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       VISION TASK TRACKER & EXCEL DASHBOARD LOGIC (Expandable Month / Dual-Control)
-       ══════════════════════════════════════════════════════════════ */
-    let currentSelectedMonth = "August";
-    let currentSelectedDay = (new Date()).getDate();
-    let currentTaskFilter = "all";
-    let currentViewMode = "expandable"; // "expandable" | "single"
-    let currentDashboardData = null;
-    let taskChartInstance = null;
-    const expandedDays = new Set([ (new Date()).getDate() ]);
-
-    function initTaskTracker() {
-      const modal = document.getElementById('task-tracker-modal');
-      const toggleBtn = document.getElementById('task-tracker-toggle-btn');
-      const closeBtn = document.getElementById('task-modal-close-btn');
-      const monthSelect = document.getElementById('task-month-select');
-      const openExcelBtn = document.getElementById('open-excel-btn');
-      const syncExcelBtn = document.getElementById('sync-excel-btn');
-      const addForm = document.getElementById('task-add-form');
-      const daySelect = document.getElementById('new-task-day-select');
-
-      // Populate Day select dropdown (1..31)
-      if (daySelect) {
-        let options = '';
-        for (let d = 1; d <= 31; d++) {
-          const sel = (d === currentSelectedDay) ? 'selected' : '';
-          options += `<option value="${d}" ${sel}>Day ${d < 10 ? '0' + d : d}</option>`;
-        }
-        daySelect.innerHTML = options;
-      }
-
-      // Set initial month based on current local date
-      const months = ["January", "February", "March", "April", "May", "June", 
-                      "July", "August", "September", "October", "November", "December"];
-      const now = new Date();
-      currentSelectedMonth = months[now.getMonth()];
-      currentSelectedDay = now.getDate();
-      expandedDays.add(currentSelectedDay);
-      if (monthSelect) monthSelect.value = currentSelectedMonth;
-
-      // Open Modal
-      if (toggleBtn && modal) {
-        toggleBtn.addEventListener('click', () => {
-          modal.classList.add('active');
-          renderDaysBar();
-          fetchTaskDashboard();
-        });
-      }
-
-      // Close Modal
-      if (closeBtn && modal) {
-        closeBtn.addEventListener('click', () => modal.classList.remove('active'));
-      }
-      if (modal) {
-        modal.addEventListener('click', (e) => {
-          if (e.target === modal) modal.classList.remove('active');
-        });
-      }
-
-      // Month select
-      if (monthSelect) {
-        monthSelect.addEventListener('change', (e) => {
-          currentSelectedMonth = e.target.value;
-          renderDaysBar();
-          fetchTaskDashboard();
-        });
-      }
-
-      // View Mode Switcher
-      const btnExpandable = document.getElementById('view-mode-expandable');
-      const btnSingle = document.getElementById('view-mode-single');
-      const expandActions = document.getElementById('expand-collapse-actions');
-      const timelineBarWrap = document.querySelector('.task-days-timeline-wrap');
-
-      if (btnExpandable && btnSingle) {
-        btnExpandable.addEventListener('click', () => {
-          currentViewMode = 'expandable';
-          btnExpandable.classList.add('active');
-          btnSingle.classList.remove('active');
-          if (expandActions) expandActions.style.display = 'flex';
-          if (timelineBarWrap) timelineBarWrap.style.display = 'block';
-          renderTaskItems();
-        });
-
-        btnSingle.addEventListener('click', () => {
-          currentViewMode = 'single';
-          btnSingle.classList.add('active');
-          btnExpandable.classList.remove('active');
-          if (expandActions) expandActions.style.display = 'none';
-          if (timelineBarWrap) timelineBarWrap.style.display = 'block';
-          renderTaskItems();
-        });
-      }
-
-      // Expand All / Collapse All
-      const btnExpandAll = document.getElementById('btn-expand-all');
-      const btnCollapseAll = document.getElementById('btn-collapse-all');
-      if (btnExpandAll) {
-        btnExpandAll.addEventListener('click', () => {
-          for (let d = 1; d <= 31; d++) expandedDays.add(d);
-          renderTaskItems();
-        });
-      }
-      if (btnCollapseAll) {
-        btnCollapseAll.addEventListener('click', () => {
-          expandedDays.clear();
-          renderTaskItems();
-        });
-      }
-
-      // Filter tabs
-      document.querySelectorAll('.task-filter-pill[data-filter]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.task-filter-pill[data-filter]').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          currentTaskFilter = btn.getAttribute('data-filter');
-          renderTaskItems();
-        });
-      });
-
-      // Add Task Form
-      if (addForm) {
-        addForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const titleInput = document.getElementById('new-task-title');
-          const dayInput = document.getElementById('new-task-day-select');
-          const catSelect = document.getElementById('new-task-category');
-          const prioSelect = document.getElementById('new-task-priority');
-          const title = titleInput.value.trim();
-          if (!title) return;
-
-          const chosenDay = dayInput ? parseInt(dayInput.value) : currentSelectedDay;
-
-          try {
-            await fetch('/api/tasks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: title,
-                day: chosenDay,
-                month: currentSelectedMonth,
-                category: catSelect.value,
-                priority: prioSelect.value
-              })
-            });
-            titleInput.value = '';
-            expandedDays.add(chosenDay);
-            fetchTaskDashboard();
-          } catch (err) {
-            console.error('[Tasks] Add task error:', err);
-          }
-        });
-      }
-
-      // Open in Excel Button
-      if (openExcelBtn) {
-        openExcelBtn.addEventListener('click', async () => {
-          try {
-            openExcelBtn.disabled = true;
-            const originalHTML = openExcelBtn.innerHTML;
-            openExcelBtn.innerHTML = `<span>LAUNCHING...</span>`;
-            await fetch('/api/tasks/excel/open', { method: 'POST' });
-            setTimeout(() => {
-              openExcelBtn.disabled = false;
-              openExcelBtn.innerHTML = originalHTML;
-              refreshIcons();
-            }, 1200);
-          } catch (err) {
-            console.error('[Excel] Open error:', err);
-            openExcelBtn.disabled = false;
-          }
-        });
-      }
-
-      // Sync Excel Button
-      if (syncExcelBtn) {
-        syncExcelBtn.addEventListener('click', async () => {
-          try {
-            syncExcelBtn.disabled = true;
-            const originalHTML = syncExcelBtn.innerHTML;
-            syncExcelBtn.innerHTML = `<span>SYNCING...</span>`;
-            await fetch('/api/tasks/excel/sync', { method: 'POST' });
-            setTimeout(() => {
-              syncExcelBtn.disabled = false;
-              syncExcelBtn.innerHTML = originalHTML;
-              refreshIcons();
-            }, 800);
-          } catch (err) {
-            console.error('[Excel] Sync error:', err);
-            syncExcelBtn.disabled = false;
-          }
-        });
-      }
-
-      // Quick LeetCode Solve Button
-      const btnQuickSolveLC = document.getElementById('btn-quick-solve-leetcode');
-      if (btnQuickSolveLC) {
-        btnQuickSolveLC.addEventListener('click', async () => {
-          try {
-            const daysMap = currentDashboardData?.month_metrics?.days_breakdown || {};
-            const todayDayTasks = daysMap[currentSelectedDay]?.tasks || [];
-            const lcTask = todayDayTasks.find(t => (t.title || '').toLowerCase().includes('leetcode'));
-
-            if (lcTask) {
-              await toggleTask(lcTask.id, lcTask.is_completed === 1);
-            } else {
-              // Add and mark completed
-              const res = await fetch('/api/tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  title: 'Daily LeetCode Problem Solving (LeetCode / CodeChef / GFG)',
-                  day: currentSelectedDay,
-                  month: currentSelectedMonth,
-                  category: 'Coding',
-                  priority: 'High'
-                })
-              });
-              const newTask = await res.json();
-              if (newTask && newTask.id) {
-                await toggleTask(newTask.id, false);
-              } else {
-                fetchTaskDashboard();
-              }
-            }
-          } catch (err) {
-            console.error('[LeetCode] Quick solve error:', err);
-          }
-        });
-      }
-
-      renderDaysBar();
-    }
-
-    function renderDaysBar() {
-      const daysBar = document.getElementById('task-days-bar');
-      if (!daysBar) return;
-
-      const now = new Date();
-      const todayDay = now.getDate();
-      const months = ["January", "February", "March", "April", "May", "June", 
-                      "July", "August", "September", "October", "November", "December"];
-      const isCurrentMonth = (currentSelectedMonth === months[now.getMonth()]);
-
-      let html = '';
-      for (let d = 1; d <= 31; d++) {
-        const isActive = (d === currentSelectedDay) ? 'active' : '';
-        const isToday = (isCurrentMonth && d === todayDay) ? 'is-today' : '';
-        html += `
-          <div class="day-pill ${isActive} ${isToday}" onclick="selectTaskDay(${d})">
-            <span class="day-pill-num">${d < 10 ? '0' + d : d}</span>
-            <span class="day-pill-sub">DAY</span>
-          </div>
-        `;
-      }
-      daysBar.innerHTML = html;
-      
-      setTimeout(() => {
-        const activePill = daysBar.querySelector('.day-pill.active');
-        if (activePill) {
-          activePill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-        }
-      }, 100);
-    }
-
-    function selectTaskDay(dayNum) {
-      currentSelectedDay = dayNum;
-      expandedDays.add(dayNum);
-
-      const daySelect = document.getElementById('new-task-day-select');
-      if (daySelect) daySelect.value = dayNum;
-
-      renderDaysBar();
-      fetchTaskDashboard();
-
-      // In expandable view, scroll the expanded day card into view
-      if (currentViewMode === 'expandable') {
-        setTimeout(() => {
-          const cardEl = document.getElementById(`day-accordion-${dayNum}`);
-          if (cardEl) {
-            cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }, 150);
-      }
-    }
-
-    function toggleDayAccordion(dayNum) {
-      if (expandedDays.has(dayNum)) {
-        expandedDays.delete(dayNum);
-      } else {
-        expandedDays.add(dayNum);
-      }
-      renderTaskItems();
-    }
-
-    async function fetchTaskDashboard() {
-      try {
-        const res = await fetch(`/api/tasks/dashboard?day=${currentSelectedDay}&month=${encodeURIComponent(currentSelectedMonth)}`);
-        const data = await res.json();
-        currentDashboardData = data;
-        
-        // Update viewing label
-        const viewLbl = document.getElementById('task-current-viewing-label');
-        if (viewLbl) {
-          if (currentViewMode === 'expandable') {
-            viewLbl.textContent = `${currentSelectedMonth} ${data.year} (31 Days Breakdown)`;
-          } else {
-            viewLbl.textContent = `Day ${currentSelectedDay} (${currentSelectedMonth})`;
-          }
-        }
-
-        // Update KPIs
-        const streakEl = document.getElementById('kpi-streak');
-        if (streakEl) streakEl.textContent = `${data.streak_days} 🔥`;
-
-        const dayRateEl = document.getElementById('kpi-day-rate');
-        if (dayRateEl) dayRateEl.textContent = `${data.day_metrics.completion_rate}%`;
-
-        const monthRateEl = document.getElementById('kpi-month-rate');
-        if (monthRateEl) monthRateEl.textContent = `${data.month_metrics.completion_rate}%`;
-
-        const pendingEl = document.getElementById('kpi-pending-count');
-        if (pendingEl) pendingEl.textContent = `${data.month_metrics.pending}`;
-
-        // Update LeetCode & Problem Solving Habit Card
-        if (data.leetcode_metrics) {
-          const lc = data.leetcode_metrics;
-          const lcStreak = document.getElementById('leetcode-streak-badge');
-          if (lcStreak) lcStreak.textContent = `${lc.streak} DAYS 🔥`;
-
-          const lcStatus = document.getElementById('leetcode-today-status');
-          const lcBtnText = document.getElementById('btn-quick-solve-text');
-          const lcBtn = document.getElementById('btn-quick-solve-leetcode');
-
-          if (lcStatus) {
-            if (lc.today_done) {
-              lcStatus.innerHTML = `<span style="color:var(--green); font-weight:800;">✅ SOLVED (${lc.month_solved}/${lc.monthly_target} Mo)</span>`;
-            } else {
-              lcStatus.innerHTML = `<span style="color:#FFA116; font-weight:700;">⏳ PENDING (1+ Q)</span>`;
-            }
-          }
-
-          if (lcBtnText && lcBtn) {
-            if (lc.today_done) {
-              lcBtnText.textContent = 'SOLVED ✨';
-              lcBtn.style.background = 'rgba(0, 255, 136, 0.2)';
-              lcBtn.style.color = '#00ff88';
-              lcBtn.style.border = '1px solid rgba(0, 255, 136, 0.4)';
-            } else {
-              lcBtnText.textContent = 'MARK SOLVED';
-              lcBtn.style.background = 'linear-gradient(135deg, #FFA116, #FF6B00)';
-              lcBtn.style.color = '#000';
-              lcBtn.style.border = 'none';
-            }
-          }
-        }
-
-        // Update Dynamic Pie / Donut Chart
-        updateTaskChart(data.month_metrics.completed, data.month_metrics.pending);
-
-        // Update Category Breakdown
-        renderCategoryBreakdown(data.month_metrics.category_breakdown);
-
-        // Render Task Items / Expandable Accordions
-        renderTaskItems();
-
-      } catch (err) {
-        console.error('[Tasks] Dashboard fetch error:', err);
-      }
-    }
-
-    function updateTaskChart(completed, pending) {
-      const canvas = document.getElementById('task-pie-chart');
-      if (!canvas || typeof Chart === 'undefined') return;
-
-      const total = completed + pending;
-      const dataValues = total === 0 ? [1, 0] : [completed, pending];
-      const bgColors = total === 0 
-        ? ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.02)'] 
-        : ['#00ff88', '#ffaa00'];
-
-      if (taskChartInstance) {
-        taskChartInstance.data.datasets[0].data = dataValues;
-        taskChartInstance.data.datasets[0].backgroundColor = bgColors;
-        taskChartInstance.update();
-      } else {
-        const ctx = canvas.getContext('2d');
-        taskChartInstance = new Chart(ctx, {
-          type: 'doughnut',
-          data: {
-            labels: ['Completed', 'Pending'],
-            datasets: [{
-              data: dataValues,
-              backgroundColor: bgColors,
-              borderColor: ['#030508', '#030508'],
-              borderWidth: 3,
-              hoverOffset: 4
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '72%',
-            plugins: {
-              legend: {
-                position: 'bottom',
-                labels: {
-                  color: '#8b9bb4',
-                  font: { family: 'Space Grotesk', size: 10 },
-                  padding: 12
-                }
-              },
-              tooltip: {
-                callbacks: {
-                  label: (ctx) => ` ${ctx.label}: ${ctx.raw} task${ctx.raw === 1 ? '' : 's'}`
-                }
-              }
-            },
-            animation: {
-              animateRotate: true,
-              duration: 800
-            }
-          }
-        });
-      }
-    }
-
-    function renderCategoryBreakdown(cats) {
-      const container = document.getElementById('task-category-breakdown');
-      if (!container) return;
-
-      const entries = Object.entries(cats || {});
-      if (entries.length === 0) {
-        container.innerHTML = `<span style="font-size:0.65rem; color:#8b9bb4; font-family:var(--mono);">No categorical tasks yet.</span>`;
-        return;
-      }
-
-      let html = '';
-      for (const [catName, catInfo] of entries) {
-        const pct = catInfo.total > 0 ? Math.round((catInfo.completed / catInfo.total) * 100) : 0;
-        html += `
-          <div class="category-row">
-            <div class="category-header-row">
-              <span style="color:#ffffff;">${catName}</span>
-              <span style="color:#00f2fe;">${catInfo.completed}/${catInfo.total} (${pct}%)</span>
-            </div>
-            <div class="cat-track">
-              <div class="cat-fill" style="width: ${pct}%;"></div>
-            </div>
-          </div>
-        `;
-      }
-      container.innerHTML = html;
-    }
-
-    function renderTaskItems() {
-      const listContainer = document.getElementById('task-items-list');
-      if (!listContainer || !currentDashboardData) return;
-
-      const now = new Date();
-      const todayDay = now.getDate();
-      const months = ["January", "February", "March", "April", "May", "June", 
-                      "July", "August", "September", "October", "November", "December"];
-      const isCurrentMonth = (currentSelectedMonth === months[now.getMonth()]);
-
-      // ── MODE 1: EXPANDABLE 31-DAY MONTH BREAKDOWN ──
-      if (currentViewMode === 'expandable') {
-        const daysMap = currentDashboardData.month_metrics.days_breakdown || {};
-        let html = '';
-
-        for (let d = 1; d <= 31; d++) {
-          const dayInfo = daysMap[d] || { day: d, total: 0, completed: 0, pending: 0, completion_rate: 0, tasks: [] };
-          let tasks = dayInfo.tasks || [];
-
-          if (currentTaskFilter === 'pending') {
-            tasks = tasks.filter(t => t.is_completed === 0);
-          } else if (currentTaskFilter === 'completed') {
-            tasks = tasks.filter(t => t.is_completed === 1);
-          }
-
-          const isExpanded = expandedDays.has(d);
-          const isToday = (isCurrentMonth && d === todayDay);
-          const isSelected = (d === currentSelectedDay);
-
-          let statusBadge = '';
-          if (dayInfo.total === 0) {
-            statusBadge = `<span style="font-size:0.62rem; color:#64748b; font-family:var(--mono);">0 tasks</span>`;
-          } else if (dayInfo.completed === dayInfo.total) {
-            statusBadge = `<span style="font-size:0.62rem; color:var(--green); font-family:var(--mono); font-weight:700;">${dayInfo.completed}/${dayInfo.total} Done 🌟</span>`;
-          } else {
-            statusBadge = `<span style="font-size:0.62rem; color:var(--amber); font-family:var(--mono); font-weight:600;">${dayInfo.completed}/${dayInfo.total} (${dayInfo.completion_rate}%)</span>`;
-          }
-
-          html += `
-            <div class="day-accordion-card ${isExpanded ? 'expanded' : ''} ${isToday ? 'is-today' : ''}" id="day-accordion-${d}">
-              <div class="day-acc-header" onclick="toggleDayAccordion(${d})">
-                <div class="day-acc-left">
-                  <div class="day-acc-badge">
-                    <span class="day-acc-num">${d < 10 ? '0' + d : d}</span>
-                    <span class="day-acc-sub">DAY</span>
-                  </div>
-                  <div class="day-acc-title-group">
-                    <div class="day-acc-title">
-                      <span>Day ${d} — ${currentSelectedMonth} ${d}</span>
-                      ${isToday ? '<span class="day-today-tag">TODAY</span>' : ''}
-                    </div>
-                    <div class="day-acc-count-text">${statusBadge}</div>
-                  </div>
-                </div>
-                <div class="day-acc-right">
-                  ${dayInfo.total > 0 ? `
-                    <div class="day-acc-mini-bar" title="${dayInfo.completion_rate}% completed">
-                      <div class="day-acc-mini-fill" style="width: ${dayInfo.completion_rate}%;"></div>
-                    </div>
-                  ` : ''}
-                  <div class="day-acc-chevron">
-                    <i data-lucide="chevron-down" class="icon-sm"></i>
-                  </div>
-                </div>
-              </div>
-
-              <div class="day-acc-body">
-                <!-- Task List for this day -->
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-          `;
-
-          if (tasks.length === 0) {
-            html += `
-              <div style="padding: 12px; text-align: center; color: var(--text-dim); font-size: 0.72rem; font-family: var(--mono);">
-                No ${currentTaskFilter === 'all' ? '' : currentTaskFilter} tasks scheduled for Day ${d}.
-              </div>
-            `;
-          } else {
-            for (const t of tasks) {
-              const isDone = t.is_completed === 1;
-              const prioClass = (t.priority || '').toLowerCase() === 'high' ? 'prio-high' : ((t.priority || '').toLowerCase() === 'low' ? 'prio-low' : 'prio-medium');
-              html += `
-                <div class="task-item-card ${isDone ? 'completed' : ''}" id="task-card-${t.id}">
-                  <div class="task-item-left">
-                    <button class="task-checkbox-btn" onclick="toggleTask(${t.id}, ${isDone})" title="${isDone ? 'Mark Pending' : 'Mark Completed'}">
-                      <i data-lucide="check" class="icon-xs" style="stroke-width:3;"></i>
-                    </button>
-                    <div class="task-details">
-                      <span class="task-title-text">${escapeHtml(t.title)}</span>
-                      <div class="task-meta-row">
-                        <span class="task-badge-cat">${escapeHtml(t.category || 'General')}</span>
-                        <span class="task-badge-prio ${prioClass}">${escapeHtml(t.priority || 'Medium')}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button class="task-delete-btn" onclick="deleteTaskItem(${t.id})" title="Delete Task">
-                    <i data-lucide="trash-2" class="icon-sm"></i>
-                  </button>
-                </div>
-              `;
-            }
-          }
-
-          // Inline Quick Add Row for this day
-          html += `
-                </div>
-                <form class="day-inline-add-row" onsubmit="event.preventDefault(); quickAddTask(${d}, 'inline-input-${d}');">
-                  <input type="text" id="inline-input-${d}" class="day-inline-input" placeholder="+ Add task for Day ${d}..." autocomplete="off">
-                  <button type="submit" class="task-btn task-btn-cyan" style="padding: 4px 10px; font-size: 0.65rem;">
-                    <i data-lucide="plus" class="icon-xs"></i> ADD
-                  </button>
-                </form>
-              </div>
-            </div>
-          `;
-        }
-
-        listContainer.innerHTML = html;
-        refreshIcons();
-        return;
-      }
-
-      // ── MODE 2: SINGLE DAY FOCUSED VIEW ──
-      const dayTasks = currentDashboardData.day_metrics.tasks || [];
-      let filtered = dayTasks;
-      if (currentTaskFilter === 'pending') {
-        filtered = dayTasks.filter(t => t.is_completed === 0);
-      } else if (currentTaskFilter === 'completed') {
-        filtered = dayTasks.filter(t => t.is_completed === 1);
-      }
-
-      if (filtered.length === 0) {
-        listContainer.innerHTML = `
-          <div class="task-empty-state">
-            <i data-lucide="check-circle" class="icon-lg" style="margin-bottom:8px; opacity:0.4;"></i>
-            <div>No ${currentTaskFilter === 'all' ? '' : currentTaskFilter} tasks scheduled for Day ${currentSelectedDay}.</div>
-            <div style="font-size:0.68rem; margin-top:4px; opacity:0.7;">Use the form above or tell VISION to schedule a task.</div>
-          </div>
-        `;
-        refreshIcons();
-        return;
-      }
-
-      let html = '';
-      for (const t of filtered) {
-        const isDone = t.is_completed === 1;
-        const prioClass = (t.priority || '').toLowerCase() === 'high' ? 'prio-high' : ((t.priority || '').toLowerCase() === 'low' ? 'prio-low' : 'prio-medium');
-        html += `
-          <div class="task-item-card ${isDone ? 'completed' : ''}" id="task-card-${t.id}">
-            <div class="task-item-left">
-              <button class="task-checkbox-btn" onclick="toggleTask(${t.id}, ${isDone})" title="${isDone ? 'Mark Pending' : 'Mark Completed'}">
-                <i data-lucide="check" class="icon-xs" style="stroke-width:3;"></i>
-              </button>
-              <div class="task-details">
-                <span class="task-title-text">${escapeHtml(t.title)}</span>
-                <div class="task-meta-row">
-                  <span class="task-badge-cat">${escapeHtml(t.category || 'General')}</span>
-                  <span class="task-badge-prio ${prioClass}">${escapeHtml(t.priority || 'Medium')}</span>
-                </div>
-              </div>
-            </div>
-            <button class="task-delete-btn" onclick="deleteTaskItem(${t.id})" title="Delete Task">
-              <i data-lucide="trash-2" class="icon-sm"></i>
-            </button>
-          </div>
-        `;
-      }
-      listContainer.innerHTML = html;
-      refreshIcons();
-    }
-
-    async function quickAddTask(dayNum, inputId) {
-      const input = document.getElementById(inputId);
-      if (!input) return;
-      const title = input.value.trim();
-      if (!title) return;
-
-      try {
-        await fetch('/api/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: title,
-            day: dayNum,
-            month: currentSelectedMonth,
-            category: 'General',
-            priority: 'Medium'
-          })
-        });
-        input.value = '';
-        expandedDays.add(dayNum);
-        fetchTaskDashboard();
-      } catch (err) {
-        console.error('[Tasks] Quick add error:', err);
-      }
-    }
-
-    function escapeHtml(text) {
-      if (!text) return '';
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    async function toggleTask(taskId, currentStatus) {
-      try {
-        await fetch(`/api/tasks/${taskId}/toggle`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ completed: !currentStatus })
-        });
-        fetchTaskDashboard();
-      } catch (err) {
-        console.error('[Tasks] Toggle error:', err);
-      }
-    }
-
-    async function deleteTaskItem(taskId) {
-      try {
-        await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-        fetchTaskDashboard();
-      } catch (err) {
-        console.error('[Tasks] Delete error:', err);
-      }
-    }
-
-    window.addEventListener('load', () => {
-      refreshIcons();
-    });
-  </script>
 </body>
 </html>
