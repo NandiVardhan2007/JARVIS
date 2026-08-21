@@ -88,8 +88,15 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 if FRONTEND_DIR.exists():
     @app.get("/")
     async def serve_frontend():
-        """Serve the VISION dashboard SPA."""
-        return FileResponse(str(FRONTEND_DIR / "index.html"))
+        """Serve the VISION dashboard SPA with fresh cache headers."""
+        return FileResponse(
+            str(FRONTEND_DIR / "index.html"),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
 
     # Mount entire frontend directory for CSS, JS, and any other static assets
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend_static")

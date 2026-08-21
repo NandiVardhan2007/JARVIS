@@ -75,7 +75,16 @@ def _resolve_user_path(path_str: str, find_existing_file: bool = False) -> Path:
     and leverage Working Memory and prioritized recursive searching.
     """
     user_home = Path.home()
-    clean = path_str.strip().strip("'\"")
+    clean = path_str.strip().strip("'\"`").rstrip(":,;.")
+
+    # Task tracker special alias
+    if clean.lower() in ["tasktracker", "task_tracker", "tasktracker.xlsx", "task tracker", "task tracker excel", "task tracker excel sheet", "tasktracker excel"]:
+        tracker_file = Path("D:/VISION/data/VISION_Task_Tracker.xlsx")
+        if tracker_file.exists():
+            return tracker_file
+        alt = Path("D:/VISION/tasktracker.xlsx")
+        if alt.exists():
+            return alt
 
     # 1. Check Working Memory first if looking for an existing file
     if find_existing_file:
@@ -104,6 +113,8 @@ def _resolve_user_path(path_str: str, find_existing_file: bool = False) -> Path:
         "pictures": user_home / "Pictures",
         "music": user_home / "Music",
         "videos": user_home / "Videos",
+        "tasktracker": Path("D:/VISION/data/VISION_Task_Tracker.xlsx"),
+        "tasktracker.xlsx": Path("D:/VISION/data/VISION_Task_Tracker.xlsx")
     }
 
     # Direct alias match (e.g. 'Downloads' -> 'C:\Users\NANDU\Downloads')

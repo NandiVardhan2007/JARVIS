@@ -31,5 +31,7 @@ import vision.tools.remote_server_tools
 import vision.tools.academic_tools
 import vision.tools.briefing_tools
 import vision.tools.code_execution_tools
+import vision.tools.task_tracker_tools
+import vision.tools.outlook_tools
 
 __all__ = ["tool", "tool_registry", "ToolRegistry"]

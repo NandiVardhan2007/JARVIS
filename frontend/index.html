@@ -6,9 +6,15 @@
   <title>VISION — Autonomous Multimodal AI Voice OS</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%236c63ff'/><circle cx='16' cy='16' r='6' fill='%2300f2fe'/></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Official Lucide Vector Icon Suite -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- High-Performance Local Vendor Libraries -->
+  <script src="/js/vendor/three.min.js"></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+  <script src="/js/vendor/chart.min.js"></script>
+  <script>
+    window.THREE || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\\/script>');
+    window.lucide || document.write('<script src="https://unpkg.com/lucide@latest"><\\/script>');
+    window.Chart || document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\\/script>');
+  </script>
 
   <style>
     /* ══════════════════════════════════════════════════════════════
@@ -516,12 +522,595 @@
       height: 38px;
     }
 
+    /* ── Task Tracker Header Button ── */
+    .task-tracker-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(127, 0, 255, 0.2));
+      border: 1px solid rgba(0, 242, 254, 0.4);
+      border-radius: 30px; padding: 6px 16px;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+      color: var(--cyan); cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
+    }
+    .task-tracker-btn:hover {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.3), rgba(127, 0, 255, 0.4));
+      border-color: var(--cyan);
+      box-shadow: 0 0 25px rgba(0, 242, 254, 0.4);
+      transform: translateY(-1px) scale(1.03);
+    }
+
+    /* ── Task Tracker Modal & Glassmorphism HUD ── */
+    .task-modal-backdrop {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(3, 5, 10, 0.82);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px;
+      animation: taskFadeIn 0.3s ease-out;
+    }
+    .task-modal-backdrop.active { display: flex; }
+    @keyframes taskFadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .task-modal-card {
+      width: 95vw; max-width: 1100px;
+      max-height: 90vh;
+      background: rgba(8, 14, 28, 0.92);
+      border: 1px solid rgba(0, 242, 254, 0.35);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 242, 254, 0.18);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      pointer-events: auto;
+    }
+
+    .task-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 22px;
+      background: rgba(13, 22, 44, 0.7);
+      border-bottom: 1px solid rgba(0, 242, 254, 0.18);
+      gap: 16px; flex-wrap: wrap;
+    }
+    .task-modal-title-group {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .task-brand-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: rgba(0, 242, 254, 0.12);
+      border: 1px solid var(--cyan);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+    }
+    .task-modal-heading {
+      font-size: 1.05rem; font-weight: 700; letter-spacing: 0.1em;
+      background: linear-gradient(90deg, #ffffff, var(--cyan));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-family: var(--font);
+    }
+    .task-modal-sub {
+      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
+    }
+
+    .task-modal-top-actions {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .task-select {
+      background: rgba(13, 22, 44, 0.9);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 20px; padding: 6px 14px;
+      color: #ffffff; font-family: var(--mono); font-size: 0.75rem;
+      outline: none; cursor: pointer; transition: all 0.2s;
+    }
+    .task-select:hover, .task-select:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+    }
+
+    .task-btn {
+      display: flex; align-items: center; gap: 6px;
+      border-radius: 20px; padding: 6px 14px;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; outline: none;
+    }
+    .task-btn-green {
+      background: rgba(0, 255, 136, 0.12);
+      border: 1px solid var(--green);
+      color: var(--green);
+    }
+    .task-btn-green:hover {
+      background: rgba(0, 255, 136, 0.25);
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.35);
+      transform: translateY(-1px);
+    }
+    .task-btn-cyan {
+      background: rgba(0, 242, 254, 0.12);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+    }
+    .task-btn-cyan:hover {
+      background: rgba(0, 242, 254, 0.25);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
+      transform: translateY(-1px);
+    }
+    .task-btn-primary {
+      background: linear-gradient(135deg, var(--neon-blue), var(--cyan));
+      border: none; color: #030508; font-weight: 700;
+    }
+    .task-btn-primary:hover {
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .task-close-btn {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-dim); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .task-close-btn:hover {
+      background: rgba(255, 51, 102, 0.2);
+      border-color: var(--red); color: var(--red);
+      transform: rotate(90deg);
+    }
+
+    /* ── 31-Day Timeline Bar ── */
+    .task-days-timeline-wrap {
+      padding: 10px 18px;
+      background: rgba(6, 12, 24, 0.9);
+      border-bottom: 1px solid rgba(0, 242, 254, 0.12);
+      overflow-x: auto;
+    }
+    .task-days-timeline-wrap::-webkit-scrollbar { height: 4px; }
+    .task-days-timeline-wrap::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.3); border-radius: 4px; }
+    
+    .task-days-timeline {
+      display: flex; gap: 6px; min-width: max-content;
+    }
+    .day-pill {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 44px; height: 46px; border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-dim); cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      font-family: var(--mono);
+    }
+    .day-pill:hover {
+      background: rgba(0, 242, 254, 0.08);
+      border-color: rgba(0, 242, 254, 0.3);
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+    .day-pill.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(127, 0, 255, 0.25));
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+      font-weight: 700;
+    }
+    .day-pill.is-today {
+      border-color: var(--green);
+    }
+    .day-pill.is-today::after {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--green); margin-top: 2px;
+      box-shadow: 0 0 6px var(--green);
+    }
+    .day-pill-num { font-size: 0.85rem; }
+    .day-pill-sub { font-size: 0.55rem; text-transform: uppercase; }
+
+    /* ── Main Modal Body Split ── */
+    .task-modal-body {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      overflow: hidden;
+      flex: 1; min-height: 480px;
+    }
+
+    /* Left Column: Analytics */
+    .task-analytics-col {
+      background: rgba(6, 11, 22, 0.6);
+      border-right: 1px solid rgba(0, 242, 254, 0.12);
+      padding: 16px; display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto;
+    }
+    .task-analytics-col::-webkit-scrollbar { width: 4px; }
+    .task-analytics-col::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.2); border-radius: 4px; }
+
+    .task-kpi-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .task-kpi-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(0, 242, 254, 0.14);
+      border-radius: 12px; padding: 10px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+    }
+    .task-kpi-val {
+      font-size: 1.15rem; font-weight: 700; font-family: var(--mono);
+    }
+    .task-kpi-lbl {
+      font-size: 0.6rem; font-family: var(--mono); color: var(--text-dim);
+      letter-spacing: 0.05em; margin-top: 2px;
+    }
+    .text-cyan { color: var(--cyan); text-shadow: 0 0 10px rgba(0, 242, 254, 0.4); }
+    .text-green { color: var(--green); text-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
+    .text-purple { color: #c084fc; text-shadow: 0 0 10px rgba(192, 132, 252, 0.4); }
+    .text-amber { color: var(--amber); text-shadow: 0 0 10px rgba(255, 170, 0, 0.4); }
+
+    /* LeetCode & Problem Solving Daily Habit Card */
+    .task-leetcode-card {
+      background: linear-gradient(135deg, rgba(255, 161, 22, 0.08) 0%, rgba(255, 107, 0, 0.04) 100%);
+      border: 1px solid rgba(255, 161, 22, 0.35);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 0 18px rgba(255, 161, 22, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+    .task-leetcode-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 4px; height: 100%;
+      background: linear-gradient(180deg, #FFA116, #FF6B00);
+    }
+    .task-leetcode-streak-badge {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #FFA116;
+      background: rgba(255, 161, 22, 0.15);
+      border: 1px solid rgba(255, 161, 22, 0.4);
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-shadow: 0 0 8px rgba(255, 161, 22, 0.5);
+    }
+    .platform-link-btn {
+      flex: 1;
+      text-align: center;
+      padding: 4px 6px;
+      font-size: 0.65rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .platform-link-btn:hover {
+      background: rgba(255, 161, 22, 0.2);
+      border-color: rgba(255, 161, 22, 0.5);
+      color: #FFA116;
+    }
+
+    .task-chart-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(0, 242, 254, 0.14);
+      border-radius: 14px; padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .task-chart-header {
+      font-size: 0.68rem; font-family: var(--mono); color: var(--cyan);
+      letter-spacing: 0.1em; display: flex; align-items: center; gap: 6px;
+    }
+    .task-chart-canvas-wrap {
+      width: 100%; height: 160px; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .task-categories-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(0, 242, 254, 0.14);
+      border-radius: 14px; padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .category-row {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .category-header-row {
+      display: flex; justify-content: space-between; font-size: 0.68rem; font-family: var(--mono);
+    }
+    .cat-track {
+      width: 100%; height: 4px; border-radius: 2px;
+      background: rgba(255, 255, 255, 0.06); overflow: hidden;
+    }
+    .cat-fill {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--neon-blue), var(--cyan));
+      transition: width 0.4s ease;
+    }
+
+    /* Right Column: Task List */
+    .task-list-col {
+      padding: 18px 22px; display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto;
+    }
+    .task-list-col::-webkit-scrollbar { width: 4px; }
+    .task-list-col::-webkit-scrollbar-thumb { background: rgba(0, 242, 254, 0.2); border-radius: 4px; }
+
+    .task-add-form {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .task-input {
+      flex: 1; background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(0, 242, 254, 0.25);
+      border-radius: 10px; padding: 9px 14px;
+      color: #ffffff; font-family: var(--font); font-size: 0.85rem;
+      outline: none; transition: all 0.2s;
+    }
+    .task-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
+      background: rgba(255, 255, 255, 0.07);
+    }
+    .task-select-sm {
+      background: rgba(13, 22, 44, 0.9);
+      border: 1px solid rgba(0, 242, 254, 0.25);
+      border-radius: 10px; padding: 8px 10px;
+      color: #ffffff; font-family: var(--mono); font-size: 0.72rem;
+      outline: none; cursor: pointer;
+    }
+
+    .task-filters-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 8px;
+    }
+    .task-filters-left { display: flex; gap: 6px; }
+    .task-filter-pill {
+      background: none; border: 1px solid transparent;
+      border-radius: 14px; padding: 3px 10px;
+      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .task-filter-pill.active {
+      background: rgba(0, 242, 254, 0.12);
+      border-color: rgba(0, 242, 254, 0.35);
+      color: var(--cyan); font-weight: 600;
+    }
+    .task-active-date-label {
+      font-size: 0.72rem; font-family: var(--mono); color: var(--cyan);
+      font-weight: 600; letter-spacing: 0.05em;
+    }
+
+    .task-items-container {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .task-item-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px; padding: 10px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .task-item-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(0, 242, 254, 0.25);
+      transform: translateX(3px);
+    }
+    .task-item-card.completed {
+      background: rgba(0, 255, 136, 0.03);
+      border-color: rgba(0, 255, 136, 0.2);
+    }
+    .task-item-left {
+      display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
+    }
+    
+    /* Custom Checkbox */
+    .task-checkbox-btn {
+      width: 22px; height: 22px; border-radius: 6px;
+      border: 2px solid rgba(0, 242, 254, 0.5);
+      background: rgba(0, 242, 254, 0.05);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+      color: transparent;
+    }
+    .task-checkbox-btn:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
+    }
+    .task-item-card.completed .task-checkbox-btn {
+      background: var(--green); border-color: var(--green);
+      color: #030508; box-shadow: 0 0 12px rgba(0, 255, 136, 0.5);
+    }
+
+    .task-details {
+      display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;
+    }
+    .task-title-text {
+      font-size: 0.85rem; font-weight: 500; color: #ffffff;
+      word-break: break-word; transition: all 0.2s;
+    }
+    .task-item-card.completed .task-title-text {
+      text-decoration: line-through; color: var(--text-dim);
+    }
+    .task-meta-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .task-badge-cat {
+      font-size: 0.6rem; font-family: var(--mono); color: var(--cyan);
+      background: rgba(0, 242, 254, 0.08); border-radius: 6px;
+      padding: 1px 6px; border: 1px solid rgba(0, 242, 254, 0.2);
+    }
+    .task-badge-prio {
+      font-size: 0.6rem; font-family: var(--mono); border-radius: 6px;
+      padding: 1px 6px;
+    }
+    .prio-high { color: var(--red); background: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.3); }
+    .prio-medium { color: var(--amber); background: rgba(255, 170, 0, 0.1); border: 1px solid rgba(255, 170, 0, 0.3); }
+    .prio-low { color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); }
+
+    .task-delete-btn {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; padding: 4px; border-radius: 6px;
+      transition: all 0.2s; opacity: 0.4;
+    }
+    .task-item-card:hover .task-delete-btn { opacity: 1; }
+    .task-delete-btn:hover {
+      color: var(--red); background: rgba(255, 51, 102, 0.15);
+    }
+
+    /* ── Expandable Day Card & Accordion Styling ── */
+    .day-accordion-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-bottom: 10px;
+    }
+    .day-accordion-card:hover {
+      border-color: rgba(0, 242, 254, 0.3);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .day-accordion-card.is-today {
+      border-color: rgba(0, 255, 136, 0.4);
+      background: rgba(0, 255, 136, 0.02);
+    }
+    .day-accordion-card.is-today .day-acc-title {
+      color: var(--green);
+    }
+    .day-accordion-card.expanded {
+      border-color: rgba(0, 242, 254, 0.4);
+      background: rgba(13, 22, 44, 0.5);
+    }
+
+    .day-acc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; cursor: pointer; user-select: none;
+      background: rgba(255, 255, 255, 0.015);
+      gap: 12px;
+    }
+    .day-acc-header:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .day-acc-left {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .day-acc-badge {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.25);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-family: var(--mono); font-weight: 700; color: var(--cyan);
+      flex-shrink: 0;
+    }
+    .day-acc-badge .day-acc-num { font-size: 0.95rem; line-height: 1; }
+    .day-acc-badge .day-acc-sub { font-size: 0.5rem; text-transform: uppercase; color: var(--text-dim); }
+
+    .day-acc-title-group {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .day-acc-title {
+      font-size: 0.88rem; font-weight: 600; font-family: var(--font); color: #ffffff;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .day-today-tag {
+      font-size: 0.58rem; font-family: var(--mono); color: var(--green);
+      background: rgba(0, 255, 136, 0.12); border: 1px solid rgba(0, 255, 136, 0.3);
+      padding: 1px 6px; border-radius: 10px; font-weight: 700;
+    }
+    .day-acc-count-text {
+      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
+    }
+
+    .day-acc-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .day-acc-mini-bar {
+      width: 80px; height: 4px; border-radius: 2px;
+      background: rgba(255, 255, 255, 0.08); overflow: hidden;
+    }
+    .day-acc-mini-fill {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--neon-blue), var(--green));
+      transition: width 0.3s;
+    }
+    .day-acc-chevron {
+      color: var(--text-dim); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .day-accordion-card.expanded .day-acc-chevron {
+      transform: rotate(180deg);
+      color: var(--cyan);
+    }
+
+    .day-acc-body {
+      display: none; padding: 12px 16px 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      animation: slideDownAcc 0.25s ease-out;
+    }
+    .day-accordion-card.expanded .day-acc-body {
+      display: block;
+    }
+    @keyframes slideDownAcc {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .day-inline-add-row {
+      display: flex; gap: 8px; align-items: center;
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    }
+    .day-inline-input {
+      flex: 1; background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(0, 242, 254, 0.2);
+      border-radius: 8px; padding: 6px 10px;
+      color: #ffffff; font-family: var(--font); font-size: 0.78rem; outline: none;
+    }
+    .day-inline-input:focus {
+      border-color: var(--cyan);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* View Switcher Pills */
+    .view-mode-tabs {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .view-mode-btn {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px; padding: 4px 12px;
+      font-size: 0.68rem; font-family: var(--mono); color: var(--text-dim);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .view-mode-btn:hover {
+      background: rgba(0, 242, 254, 0.1); color: #ffffff;
+    }
+    .view-mode-btn.active {
+      background: rgba(0, 242, 254, 0.18);
+      border-color: var(--cyan);
+      color: var(--cyan); font-weight: 700;
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.25);
+    }
+
     /* ── Responsive ── */
     @media (max-width: 1080px) {
       .hud-middle { grid-template-columns: 1fr; }
       .left-hud-column, .transcriptions-card { display: none; }
       .center-hud { max-width: 90%; }
       #hud-shell { padding: 12px; }
+      .task-modal-body { grid-template-columns: 1fr; }
+      .task-analytics-col { display: none; }
     }
   </style>
 </head>
@@ -549,6 +1138,12 @@
       </div>
 
       <div class="header-controls">
+        <!-- Task Tracker & Excel Button -->
+        <button class="task-tracker-btn" id="task-tracker-toggle-btn" title="Open Dynamic Task Tracker & Excel Dashboard">
+          <i data-lucide="check-square" class="icon-sm"></i>
+          <span>TASK TRACKER & EXCEL</span>
+        </button>
+
         <!-- Mute Kill-Switch Button -->
         <button class="mute-toggle-btn" id="mute-btn" title="Mute Microphone (VISION will not listen)">
           <span id="mute-icon-container">
@@ -721,6 +1316,223 @@
 
     </div>
 
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       VISION DYNAMIC TASK TRACKER & EXCEL DASHBOARD MODAL
+       ══════════════════════════════════════════════════════════════ -->
+  <div id="task-tracker-modal" class="task-modal-backdrop">
+    <div class="task-modal-card">
+      <div class="task-modal-header">
+        <div class="task-modal-title-group">
+          <div class="task-brand-icon">
+            <i data-lucide="sparkles" class="icon-md"></i>
+          </div>
+          <div>
+            <div class="task-modal-heading">VISION TASK TRACKER & PRODUCTIVITY HUD</div>
+            <div class="task-modal-sub">Dual-Control Voice OS & Colorful Excel Workbook Sync</div>
+          </div>
+        </div>
+        <div class="task-modal-top-actions">
+          <!-- Month Picker -->
+          <select id="task-month-select" class="task-select">
+            <option value="January">January</option>
+            <option value="February">February</option>
+            <option value="March">March</option>
+            <option value="April">April</option>
+            <option value="May">May</option>
+            <option value="June">June</option>
+            <option value="July">July</option>
+            <option value="August" selected>August</option>
+            <option value="September">September</option>
+            <option value="October">October</option>
+            <option value="November">November</option>
+            <option value="December">December</option>
+          </select>
+
+          <button class="task-btn task-btn-green" id="open-excel-btn" title="Open the .xlsx file on your computer">
+            <i data-lucide="file-spreadsheet" class="icon-sm"></i>
+            <span>OPEN IN EXCEL</span>
+          </button>
+          <button class="task-btn task-btn-cyan" id="sync-excel-btn" title="Regenerate & sync Excel workbook">
+            <i data-lucide="refresh-cw" class="icon-sm"></i>
+            <span>SYNC EXCEL</span>
+          </button>
+          <button class="task-close-btn" id="task-modal-close-btn" title="Close">
+            <i data-lucide="x" class="icon-md"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 31-Day Timeline Bar -->
+      <div class="task-days-timeline-wrap">
+        <div class="task-days-timeline" id="task-days-bar">
+          <!-- Injected via JS: Day 1 to 31 -->
+        </div>
+      </div>
+
+      <!-- Main Modal Split Grid -->
+      <div class="task-modal-body">
+        <!-- Left Column: Live Analytics & Dynamic Pie/Donut Chart -->
+        <div class="task-analytics-col">
+          <!-- KPI Cards -->
+          <div class="task-kpi-grid">
+            <div class="task-kpi-card">
+              <span class="task-kpi-val text-cyan" id="kpi-streak">0 🔥</span>
+              <span class="task-kpi-lbl">STREAK</span>
+            </div>
+            <div class="task-kpi-card">
+              <span class="task-kpi-val text-green" id="kpi-day-rate">0%</span>
+              <span class="task-kpi-lbl">DAY PROGRESS</span>
+            </div>
+            <div class="task-kpi-card">
+              <span class="task-kpi-val text-purple" id="kpi-month-rate">0%</span>
+              <span class="task-kpi-lbl">MONTH SCORE</span>
+            </div>
+            <div class="task-kpi-card">
+              <span class="task-kpi-val text-amber" id="kpi-pending-count">0</span>
+              <span class="task-kpi-lbl">PENDING</span>
+            </div>
+          </div>
+
+          <!-- LeetCode & Problem Solving Daily Priority Habit Card -->
+          <div class="task-leetcode-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.25rem;">🔥</span>
+                <div>
+                  <div style="font-size: 0.76rem; font-weight: 800; color: #FFA116; font-family: var(--font); letter-spacing: 0.5px;">
+                    LEETCODE & CODING HABIT
+                  </div>
+                  <div style="font-size: 0.62rem; color: #94a3b8; font-family: var(--mono);">
+                    Daily Problem Solving (LeetCode / GFG / CodeChef)
+                  </div>
+                </div>
+              </div>
+              <div class="task-leetcode-streak-badge" id="leetcode-streak-badge">
+                0 DAYS 🔥
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 7px 10px; background: rgba(0,0,0,0.35); border-radius: 8px; border: 1px solid rgba(255,161,22,0.25);">
+              <div>
+                <div style="font-size: 0.64rem; color: #94a3b8;">Today's LeetCode Status:</div>
+                <div style="font-size: 0.78rem; font-weight: 700; font-family: var(--mono);" id="leetcode-today-status">
+                  ⏳ Pending
+                </div>
+              </div>
+              <button type="button" class="task-btn" id="btn-quick-solve-leetcode" style="background: linear-gradient(135deg, #FFA116, #FF6B00); color: #000; font-weight: 800; padding: 5px 11px; font-size: 0.68rem; border-radius: 6px; box-shadow: 0 0 10px rgba(255,161,22,0.35); border: none;">
+                <i data-lucide="check" class="icon-xs" style="stroke-width: 3;"></i>
+                <span id="btn-quick-solve-text">MARK SOLVED</span>
+              </button>
+            </div>
+
+            <!-- Quick Platform Jump Links -->
+            <div style="display: flex; gap: 6px; margin-top: 6px;">
+              <a href="https://leetcode.com/problemset/" target="_blank" rel="noopener noreferrer" class="platform-link-btn" title="Open LeetCode">
+                <i data-lucide="code" class="icon-xs"></i> LeetCode
+              </a>
+              <a href="https://practice.geeksforgeeks.org/" target="_blank" rel="noopener noreferrer" class="platform-link-btn" title="Open GeeksforGeeks">
+                <i data-lucide="terminal" class="icon-xs"></i> GFG
+              </a>
+              <a href="https://www.codechef.com/practice" target="_blank" rel="noopener noreferrer" class="platform-link-btn" title="Open CodeChef">
+                <i data-lucide="cpu" class="icon-xs"></i> CodeChef
+              </a>
+            </div>
+          </div>
+
+          <!-- Chart Container -->
+          <div class="task-chart-card">
+            <div class="task-chart-header">
+              <i data-lucide="pie-chart" class="icon-sm"></i>
+              <span>COMPLETION RATIO (MONTH)</span>
+            </div>
+            <div class="task-chart-canvas-wrap">
+              <canvas id="task-pie-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Category Breakdown -->
+          <div class="task-categories-card">
+            <div class="task-chart-header">
+              <i data-lucide="folder-kanban" class="icon-sm"></i>
+              <span>CATEGORY BREAKDOWN</span>
+            </div>
+            <div id="task-category-breakdown" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Checklist & Expandable Month View -->
+        <div class="task-list-col">
+          <!-- View Switcher & Expand All Controls -->
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+            <div class="view-mode-tabs">
+              <button type="button" class="view-mode-btn active" id="view-mode-expandable" title="View all 31 days of the month with expandable cards">
+                <i data-lucide="calendar" class="icon-xs"></i>
+                <span>EXPANDABLE MONTH VIEW</span>
+              </button>
+              <button type="button" class="view-mode-btn" id="view-mode-single" title="Focus on single selected day">
+                <i data-lucide="target" class="icon-xs"></i>
+                <span>SINGLE DAY VIEW</span>
+              </button>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 6px;" id="expand-collapse-actions">
+              <button type="button" class="task-filter-pill" id="btn-expand-all" title="Expand all day cards">
+                <i data-lucide="chevrons-down" class="icon-xs"></i> Expand All
+              </button>
+              <button type="button" class="task-filter-pill" id="btn-collapse-all" title="Collapse all day cards">
+                <i data-lucide="chevrons-up" class="icon-xs"></i> Collapse All
+              </button>
+            </div>
+          </div>
+
+          <!-- Add Task Form -->
+          <form class="task-add-form" id="task-add-form">
+            <input type="text" id="new-task-title" class="task-input" placeholder="Add task or habit (e.g. Daily Gym, Code Review)..." required autocomplete="off">
+            <select id="new-task-day-select" class="task-select-sm" title="Select Day (1-31)">
+              <!-- Populated via JS with Days 1..31 -->
+            </select>
+            <select id="new-task-category" class="task-select-sm">
+              <option value="General">General</option>
+              <option value="Coding">Coding</option>
+              <option value="Fitness">Fitness</option>
+              <option value="Work">Work</option>
+              <option value="Study">Study</option>
+              <option value="Habits">Habits</option>
+            </select>
+            <select id="new-task-priority" class="task-select-sm">
+              <option value="High">High</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <button type="submit" class="task-btn task-btn-primary">
+              <i data-lucide="plus" class="icon-sm"></i>
+              <span>ADD</span>
+            </button>
+          </form>
+
+          <!-- Filter & Info Bar -->
+          <div class="task-filters-bar">
+            <div class="task-filters-left">
+              <button type="button" class="task-filter-pill active" data-filter="all">All Tasks</button>
+              <button type="button" class="task-filter-pill" data-filter="pending">Pending</button>
+              <button type="button" class="task-filter-pill" data-filter="completed">Completed</button>
+            </div>
+            <div class="task-active-date-label" id="task-current-viewing-label">
+              August 2026 (31 Days)
+            </div>
+          </div>
+
+          <!-- Scrollable Task Items / Expandable Accordions Container -->
+          <div class="task-items-container" id="task-items-list">
+            <!-- Injected via JS: Accordion cards for Days 1..31 or Single Day list -->
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="js/websocket.js"></script>
@@ -1189,10 +2001,11 @@
     const statusDot = document.getElementById('status-indicator');
 
     document.addEventListener('DOMContentLoaded', async () => {
-      init3DOrb();
-      setupWebSocketListeners();
-      setupEventListeners();
-      startSystemTelemetry();
+      try { init3DOrb(); } catch(e) { console.error('[3D Orb] Init error:', e); }
+      try { setupWebSocketListeners(); } catch(e) { console.error('[WS] Init error:', e); }
+      try { setupEventListeners(); } catch(e) { console.error('[Events] Init error:', e); }
+      try { startSystemTelemetry(); } catch(e) { console.error('[Telemetry] Init error:', e); }
+      try { initTaskTracker(); } catch(e) { console.error('[TaskTracker] Init error:', e); }
       refreshIcons();
 
       document.body.addEventListener('click', startHandsFreeVAD, { once: true });
@@ -1942,6 +2755,691 @@
       updateStats();
       updateMemoryNodes();
     }
+
+    /* ══════════════════════════════════════════════════════════════
+       VISION TASK TRACKER & EXCEL DASHBOARD LOGIC (Expandable Month / Dual-Control)
+       ══════════════════════════════════════════════════════════════ */
+    let currentSelectedMonth = "August";
+    let currentSelectedDay = (new Date()).getDate();
+    let currentTaskFilter = "all";
+    let currentViewMode = "expandable"; // "expandable" | "single"
+    let currentDashboardData = null;
+    let taskChartInstance = null;
+    const expandedDays = new Set([ (new Date()).getDate() ]);
+
+    function initTaskTracker() {
+      const modal = document.getElementById('task-tracker-modal');
+      const toggleBtn = document.getElementById('task-tracker-toggle-btn');
+      const closeBtn = document.getElementById('task-modal-close-btn');
+      const monthSelect = document.getElementById('task-month-select');
+      const openExcelBtn = document.getElementById('open-excel-btn');
+      const syncExcelBtn = document.getElementById('sync-excel-btn');
+      const addForm = document.getElementById('task-add-form');
+      const daySelect = document.getElementById('new-task-day-select');
+
+      // Populate Day select dropdown (1..31)
+      if (daySelect) {
+        let options = '';
+        for (let d = 1; d <= 31; d++) {
+          const sel = (d === currentSelectedDay) ? 'selected' : '';
+          options += `<option value="${d}" ${sel}>Day ${d < 10 ? '0' + d : d}</option>`;
+        }
+        daySelect.innerHTML = options;
+      }
+
+      // Set initial month based on current local date
+      const months = ["January", "February", "March", "April", "May", "June", 
+                      "July", "August", "September", "October", "November", "December"];
+      const now = new Date();
+      currentSelectedMonth = months[now.getMonth()];
+      currentSelectedDay = now.getDate();
+      expandedDays.add(currentSelectedDay);
+      if (monthSelect) monthSelect.value = currentSelectedMonth;
+
+      // Open Modal
+      if (toggleBtn && modal) {
+        toggleBtn.addEventListener('click', () => {
+          modal.classList.add('active');
+          renderDaysBar();
+          fetchTaskDashboard();
+        });
+      }
+
+      // Close Modal
+      if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+      }
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.classList.remove('active');
+        });
+      }
+
+      // Month select
+      if (monthSelect) {
+        monthSelect.addEventListener('change', (e) => {
+          currentSelectedMonth = e.target.value;
+          renderDaysBar();
+          fetchTaskDashboard();
+        });
+      }
+
+      // View Mode Switcher
+      const btnExpandable = document.getElementById('view-mode-expandable');
+      const btnSingle = document.getElementById('view-mode-single');
+      const expandActions = document.getElementById('expand-collapse-actions');
+      const timelineBarWrap = document.querySelector('.task-days-timeline-wrap');
+
+      if (btnExpandable && btnSingle) {
+        btnExpandable.addEventListener('click', () => {
+          currentViewMode = 'expandable';
+          btnExpandable.classList.add('active');
+          btnSingle.classList.remove('active');
+          if (expandActions) expandActions.style.display = 'flex';
+          if (timelineBarWrap) timelineBarWrap.style.display = 'block';
+          renderTaskItems();
+        });
+
+        btnSingle.addEventListener('click', () => {
+          currentViewMode = 'single';
+          btnSingle.classList.add('active');
+          btnExpandable.classList.remove('active');
+          if (expandActions) expandActions.style.display = 'none';
+          if (timelineBarWrap) timelineBarWrap.style.display = 'block';
+          renderTaskItems();
+        });
+      }
+
+      // Expand All / Collapse All
+      const btnExpandAll = document.getElementById('btn-expand-all');
+      const btnCollapseAll = document.getElementById('btn-collapse-all');
+      if (btnExpandAll) {
+        btnExpandAll.addEventListener('click', () => {
+          for (let d = 1; d <= 31; d++) expandedDays.add(d);
+          renderTaskItems();
+        });
+      }
+      if (btnCollapseAll) {
+        btnCollapseAll.addEventListener('click', () => {
+          expandedDays.clear();
+          renderTaskItems();
+        });
+      }
+
+      // Filter tabs
+      document.querySelectorAll('.task-filter-pill[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.task-filter-pill[data-filter]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentTaskFilter = btn.getAttribute('data-filter');
+          renderTaskItems();
+        });
+      });
+
+      // Add Task Form
+      if (addForm) {
+        addForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const titleInput = document.getElementById('new-task-title');
+          const dayInput = document.getElementById('new-task-day-select');
+          const catSelect = document.getElementById('new-task-category');
+          const prioSelect = document.getElementById('new-task-priority');
+          const title = titleInput.value.trim();
+          if (!title) return;
+
+          const chosenDay = dayInput ? parseInt(dayInput.value) : currentSelectedDay;
+
+          try {
+            await fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: title,
+                day: chosenDay,
+                month: currentSelectedMonth,
+                category: catSelect.value,
+                priority: prioSelect.value
+              })
+            });
+            titleInput.value = '';
+            expandedDays.add(chosenDay);
+            fetchTaskDashboard();
+          } catch (err) {
+            console.error('[Tasks] Add task error:', err);
+          }
+        });
+      }
+
+      // Open in Excel Button
+      if (openExcelBtn) {
+        openExcelBtn.addEventListener('click', async () => {
+          try {
+            openExcelBtn.disabled = true;
+            const originalHTML = openExcelBtn.innerHTML;
+            openExcelBtn.innerHTML = `<span>LAUNCHING...</span>`;
+            await fetch('/api/tasks/excel/open', { method: 'POST' });
+            setTimeout(() => {
+              openExcelBtn.disabled = false;
+              openExcelBtn.innerHTML = originalHTML;
+              refreshIcons();
+            }, 1200);
+          } catch (err) {
+            console.error('[Excel] Open error:', err);
+            openExcelBtn.disabled = false;
+          }
+        });
+      }
+
+      // Sync Excel Button
+      if (syncExcelBtn) {
+        syncExcelBtn.addEventListener('click', async () => {
+          try {
+            syncExcelBtn.disabled = true;
+            const originalHTML = syncExcelBtn.innerHTML;
+            syncExcelBtn.innerHTML = `<span>SYNCING...</span>`;
+            await fetch('/api/tasks/excel/sync', { method: 'POST' });
+            setTimeout(() => {
+              syncExcelBtn.disabled = false;
+              syncExcelBtn.innerHTML = originalHTML;
+              refreshIcons();
+            }, 800);
+          } catch (err) {
+            console.error('[Excel] Sync error:', err);
+            syncExcelBtn.disabled = false;
+          }
+        });
+      }
+
+      // Quick LeetCode Solve Button
+      const btnQuickSolveLC = document.getElementById('btn-quick-solve-leetcode');
+      if (btnQuickSolveLC) {
+        btnQuickSolveLC.addEventListener('click', async () => {
+          try {
+            const daysMap = currentDashboardData?.month_metrics?.days_breakdown || {};
+            const todayDayTasks = daysMap[currentSelectedDay]?.tasks || [];
+            const lcTask = todayDayTasks.find(t => (t.title || '').toLowerCase().includes('leetcode'));
+
+            if (lcTask) {
+              await toggleTask(lcTask.id, lcTask.is_completed === 1);
+            } else {
+              // Add and mark completed
+              const res = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: 'Daily LeetCode Problem Solving (LeetCode / CodeChef / GFG)',
+                  day: currentSelectedDay,
+                  month: currentSelectedMonth,
+                  category: 'Coding',
+                  priority: 'High'
+                })
+              });
+              const newTask = await res.json();
+              if (newTask && newTask.id) {
+                await toggleTask(newTask.id, false);
+              } else {
+                fetchTaskDashboard();
+              }
+            }
+          } catch (err) {
+            console.error('[LeetCode] Quick solve error:', err);
+          }
+        });
+      }
+
+      renderDaysBar();
+    }
+
+    function renderDaysBar() {
+      const daysBar = document.getElementById('task-days-bar');
+      if (!daysBar) return;
+
+      const now = new Date();
+      const todayDay = now.getDate();
+      const months = ["January", "February", "March", "April", "May", "June", 
+                      "July", "August", "September", "October", "November", "December"];
+      const isCurrentMonth = (currentSelectedMonth === months[now.getMonth()]);
+
+      let html = '';
+      for (let d = 1; d <= 31; d++) {
+        const isActive = (d === currentSelectedDay) ? 'active' : '';
+        const isToday = (isCurrentMonth && d === todayDay) ? 'is-today' : '';
+        html += `
+          <div class="day-pill ${isActive} ${isToday}" onclick="selectTaskDay(${d})">
+            <span class="day-pill-num">${d < 10 ? '0' + d : d}</span>
+            <span class="day-pill-sub">DAY</span>
+          </div>
+        `;
+      }
+      daysBar.innerHTML = html;
+      
+      setTimeout(() => {
+        const activePill = daysBar.querySelector('.day-pill.active');
+        if (activePill) {
+          activePill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+      }, 100);
+    }
+
+    function selectTaskDay(dayNum) {
+      currentSelectedDay = dayNum;
+      expandedDays.add(dayNum);
+
+      const daySelect = document.getElementById('new-task-day-select');
+      if (daySelect) daySelect.value = dayNum;
+
+      renderDaysBar();
+      fetchTaskDashboard();
+
+      // In expandable view, scroll the expanded day card into view
+      if (currentViewMode === 'expandable') {
+        setTimeout(() => {
+          const cardEl = document.getElementById(`day-accordion-${dayNum}`);
+          if (cardEl) {
+            cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 150);
+      }
+    }
+
+    function toggleDayAccordion(dayNum) {
+      if (expandedDays.has(dayNum)) {
+        expandedDays.delete(dayNum);
+      } else {
+        expandedDays.add(dayNum);
+      }
+      renderTaskItems();
+    }
+
+    async function fetchTaskDashboard() {
+      try {
+        const res = await fetch(`/api/tasks/dashboard?day=${currentSelectedDay}&month=${encodeURIComponent(currentSelectedMonth)}`);
+        const data = await res.json();
+        currentDashboardData = data;
+        
+        // Update viewing label
+        const viewLbl = document.getElementById('task-current-viewing-label');
+        if (viewLbl) {
+          if (currentViewMode === 'expandable') {
+            viewLbl.textContent = `${currentSelectedMonth} ${data.year} (31 Days Breakdown)`;
+          } else {
+            viewLbl.textContent = `Day ${currentSelectedDay} (${currentSelectedMonth})`;
+          }
+        }
+
+        // Update KPIs
+        const streakEl = document.getElementById('kpi-streak');
+        if (streakEl) streakEl.textContent = `${data.streak_days} 🔥`;
+
+        const dayRateEl = document.getElementById('kpi-day-rate');
+        if (dayRateEl) dayRateEl.textContent = `${data.day_metrics.completion_rate}%`;
+
+        const monthRateEl = document.getElementById('kpi-month-rate');
+        if (monthRateEl) monthRateEl.textContent = `${data.month_metrics.completion_rate}%`;
+
+        const pendingEl = document.getElementById('kpi-pending-count');
+        if (pendingEl) pendingEl.textContent = `${data.month_metrics.pending}`;
+
+        // Update LeetCode & Problem Solving Habit Card
+        if (data.leetcode_metrics) {
+          const lc = data.leetcode_metrics;
+          const lcStreak = document.getElementById('leetcode-streak-badge');
+          if (lcStreak) lcStreak.textContent = `${lc.streak} DAYS 🔥`;
+
+          const lcStatus = document.getElementById('leetcode-today-status');
+          const lcBtnText = document.getElementById('btn-quick-solve-text');
+          const lcBtn = document.getElementById('btn-quick-solve-leetcode');
+
+          if (lcStatus) {
+            if (lc.today_done) {
+              lcStatus.innerHTML = `<span style="color:var(--green); font-weight:800;">✅ SOLVED (${lc.month_solved}/${lc.monthly_target} Mo)</span>`;
+            } else {
+              lcStatus.innerHTML = `<span style="color:#FFA116; font-weight:700;">⏳ PENDING (1+ Q)</span>`;
+            }
+          }
+
+          if (lcBtnText && lcBtn) {
+            if (lc.today_done) {
+              lcBtnText.textContent = 'SOLVED ✨';
+              lcBtn.style.background = 'rgba(0, 255, 136, 0.2)';
+              lcBtn.style.color = '#00ff88';
+              lcBtn.style.border = '1px solid rgba(0, 255, 136, 0.4)';
+            } else {
+              lcBtnText.textContent = 'MARK SOLVED';
+              lcBtn.style.background = 'linear-gradient(135deg, #FFA116, #FF6B00)';
+              lcBtn.style.color = '#000';
+              lcBtn.style.border = 'none';
+            }
+          }
+        }
+
+        // Update Dynamic Pie / Donut Chart
+        updateTaskChart(data.month_metrics.completed, data.month_metrics.pending);
+
+        // Update Category Breakdown
+        renderCategoryBreakdown(data.month_metrics.category_breakdown);
+
+        // Render Task Items / Expandable Accordions
+        renderTaskItems();
+
+      } catch (err) {
+        console.error('[Tasks] Dashboard fetch error:', err);
+      }
+    }
+
+    function updateTaskChart(completed, pending) {
+      const canvas = document.getElementById('task-pie-chart');
+      if (!canvas || typeof Chart === 'undefined') return;
+
+      const total = completed + pending;
+      const dataValues = total === 0 ? [1, 0] : [completed, pending];
+      const bgColors = total === 0 
+        ? ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.02)'] 
+        : ['#00ff88', '#ffaa00'];
+
+      if (taskChartInstance) {
+        taskChartInstance.data.datasets[0].data = dataValues;
+        taskChartInstance.data.datasets[0].backgroundColor = bgColors;
+        taskChartInstance.update();
+      } else {
+        const ctx = canvas.getContext('2d');
+        taskChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Completed', 'Pending'],
+            datasets: [{
+              data: dataValues,
+              backgroundColor: bgColors,
+              borderColor: ['#030508', '#030508'],
+              borderWidth: 3,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '72%',
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: '#8b9bb4',
+                  font: { family: 'Space Grotesk', size: 10 },
+                  padding: 12
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => ` ${ctx.label}: ${ctx.raw} task${ctx.raw === 1 ? '' : 's'}`
+                }
+              }
+            },
+            animation: {
+              animateRotate: true,
+              duration: 800
+            }
+          }
+        });
+      }
+    }
+
+    function renderCategoryBreakdown(cats) {
+      const container = document.getElementById('task-category-breakdown');
+      if (!container) return;
+
+      const entries = Object.entries(cats || {});
+      if (entries.length === 0) {
+        container.innerHTML = `<span style="font-size:0.65rem; color:#8b9bb4; font-family:var(--mono);">No categorical tasks yet.</span>`;
+        return;
+      }
+
+      let html = '';
+      for (const [catName, catInfo] of entries) {
+        const pct = catInfo.total > 0 ? Math.round((catInfo.completed / catInfo.total) * 100) : 0;
+        html += `
+          <div class="category-row">
+            <div class="category-header-row">
+              <span style="color:#ffffff;">${catName}</span>
+              <span style="color:#00f2fe;">${catInfo.completed}/${catInfo.total} (${pct}%)</span>
+            </div>
+            <div class="cat-track">
+              <div class="cat-fill" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    }
+
+    function renderTaskItems() {
+      const listContainer = document.getElementById('task-items-list');
+      if (!listContainer || !currentDashboardData) return;
+
+      const now = new Date();
+      const todayDay = now.getDate();
+      const months = ["January", "February", "March", "April", "May", "June", 
+                      "July", "August", "September", "October", "November", "December"];
+      const isCurrentMonth = (currentSelectedMonth === months[now.getMonth()]);
+
+      // ── MODE 1: EXPANDABLE 31-DAY MONTH BREAKDOWN ──
+      if (currentViewMode === 'expandable') {
+        const daysMap = currentDashboardData.month_metrics.days_breakdown || {};
+        let html = '';
+
+        for (let d = 1; d <= 31; d++) {
+          const dayInfo = daysMap[d] || { day: d, total: 0, completed: 0, pending: 0, completion_rate: 0, tasks: [] };
+          let tasks = dayInfo.tasks || [];
+
+          if (currentTaskFilter === 'pending') {
+            tasks = tasks.filter(t => t.is_completed === 0);
+          } else if (currentTaskFilter === 'completed') {
+            tasks = tasks.filter(t => t.is_completed === 1);
+          }
+
+          const isExpanded = expandedDays.has(d);
+          const isToday = (isCurrentMonth && d === todayDay);
+          const isSelected = (d === currentSelectedDay);
+
+          let statusBadge = '';
+          if (dayInfo.total === 0) {
+            statusBadge = `<span style="font-size:0.62rem; color:#64748b; font-family:var(--mono);">0 tasks</span>`;
+          } else if (dayInfo.completed === dayInfo.total) {
+            statusBadge = `<span style="font-size:0.62rem; color:var(--green); font-family:var(--mono); font-weight:700;">${dayInfo.completed}/${dayInfo.total} Done 🌟</span>`;
+          } else {
+            statusBadge = `<span style="font-size:0.62rem; color:var(--amber); font-family:var(--mono); font-weight:600;">${dayInfo.completed}/${dayInfo.total} (${dayInfo.completion_rate}%)</span>`;
+          }
+
+          html += `
+            <div class="day-accordion-card ${isExpanded ? 'expanded' : ''} ${isToday ? 'is-today' : ''}" id="day-accordion-${d}">
+              <div class="day-acc-header" onclick="toggleDayAccordion(${d})">
+                <div class="day-acc-left">
+                  <div class="day-acc-badge">
+                    <span class="day-acc-num">${d < 10 ? '0' + d : d}</span>
+                    <span class="day-acc-sub">DAY</span>
+                  </div>
+                  <div class="day-acc-title-group">
+                    <div class="day-acc-title">
+                      <span>Day ${d} — ${currentSelectedMonth} ${d}</span>
+                      ${isToday ? '<span class="day-today-tag">TODAY</span>' : ''}
+                    </div>
+                    <div class="day-acc-count-text">${statusBadge}</div>
+                  </div>
+                </div>
+                <div class="day-acc-right">
+                  ${dayInfo.total > 0 ? `
+                    <div class="day-acc-mini-bar" title="${dayInfo.completion_rate}% completed">
+                      <div class="day-acc-mini-fill" style="width: ${dayInfo.completion_rate}%;"></div>
+                    </div>
+                  ` : ''}
+                  <div class="day-acc-chevron">
+                    <i data-lucide="chevron-down" class="icon-sm"></i>
+                  </div>
+                </div>
+              </div>
+
+              <div class="day-acc-body">
+                <!-- Task List for this day -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+          `;
+
+          if (tasks.length === 0) {
+            html += `
+              <div style="padding: 12px; text-align: center; color: var(--text-dim); font-size: 0.72rem; font-family: var(--mono);">
+                No ${currentTaskFilter === 'all' ? '' : currentTaskFilter} tasks scheduled for Day ${d}.
+              </div>
+            `;
+          } else {
+            for (const t of tasks) {
+              const isDone = t.is_completed === 1;
+              const prioClass = (t.priority || '').toLowerCase() === 'high' ? 'prio-high' : ((t.priority || '').toLowerCase() === 'low' ? 'prio-low' : 'prio-medium');
+              html += `
+                <div class="task-item-card ${isDone ? 'completed' : ''}" id="task-card-${t.id}">
+                  <div class="task-item-left">
+                    <button class="task-checkbox-btn" onclick="toggleTask(${t.id}, ${isDone})" title="${isDone ? 'Mark Pending' : 'Mark Completed'}">
+                      <i data-lucide="check" class="icon-xs" style="stroke-width:3;"></i>
+                    </button>
+                    <div class="task-details">
+                      <span class="task-title-text">${escapeHtml(t.title)}</span>
+                      <div class="task-meta-row">
+                        <span class="task-badge-cat">${escapeHtml(t.category || 'General')}</span>
+                        <span class="task-badge-prio ${prioClass}">${escapeHtml(t.priority || 'Medium')}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="task-delete-btn" onclick="deleteTaskItem(${t.id})" title="Delete Task">
+                    <i data-lucide="trash-2" class="icon-sm"></i>
+                  </button>
+                </div>
+              `;
+            }
+          }
+
+          // Inline Quick Add Row for this day
+          html += `
+                </div>
+                <form class="day-inline-add-row" onsubmit="event.preventDefault(); quickAddTask(${d}, 'inline-input-${d}');">
+                  <input type="text" id="inline-input-${d}" class="day-inline-input" placeholder="+ Add task for Day ${d}..." autocomplete="off">
+                  <button type="submit" class="task-btn task-btn-cyan" style="padding: 4px 10px; font-size: 0.65rem;">
+                    <i data-lucide="plus" class="icon-xs"></i> ADD
+                  </button>
+                </form>
+              </div>
+            </div>
+          `;
+        }
+
+        listContainer.innerHTML = html;
+        refreshIcons();
+        return;
+      }
+
+      // ── MODE 2: SINGLE DAY FOCUSED VIEW ──
+      const dayTasks = currentDashboardData.day_metrics.tasks || [];
+      let filtered = dayTasks;
+      if (currentTaskFilter === 'pending') {
+        filtered = dayTasks.filter(t => t.is_completed === 0);
+      } else if (currentTaskFilter === 'completed') {
+        filtered = dayTasks.filter(t => t.is_completed === 1);
+      }
+
+      if (filtered.length === 0) {
+        listContainer.innerHTML = `
+          <div class="task-empty-state">
+            <i data-lucide="check-circle" class="icon-lg" style="margin-bottom:8px; opacity:0.4;"></i>
+            <div>No ${currentTaskFilter === 'all' ? '' : currentTaskFilter} tasks scheduled for Day ${currentSelectedDay}.</div>
+            <div style="font-size:0.68rem; margin-top:4px; opacity:0.7;">Use the form above or tell VISION to schedule a task.</div>
+          </div>
+        `;
+        refreshIcons();
+        return;
+      }
+
+      let html = '';
+      for (const t of filtered) {
+        const isDone = t.is_completed === 1;
+        const prioClass = (t.priority || '').toLowerCase() === 'high' ? 'prio-high' : ((t.priority || '').toLowerCase() === 'low' ? 'prio-low' : 'prio-medium');
+        html += `
+          <div class="task-item-card ${isDone ? 'completed' : ''}" id="task-card-${t.id}">
+            <div class="task-item-left">
+              <button class="task-checkbox-btn" onclick="toggleTask(${t.id}, ${isDone})" title="${isDone ? 'Mark Pending' : 'Mark Completed'}">
+                <i data-lucide="check" class="icon-xs" style="stroke-width:3;"></i>
+              </button>
+              <div class="task-details">
+                <span class="task-title-text">${escapeHtml(t.title)}</span>
+                <div class="task-meta-row">
+                  <span class="task-badge-cat">${escapeHtml(t.category || 'General')}</span>
+                  <span class="task-badge-prio ${prioClass}">${escapeHtml(t.priority || 'Medium')}</span>
+                </div>
+              </div>
+            </div>
+            <button class="task-delete-btn" onclick="deleteTaskItem(${t.id})" title="Delete Task">
+              <i data-lucide="trash-2" class="icon-sm"></i>
+            </button>
+          </div>
+        `;
+      }
+      listContainer.innerHTML = html;
+      refreshIcons();
+    }
+
+    async function quickAddTask(dayNum, inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const title = input.value.trim();
+      if (!title) return;
+
+      try {
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            day: dayNum,
+            month: currentSelectedMonth,
+            category: 'General',
+            priority: 'Medium'
+          })
+        });
+        input.value = '';
+        expandedDays.add(dayNum);
+        fetchTaskDashboard();
+      } catch (err) {
+        console.error('[Tasks] Quick add error:', err);
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function toggleTask(taskId, currentStatus) {
+      try {
+        await fetch(`/api/tasks/${taskId}/toggle`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed: !currentStatus })
+        });
+        fetchTaskDashboard();
+      } catch (err) {
+        console.error('[Tasks] Toggle error:', err);
+      }
+    }
+
+    async function deleteTaskItem(taskId) {
+      try {
+        await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+        fetchTaskDashboard();
+      } catch (err) {
+        console.error('[Tasks] Delete error:', err);
+      }
+    }
+
+    window.addEventListener('load', () => {
+      refreshIcons();
+    });
   </script>
 </body>
 </html>

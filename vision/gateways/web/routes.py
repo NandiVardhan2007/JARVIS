@@ -263,3 +263,131 @@ async def get_screenshot():
         raise HTTPException(status_code=500, detail="Failed to capture screen.")
     return Response(content=jpeg_bytes, media_type="image/jpeg")
 
+
+# ── Task Tracker Endpoints ──
+class TaskCreateRequest(BaseModel):
+    title: str
+    day: Optional[int] = None
+    month: Optional[str] = None
+    year: Optional[int] = None
+    category: Optional[str] = "General"
+    priority: Optional[str] = "Medium"
+
+
+class TaskToggleRequest(BaseModel):
+    completed: Optional[bool] = None
+
+
+@router.get("/tasks/dashboard")
+async def get_tasks_dashboard(day: Optional[int] = None, month: Optional[str] = None, year: Optional[int] = None):
+    try:
+        from vision.memory.task_tracker_db import task_db
+        summary = task_db.get_dashboard_summary(day=day, month=month, year=year)
+        return summary
+    except Exception as e:
+        logger.error(f"[API] Tasks dashboard error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tasks")
+async def list_tasks(day: Optional[int] = None, month: Optional[str] = None, year: Optional[int] = None):
+    try:
+        from vision.memory.task_tracker_db import task_db
+        if day:
+            tasks = task_db.get_tasks_for_day(day=day, month=month, year=year)
+        elif month:
+            tasks = task_db.get_tasks_for_month(month=month, year=year)
+        else:
+            tasks = task_db.get_all_tasks(year=year)
+        return {"tasks": tasks}
+    except Exception as e:
+        logger.error(f"[API] List tasks error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/tasks")
+async def create_task(req: TaskCreateRequest):
+    try:
+        from vision.memory.task_tracker_db import task_db
+        from vision.tools.excel_tracker_engine import excel_tracker
+        task = task_db.add_task(
+            title=req.title,
+            day=req.day,
+            month=req.month,
+            year=req.year,
+            category=req.category or "General",
+            priority=req.priority or "Medium"
+        )
+        try:
+            excel_tracker.generate_workbook(year=task["year"])
+        except Exception as ex:
+            logger.warning(f"[API] Excel sync warning: {ex}")
+        return {"status": "success", "task": task}
+    except Exception as e:
+        logger.error(f"[API] Create task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/tasks/{task_id}/toggle")
+async def toggle_task(task_id: int, req: Optional[TaskToggleRequest] = None):
+    try:
+        from vision.memory.task_tracker_db import task_db
+        from vision.tools.excel_tracker_engine import excel_tracker
+        completed = req.completed if req else None
+        task = task_db.toggle_task(task_id, completed=completed)
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task #{task_id} not found.")
+        try:
+            excel_tracker.generate_workbook(year=task["year"])
+        except Exception as ex:
+            logger.warning(f"[API] Excel sync warning: {ex}")
+        return {"status": "success", "task": task}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] Toggle task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(task_id: int):
+    try:
+        from vision.memory.task_tracker_db import task_db
+        from vision.tools.excel_tracker_engine import excel_tracker
+        success = task_db.delete_task(task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Task #{task_id} not found.")
+        try:
+            excel_tracker.generate_workbook()
+        except Exception as ex:
+            logger.warning(f"[API] Excel sync warning: {ex}")
+        return {"status": "deleted", "task_id": task_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] Delete task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/tasks/excel/sync")
+async def sync_excel_tracker():
+    try:
+        from vision.tools.excel_tracker_engine import excel_tracker
+        path = excel_tracker.generate_workbook()
+        return {"status": "success", "path": path}
+    except Exception as e:
+        logger.error(f"[API] Excel sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/tasks/excel/open")
+async def open_excel_tracker():
+    try:
+        from vision.tools.task_tracker_tools import open_excel_tracker
+        result = open_excel_tracker()
+        return {"status": "success", "message": result}
+    except Exception as e:
+        logger.error(f"[API] Excel open error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+

@@ -27,11 +27,16 @@ if /i "%MODE%"=="web" (
     echo [*] Opening browser automatically...
     echo.
 
+    :: Free port 8000 if previously occupied
+    for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8000" ^| findstr "LISTENING"') do (
+        taskkill /f /pid %%a >nul 2>&1
+    )
+
     :: Open browser after a short delay (gives server time to boot)
     start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8000"
 
     :: Start uvicorn web server (blocking)
-    "%PYTHON_EXE%" -m uvicorn vision.gateways.web.server:app --host 0.0.0.0 --port 8000
+    "%PYTHON_EXE%" -m uvicorn vision.gateways.web.server:app --host 127.0.0.1 --port 8000
     goto END
 )
 

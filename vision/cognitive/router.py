@@ -102,8 +102,17 @@ DOMAIN_KEYWORD_MAP = {
         ]
     },
     "email": {
-        "keywords": ["email", "mail", "send mail", "compose"],
-        "tools": ["send_email"]
+        "keywords": [
+            "email", "emails", "mail", "mails", "send mail", "compose", "college mails", "college mail",
+            "check my college mails", "check college mails", "check college email", "check college emails",
+            "outlook", "outlook mails", "outlook mail", "check my outlook", "check outlook", "unread mails",
+            "unread emails", "inbox", "college inbox", "check my inbox", "move to bin", "move to the bin",
+            "move them to the bin", "delete promotional mails", "confirm move", "clean inbox", "pending review"
+        ],
+        "tools": [
+            "check_college_outlook_emails", "confirm_move_emails_to_bin", "get_pending_email_review",
+            "send_email", "open_website"
+        ]
     },
     "mobile": {
         "keywords": ["phone", "mobile", "android", "adb", "unlock phone"],
@@ -183,6 +192,23 @@ DOMAIN_KEYWORD_MAP = {
             "get_college_timetable", "get_mid_exam_schedule", "get_next_upcoming_class",
             "add_college_assignment", "list_college_assignments", "mark_assignment_done",
             "get_current_time_and_date"
+        ]
+    },
+    "task_tracker": {
+        "keywords": [
+            "task", "tasks", "task tracker", "tracker", "excel tracker", "task tracker excel",
+            "todo", "todos", "to-do", "to do", "today task", "today tasks", "tasks today",
+            "tasks listed", "what are the tasks", "what are my tasks", "list tasks", "my tasks",
+            "complete task", "mark task", "check off task", "add task", "new task",
+            "schedule task", "habit", "habits", "leetcode", "lead code", "leet code", "quidco",
+            "dsa", "codechef", "geeksforgeeks", "gfg", "problem solving", "coding challenge",
+            "productivity", "streak", "my streak", "coding streak", "leetcode streak",
+            "open tracker", "open excel tracker", "sync excel", "excel sheet", "tasktracker"
+        ],
+        "tools": [
+            "get_daily_tasks", "get_productivity_summary", "add_task", "complete_task",
+            "log_leetcode_solved", "get_leetcode_stats", "generate_excel_tracker",
+            "open_excel_tracker", "get_current_time_and_date"
         ]
     }
 }

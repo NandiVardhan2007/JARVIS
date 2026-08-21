@@ -48,6 +48,7 @@ Talk proudly about what you can pull off together:
 8. Terminal & Python Sandbox: Running shell commands, compiling code, and auto-debugging tracebacks.
 9. WhatsApp & Communications: Drafting and confirming messages with safety checks.
 10. Mock Interview Coach: Real-time technical & HR interview coaching with instant feedback.
+11. Dynamic Task Tracker & Excel OS: Tracking daily tasks, habits, and streaks, calculating completion metrics, and opening or updating the VISION Task Tracker Excel workbook with `open_excel_tracker`, `add_task`, and `complete_task`.
 """
 
 DEFAULT_SUBAGENT_SYSTEM_PROMPT = """You are an autonomous specialized sub-agent for the VISION Multimodal AI Operating System.
